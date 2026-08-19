@@ -1,0 +1,622 @@
+{
+  "generatedFrom": "analytics-widgets-lab",
+  "publication": {
+    "enumerations": {
+      "fieldRole": [
+        "dimension",
+        "time-dimension",
+        "measure"
+      ],
+      "aggregation": [
+        "sum",
+        "average",
+        "count",
+        "minimum",
+        "maximum",
+        "distinct-count"
+      ],
+      "classification": [
+        "public",
+        "internal",
+        "confidential",
+        "restricted"
+      ]
+    },
+    "rules": [
+      {
+        "id": "PC-01",
+        "requirement": "Definitions — Dataset",
+        "statement": "A Dataset must carry a stable identifier and a human-readable name."
+      },
+      {
+        "id": "PC-02",
+        "requirement": "FR-DP-02",
+        "statement": "A Dataset must identify the Source System that owns it. Ownership is singular and unambiguous."
+      },
+      {
+        "id": "PC-03",
+        "requirement": "FR-DP-03",
+        "statement": "A Dataset must describe its Fields such that, for each Field, a consumer can determine whether it is a Dimension or a Measure. Every Field carries a unique key, a label, and a role."
+      },
+      {
+        "id": "PC-04",
+        "requirement": "FR-DP-04",
+        "statement": "Every Measure must declare which aggregations are meaningful for it. Declaring an aggregation asserts that its result carries meaning, not merely that it computes."
+      },
+      {
+        "id": "PC-05",
+        "requirement": "FR-DP-05",
+        "statement": "Every Field must state explicitly whether it may be used to filter records and whether it may be used to order them. Omission is not a default — it is an undeclared Field."
+      },
+      {
+        "id": "PC-06",
+        "requirement": "FR-DP-07",
+        "statement": "A Dataset must carry a data classification indicating the sensitivity of the data it exposes."
+      },
+      {
+        "id": "PC-07",
+        "requirement": "FR-DP-07",
+        "statement": "A Dataset must state explicitly whether it exposes personal data. This drives the access recording obligation in FR-DA-14, so it cannot be left to inference."
+      }
+    ]
+  },
+  "visualization": {
+    "families": [
+      {
+        "id": "tabular",
+        "name": "Tabular",
+        "question": "What are the individual records?",
+        "dataShape": {
+          "summary": "One or more Dimensions and/or Measures",
+          "clauses": [
+            {
+              "describe": "at least one Field",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": true,
+            "id": "data-table",
+            "name": "Data table",
+            "description": "Sortable and filterable rows with pagination, column configuration (visibility, width, pinning), row selection and expandable rows."
+          },
+          {
+            "implemented": false,
+            "id": "pivot-table",
+            "name": "Pivot table",
+            "description": "Grouped rows and columns with aggregation."
+          },
+          {
+            "implemented": false,
+            "id": "comparison-table",
+            "name": "Comparison table",
+            "description": "Side-by-side entities across fixed metrics."
+          }
+        ]
+      },
+      {
+        "id": "trend",
+        "name": "Trend",
+        "question": "How has this changed over time?",
+        "dataShape": {
+          "summary": "One Time Dimension + one or more Measures",
+          "clauses": [
+            {
+              "describe": "at least one Time Dimension",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            },
+            {
+              "describe": "at least one Measure",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": true,
+            "id": "line-chart",
+            "name": "Line chart",
+            "description": "Values joined over time."
+          },
+          {
+            "implemented": true,
+            "id": "area-chart",
+            "name": "Area chart",
+            "description": "Line chart with the area beneath filled."
+          },
+          {
+            "implemented": true,
+            "id": "spline-chart",
+            "name": "Spline chart",
+            "description": "Curve-smoothed line over time."
+          },
+          {
+            "implemented": true,
+            "id": "step-chart",
+            "name": "Step chart",
+            "description": "Discrete level changes over time."
+          }
+        ]
+      },
+      {
+        "id": "categorical-comparison",
+        "name": "Categorical Comparison",
+        "question": "How do these categories compare?",
+        "dataShape": {
+          "summary": "One Dimension + one or more Measures",
+          "clauses": [
+            {
+              "describe": "at least one Dimension",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            },
+            {
+              "describe": "at least one Measure",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": true,
+            "id": "bar-chart-vertical",
+            "name": "Bar chart (vertical)",
+            "description": "One bar per category, measured on the vertical axis."
+          },
+          {
+            "implemented": true,
+            "id": "bar-chart-horizontal",
+            "name": "Bar chart (horizontal)",
+            "description": "One bar per category, measured on the horizontal axis. Suits long category labels."
+          },
+          {
+            "implemented": true,
+            "id": "grouped-bar-chart",
+            "name": "Grouped bar chart",
+            "description": "Several Measures shown side by side within each category."
+          },
+          {
+            "implemented": true,
+            "id": "stacked-bar-chart",
+            "name": "Stacked bar chart",
+            "description": "Several Measures stacked within each category."
+          }
+        ]
+      },
+      {
+        "id": "composition",
+        "name": "Composition",
+        "question": "What are the parts of this whole?",
+        "dataShape": {
+          "summary": "One Dimension + one Measure summing to a meaningful total",
+          "clauses": [
+            {
+              "describe": "at least one Dimension",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            },
+            {
+              "describe": "at least one Measure",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            },
+            {
+              "describe": "a Measure that sums to a meaningful total",
+              "decidableFromPublishedModel": false,
+              "undecidable": {
+                "requirement": "§4.2 requires a Measure \"summing to a meaningful total\". Additivity is a property of meaning, not of type — FR-DP-04 declares which aggregations are meaningful, but not whether the resulting total is itself meaningful as a whole.",
+                "resolvedBy": "proposed Field semantic 'additive-total'"
+              }
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": false,
+            "id": "pie-chart",
+            "name": "Pie chart",
+            "description": "Shares of a whole as circular segments."
+          },
+          {
+            "implemented": false,
+            "id": "donut-chart",
+            "name": "Donut chart",
+            "description": "Pie chart with a hollow centre, often carrying the total."
+          },
+          {
+            "implemented": false,
+            "id": "stacked-100-bar",
+            "name": "Stacked 100% bar",
+            "description": "Shares of a whole as proportions of a full-width bar."
+          },
+          {
+            "implemented": false,
+            "id": "treemap",
+            "name": "Treemap",
+            "description": "Shares of a whole as nested rectangles sized by value."
+          }
+        ]
+      },
+      {
+        "id": "distribution",
+        "name": "Distribution",
+        "question": "How are these values spread?",
+        "dataShape": {
+          "summary": "One Measure across many records",
+          "clauses": [
+            {
+              "describe": "at least one Measure",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            },
+            {
+              "describe": "many records",
+              "decidableFromPublishedModel": false,
+              "undecidable": {
+                "requirement": "§4.2 requires the Measure be spread \"across many records\". Record volume is not part of the published model.",
+                "resolvedBy": "proposed Dataset descriptor 'recordVolume'"
+              }
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": false,
+            "id": "histogram",
+            "name": "Histogram",
+            "description": "Record counts bucketed by value range."
+          },
+          {
+            "implemented": false,
+            "id": "box-plot",
+            "name": "Box plot",
+            "description": "Quartiles, median and outliers."
+          },
+          {
+            "implemented": false,
+            "id": "violin-plot",
+            "name": "Violin plot",
+            "description": "Density of values across the range."
+          }
+        ]
+      },
+      {
+        "id": "correlation",
+        "name": "Correlation",
+        "question": "Do these move together?",
+        "dataShape": {
+          "summary": "Two or more Measures",
+          "clauses": [
+            {
+              "describe": "at least 2 Measures",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": true,
+            "id": "scatter-plot",
+            "name": "Scatter plot",
+            "description": "One point per record against two Measures."
+          },
+          {
+            "implemented": true,
+            "id": "bubble-chart",
+            "name": "Bubble chart",
+            "description": "Scatter plot with a third Measure encoded as point size."
+          },
+          {
+            "implemented": false,
+            "id": "heatmap-matrix",
+            "name": "Heatmap matrix",
+            "description": "Pairwise Measure relationships encoded as colour intensity."
+          }
+        ]
+      },
+      {
+        "id": "ranking-and-flow",
+        "name": "Ranking & Flow",
+        "question": "What is the order, or where is the drop-off?",
+        "dataShape": {
+          "summary": "One Dimension + one Measure, or ordered stage data",
+          "clauses": [
+            {
+              "describe": "one Dimension and one Measure, or a Dimension declared as an ordered stage",
+              "decidableFromPublishedModel": false,
+              "undecidable": {
+                "requirement": "§4.2 admits \"ordered stage data\" as an alternative shape. Stage ordering is not expressible in the published model, so the funnel/sankey route cannot be evaluated.",
+                "resolvedBy": "proposed Field semantic 'stage'"
+              }
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": true,
+            "id": "ranked-list",
+            "name": "Top-N / ranked list",
+            "description": "Categories ordered by a Measure, truncated to the top N."
+          },
+          {
+            "implemented": true,
+            "id": "leaderboard",
+            "name": "Leaderboard",
+            "description": "Rank, score and movement indicator against the previous period."
+          },
+          {
+            "implemented": false,
+            "id": "funnel",
+            "name": "Funnel",
+            "description": "Drop-off across sequential stages."
+          },
+          {
+            "implemented": false,
+            "id": "sankey",
+            "name": "Sankey",
+            "description": "Flow volume between stages or categories."
+          },
+          {
+            "implemented": false,
+            "id": "bar-chart-race",
+            "name": "Bar chart race",
+            "description": "Ranking animated across time periods."
+          }
+        ]
+      },
+      {
+        "id": "geospatial",
+        "name": "Geospatial",
+        "question": "Where is this happening?",
+        "dataShape": {
+          "summary": "One location-typed Dimension + one Measure",
+          "clauses": [
+            {
+              "describe": "at least one Measure",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            },
+            {
+              "describe": "a location-typed Dimension",
+              "decidableFromPublishedModel": false,
+              "undecidable": {
+                "requirement": "§4.2 requires a \"location-typed Dimension\". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type.",
+                "resolvedBy": "proposed Field semantic 'geographic-location'"
+              }
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": false,
+            "id": "choropleth-map",
+            "name": "Choropleth map",
+            "description": "Regions shaded by a Measure."
+          },
+          {
+            "implemented": false,
+            "id": "point-map",
+            "name": "Point / pin map",
+            "description": "Individual locations plotted as points."
+          }
+        ]
+      },
+      {
+        "id": "radial",
+        "name": "Radial",
+        "question": "How does this compare against a target or across axes?",
+        "dataShape": {
+          "summary": "One or more Measures, optionally with a target",
+          "clauses": [
+            {
+              "describe": "at least one Measure",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": true,
+            "id": "radar-chart",
+            "name": "Radar / spider chart",
+            "description": "Several Measures on radial axes from a shared centre."
+          },
+          {
+            "implemented": true,
+            "id": "gauge",
+            "name": "Gauge / speedometer",
+            "description": "A single Measure against a range, usually with a target."
+          }
+        ]
+      },
+      {
+        "id": "single-value",
+        "name": "Single Value",
+        "question": "What is the number right now?",
+        "dataShape": {
+          "summary": "One Measure, optionally one Time Dimension for trend or comparison",
+          "clauses": [
+            {
+              "describe": "at least one Measure",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": true,
+            "id": "stat-card",
+            "name": "Stat card",
+            "description": "Large number with a label and a trend arrow or percentage."
+          },
+          {
+            "implemented": true,
+            "id": "sparkline-card",
+            "name": "Sparkline card",
+            "description": "Stat card with an embedded mini line or bar chart. Needs a Time Dimension for the spark."
+          },
+          {
+            "implemented": true,
+            "id": "progress-tracker",
+            "name": "Progress / goal tracker",
+            "description": "Value against a target, as a bar or a ring."
+          },
+          {
+            "implemented": true,
+            "id": "delta-card",
+            "name": "Delta card",
+            "description": "Current period against the previous one. Needs a Time Dimension."
+          }
+        ]
+      },
+      {
+        "id": "temporal-pattern",
+        "name": "Temporal Pattern",
+        "question": "What is the pattern across time periods or cohorts?",
+        "dataShape": {
+          "summary": "One Time Dimension + one Measure",
+          "clauses": [
+            {
+              "describe": "at least one Time Dimension",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            },
+            {
+              "describe": "at least one Measure",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": false,
+            "id": "calendar-heatmap",
+            "name": "Calendar heatmap",
+            "description": "Contribution-grid style: one cell per day, shaded by a Measure."
+          },
+          {
+            "implemented": false,
+            "id": "cohort-grid",
+            "name": "Cohort / retention grid",
+            "description": "Cohorts down, elapsed periods across."
+          },
+          {
+            "implemented": false,
+            "id": "timeline-chart",
+            "name": "Gantt / timeline chart",
+            "description": "Spans positioned and sized along a time axis."
+          }
+        ]
+      },
+      {
+        "id": "chronological",
+        "name": "Chronological",
+        "question": "What happened, in order?",
+        "dataShape": {
+          "summary": "Time-ordered records",
+          "clauses": [
+            {
+              "describe": "at least one Time Dimension",
+              "decidableFromPublishedModel": true,
+              "undecidable": null
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": true,
+            "id": "activity-feed",
+            "name": "Activity feed / timeline",
+            "description": "Chronological events, most recent first."
+          },
+          {
+            "implemented": true,
+            "id": "event-log-view",
+            "name": "Log / event viewer",
+            "description": "Raw or structured event stream."
+          }
+        ]
+      },
+      {
+        "id": "status",
+        "name": "Status",
+        "question": "Is this healthy?",
+        "dataShape": {
+          "summary": "One Measure with a threshold, or one state Dimension",
+          "clauses": [
+            {
+              "describe": "one Measure, or a Dimension declared as a state",
+              "decidableFromPublishedModel": false,
+              "undecidable": {
+                "requirement": "§4.2 admits \"one state Dimension\" as an alternative shape. The published model cannot distinguish a state Dimension from any other Dimension.",
+                "resolvedBy": "proposed Field semantic 'state'"
+              }
+            }
+          ]
+        },
+        "visualizationTypes": [
+          {
+            "implemented": true,
+            "id": "status-indicator",
+            "name": "Status badge / indicator",
+            "description": "Health, uptime or pass/fail state."
+          },
+          {
+            "implemented": true,
+            "id": "threshold-indicator",
+            "name": "Threshold indicator",
+            "description": "Traffic-light presentation of a Measure against configured thresholds."
+          },
+          {
+            "implemented": true,
+            "id": "alert-banner",
+            "name": "Alert / notification banner",
+            "description": "Prominent banner when a state warrants attention. Display only — Analytics does not alert (§10)."
+          }
+        ]
+      }
+    ]
+  },
+  "knownGap": [
+    {
+      "familyId": "composition",
+      "familyName": "Composition",
+      "requirement": "§4.2 requires a Measure \"summing to a meaningful total\". Additivity is a property of meaning, not of type — FR-DP-04 declares which aggregations are meaningful, but not whether the resulting total is itself meaningful as a whole.",
+      "resolvedBy": "proposed Field semantic 'additive-total'"
+    },
+    {
+      "familyId": "distribution",
+      "familyName": "Distribution",
+      "requirement": "§4.2 requires the Measure be spread \"across many records\". Record volume is not part of the published model.",
+      "resolvedBy": "proposed Dataset descriptor 'recordVolume'"
+    },
+    {
+      "familyId": "ranking-and-flow",
+      "familyName": "Ranking & Flow",
+      "requirement": "§4.2 admits \"ordered stage data\" as an alternative shape. Stage ordering is not expressible in the published model, so the funnel/sankey route cannot be evaluated.",
+      "resolvedBy": "proposed Field semantic 'stage'"
+    },
+    {
+      "familyId": "geospatial",
+      "familyName": "Geospatial",
+      "requirement": "§4.2 requires a \"location-typed Dimension\". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type.",
+      "resolvedBy": "proposed Field semantic 'geographic-location'"
+    },
+    {
+      "familyId": "status",
+      "familyName": "Status",
+      "requirement": "§4.2 admits \"one state Dimension\" as an alternative shape. The published model cannot distinguish a state Dimension from any other Dimension.",
+      "resolvedBy": "proposed Field semantic 'state'"
+    }
+  ]
+}

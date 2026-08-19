@@ -1,0 +1,238 @@
+/*
+ * Analytics module — design tokens.
+ *
+ * Every colour the module uses is declared here and nowhere else. No component
+ * contains a colour literal, which is what makes the whole set re-skinnable by
+ * a consumer overriding these variables.
+ *
+ * Scoped to `.analytics-root` rather than `:root` so the module can be dropped
+ * into a host portal without leaking tokens into it, and so a host can scope a
+ * different theme to its own subtree.
+ *
+ * Neutrals and status colours are taken from @SMCDAO/ui. The categorical series
+ * palette is not — the library never had one (its Chart component shipped
+ * recharts' documentation defaults plus pure lime, magenta and cyan). These
+ * eight were selected against the light and dark surfaces and validated for
+ * lightness band, chroma floor, colour-vision-deficiency separation and
+ * contrast. Slot 1 is SMCDAO's brand blue.
+ */
+
+.analytics-root {
+  color-scheme: light;
+
+  /* --- surfaces, from @SMCDAO/ui neutrals -------------------------------- */
+  --a-bg: #f7f7f7;
+  --a-surface: #ffffff;
+  --a-surface-raised: #ffffff;
+  --a-surface-hover: #ebebeb;
+  --a-surface-sunken: #f2f2f2;
+  --a-border: #e5e5e5;
+  --a-border-strong: #cccccc;
+
+  /* --- ink --------------------------------------------------------------- */
+  --a-text: #000000;
+  --a-text-secondary: #6b7280;
+  --a-text-muted: #999999;
+  --a-text-inverse: #ffffff;
+
+  /* --- brand / interaction ----------------------------------------------- */
+  --a-accent: #1060d8;
+  --a-accent-hover: #0d4fb4;
+  --a-accent-subtle: #e0ecfa;
+  --a-focus-ring: #1060d8;
+
+  /* --- status, from @SMCDAO/ui Badge and AlertBanner ---------------------- */
+  --a-status-good: #1f9d55;
+  --a-status-good-subtle: #dcfce7;
+  --a-status-warning: #f7b13c;
+  --a-status-warning-subtle: #fdeace;
+  --a-status-serious: #f59e0b;
+  --a-status-critical: #ff3b30;
+  --a-status-critical-subtle: #fee2e2;
+  --a-status-neutral: #6b7280;
+
+  /* --- categorical series ------------------------------------------------
+   * Assigned in fixed order and never cycled. A ninth series folds into
+   * "Other" or becomes small multiples — it is never a generated hue.
+   *
+   * Three of these (aqua, yellow, magenta) sit below 3:1 against the light
+   * surface, so any chart using them ships direct labels or a table view.
+   * Scatter and bubble cap at the first three slots, which clear the
+   * all-pairs floors; past that the yellow/orange pair becomes ambiguous.
+   */
+  --a-series-1: #1060d8;
+  --a-series-2: #eb6834;
+  --a-series-3: #1baf7a;
+  --a-series-4: #eda100;
+  --a-series-5: #e87ba4;
+  --a-series-6: #008300;
+  --a-series-7: #4a3aa7;
+  --a-series-8: #e34948;
+
+  /* --- sequential ramp, one hue light to dark ---------------------------- */
+  --a-seq-1: #e0ecfa;
+  --a-seq-2: #b9d3f2;
+  --a-seq-3: #7fadea;
+  --a-seq-4: #4685e1;
+  --a-seq-5: #1060d8;
+  --a-seq-6: #0b459a;
+
+  /* --- chart furniture ---------------------------------------------------- */
+  --a-grid: #ececec;
+  --a-axis: #999999;
+  --a-tooltip-bg: #1a1a1a;
+  --a-tooltip-text: #ffffff;
+
+  /* --- shape ------------------------------------------------------------- */
+  --a-radius-sm: 4px;
+  --a-radius: 8px;
+  --a-radius-lg: 12px;
+  --a-shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 1px 3px rgb(0 0 0 / 4%);
+  --a-shadow-raised: 0 4px 12px rgb(0 0 0 / 8%);
+
+  /* --- rhythm ------------------------------------------------------------ */
+  --a-space-1: 4px;
+  --a-space-2: 8px;
+  --a-space-3: 12px;
+  --a-space-4: 16px;
+  --a-space-5: 24px;
+  --a-space-6: 32px;
+
+  /* --- type -------------------------------------------------------------- */
+  --a-font: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --a-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --a-text-xs: 11px;
+  --a-text-sm: 13px;
+  --a-text-base: 14px;
+  --a-text-lg: 16px;
+  --a-text-xl: 20px;
+  --a-text-2xl: 28px;
+  --a-text-3xl: 36px;
+}
+
+/*
+ * Dark is selected, not derived. The same eight hues stepped for the dark
+ * surface — an automatic inversion would put the light steps on a dark ground,
+ * where several fall out of the readable lightness band.
+ *
+ * Declared under both scopes: the media query covers the OS setting, the
+ * data-theme scope covers an explicit toggle, and the toggle wins either way.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) .analytics-root {
+    color-scheme: dark;
+
+    --a-bg: #161616;
+    --a-surface: #202020;
+    --a-surface-raised: #262626;
+    --a-surface-hover: #2e2e2e;
+    --a-surface-sunken: #1a1a1a;
+    --a-border: #333333;
+    --a-border-strong: #454545;
+
+    --a-text: #f2f2f2;
+    --a-text-secondary: #9ca3af;
+    --a-text-muted: #6b7280;
+    --a-text-inverse: #000000;
+
+    --a-accent: #4a90f0;
+    --a-accent-hover: #6ba5f4;
+    --a-accent-subtle: #16304f;
+    --a-focus-ring: #4a90f0;
+
+    --a-status-good: #4ade80;
+    --a-status-good-subtle: #10281a;
+    --a-status-warning: #fbbf24;
+    --a-status-warning-subtle: #33260a;
+    --a-status-serious: #f59e0b;
+    --a-status-critical: #f87171;
+    --a-status-critical-subtle: #3a1414;
+    --a-status-neutral: #9ca3af;
+
+    --a-series-1: #4a90f0;
+    --a-series-2: #d95926;
+    --a-series-3: #199e70;
+    --a-series-4: #c98500;
+    --a-series-5: #d55181;
+    --a-series-6: #008300;
+    --a-series-7: #9085e9;
+    --a-series-8: #e66767;
+
+    --a-seq-1: #16304f;
+    --a-seq-2: #1d4a7e;
+    --a-seq-3: #2465ad;
+    --a-seq-4: #2f7ddb;
+    --a-seq-5: #4a90f0;
+    --a-seq-6: #7fb2f6;
+
+    --a-grid: #2e2e2e;
+    --a-axis: #6b7280;
+    --a-tooltip-bg: #f2f2f2;
+    --a-tooltip-text: #1a1a1a;
+
+    --a-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 1px 3px rgb(0 0 0 / 30%);
+    --a-shadow-raised: 0 4px 12px rgb(0 0 0 / 45%);
+  }
+}
+
+:root[data-theme='dark'] .analytics-root {
+  color-scheme: dark;
+
+  --a-bg: #161616;
+  --a-surface: #202020;
+  --a-surface-raised: #262626;
+  --a-surface-hover: #2e2e2e;
+  --a-surface-sunken: #1a1a1a;
+  --a-border: #333333;
+  --a-border-strong: #454545;
+
+  --a-text: #f2f2f2;
+  --a-text-secondary: #9ca3af;
+  --a-text-muted: #6b7280;
+  --a-text-inverse: #000000;
+
+  --a-accent: #4a90f0;
+  --a-accent-hover: #6ba5f4;
+  --a-accent-subtle: #16304f;
+  --a-focus-ring: #4a90f0;
+
+  --a-status-good: #4ade80;
+  --a-status-good-subtle: #10281a;
+  --a-status-warning: #fbbf24;
+  --a-status-warning-subtle: #33260a;
+  --a-status-serious: #f59e0b;
+  --a-status-critical: #f87171;
+  --a-status-critical-subtle: #3a1414;
+  --a-status-neutral: #9ca3af;
+
+  --a-series-1: #4a90f0;
+  --a-series-2: #d95926;
+  --a-series-3: #199e70;
+  --a-series-4: #c98500;
+  --a-series-5: #d55181;
+  --a-series-6: #008300;
+  --a-series-7: #9085e9;
+  --a-series-8: #e66767;
+
+  --a-seq-1: #16304f;
+  --a-seq-2: #1d4a7e;
+  --a-seq-3: #2465ad;
+  --a-seq-4: #2f7ddb;
+  --a-seq-5: #4a90f0;
+  --a-seq-6: #7fb2f6;
+
+  --a-grid: #2e2e2e;
+  --a-axis: #6b7280;
+  --a-tooltip-bg: #f2f2f2;
+  --a-tooltip-text: #1a1a1a;
+
+  --a-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 1px 3px rgb(0 0 0 / 30%);
+  --a-shadow-raised: 0 4px 12px rgb(0 0 0 / 45%);
+}
+
+.analytics-root {
+  background: var(--a-bg);
+  color: var(--a-text);
+  font-family: var(--a-font);
+  font-size: var(--a-text-base);
+}

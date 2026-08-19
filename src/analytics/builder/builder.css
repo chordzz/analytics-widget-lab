@@ -1,0 +1,698 @@
+/*
+ * Builder surfaces — composer, canvas, drafts.
+ *
+ * Same rule as everywhere else in the module: no colour literals. Every value
+ * here is a token, so a host re-skinning the module gets the builder for free
+ * rather than discovering it was hard-coded to our palette.
+ */
+
+/* --- shared form controls --------------------------------------------------
+ * Not builder-specific in principle, but this is the first screen that needed
+ * inputs, so they live here until something else wants them.
+ */
+
+.a-input,
+.a-select {
+  width: 100%;
+  padding: 7px var(--a-space-3);
+  border: 1px solid var(--a-border-strong);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface);
+  color: var(--a-text);
+  font: inherit;
+  font-size: var(--a-text-sm);
+}
+
+.a-input:focus-visible,
+.a-select:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 1px;
+}
+
+.a-input--title {
+  max-width: 420px;
+  border-color: transparent;
+  background: transparent;
+  font-size: var(--a-text-lg);
+  font-weight: 600;
+  padding-left: var(--a-space-2);
+}
+
+/* The board name reads as a heading until you point at it, then as a field —
+   an always-boxed input in the page title looks like a form, not a document. */
+.a-input--title:hover {
+  border-color: var(--a-border);
+  background: var(--a-surface);
+}
+
+.a-button--danger {
+  color: var(--a-status-critical);
+  border-color: var(--a-border-strong);
+}
+
+.a-button--danger:hover {
+  background: var(--a-status-critical-subtle);
+}
+
+.a-button:disabled,
+.a-chip-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.a-chip-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--a-border-strong);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface);
+  color: var(--a-text-secondary);
+  font: inherit;
+  font-size: var(--a-text-xs);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.a-chip-button:hover:not(:disabled) {
+  background: var(--a-surface-hover);
+  color: var(--a-text);
+}
+
+.a-chip-button--remove:hover:not(:disabled) {
+  background: var(--a-status-critical-subtle);
+  color: var(--a-status-critical);
+}
+
+/* --- empty states ---------------------------------------------------------- */
+
+.a-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--a-space-3);
+  padding: var(--a-space-6);
+  border: 1px dashed var(--a-border-strong);
+  border-radius: var(--a-radius-lg);
+  background: var(--a-surface-sunken);
+  text-align: center;
+}
+
+.a-empty h3 {
+  margin: 0;
+  font-size: var(--a-text-base);
+}
+
+.a-empty p {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--a-text-secondary);
+  font-size: var(--a-text-sm);
+  line-height: 1.5;
+}
+
+.a-empty--inline {
+  padding: var(--a-space-5);
+  min-height: 180px;
+}
+
+/* --- board header ---------------------------------------------------------- */
+
+.a-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--a-space-4);
+  margin-bottom: var(--a-space-4);
+  flex-wrap: wrap;
+}
+
+.a-board-head--compact {
+  margin-bottom: var(--a-space-3);
+}
+
+.a-board-head--compact p {
+  margin: 0;
+}
+
+.a-board-head__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+}
+
+.a-tabs {
+  display: flex;
+  gap: var(--a-space-2);
+  margin-bottom: var(--a-space-4);
+  flex-wrap: wrap;
+}
+
+.a-tabs__flag {
+  opacity: 0.7;
+  font-size: var(--a-text-xs);
+}
+
+/* --- the composer ---------------------------------------------------------- */
+
+.a-composer {
+  display: grid;
+  /* The preview must not shrink below the width where charts stop being
+     readable, so it takes a fixed column and the panel takes the rest. */
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 460px);
+  gap: var(--a-space-5);
+  align-items: start;
+}
+
+@media (max-width: 1080px) {
+  .a-composer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.a-composer__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-5);
+  min-width: 0;
+}
+
+.a-composer__preview {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-3);
+  padding: var(--a-space-4);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-lg);
+  background: var(--a-surface-sunken);
+}
+
+/*
+ * The preview frame stretches its card.
+ *
+ * A card is content-height by default; the board gives it height through the
+ * grid cell. Without an equivalent here the plot — which claims `flex: 1` of
+ * its card — resolves to zero and the preview renders as a title and a legend
+ * with nothing between them.
+ */
+.a-composer__frame {
+  display: flex;
+}
+
+.a-composer__frame > .a-card {
+  flex: 1;
+  min-width: 0;
+}
+
+.a-composer__preview-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.a-composer__preview-head h3 {
+  margin: 0;
+  font-size: var(--a-text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--a-text-secondary);
+}
+
+.a-composer__missing {
+  margin: 0;
+  padding: var(--a-space-2) var(--a-space-3);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-status-warning-subtle);
+  color: var(--a-text);
+  font-size: var(--a-text-xs);
+}
+
+.a-composer__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--a-space-2);
+}
+
+/* --- steps ----------------------------------------------------------------- */
+
+.a-step__title {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  margin: 0 0 var(--a-space-3);
+  font-size: var(--a-text-base);
+}
+
+.a-step__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--a-surface-sunken);
+  border: 1px solid var(--a-border-strong);
+  color: var(--a-text-secondary);
+  font-size: var(--a-text-xs);
+  font-weight: 600;
+}
+
+.a-step__index--done {
+  background: var(--a-accent);
+  border-color: var(--a-accent);
+  color: var(--a-text-inverse);
+}
+
+.a-step__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-3);
+}
+
+.a-step__hint {
+  margin: 0;
+  font-size: var(--a-text-sm);
+}
+
+/* --- type picker ----------------------------------------------------------- */
+
+.a-chosen-type {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--a-space-4);
+  padding: var(--a-space-3);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface);
+}
+
+.a-chosen-type p {
+  margin: 2px 0 0;
+  font-size: var(--a-text-sm);
+}
+
+.a-type-group__title {
+  margin: var(--a-space-3) 0 var(--a-space-2);
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+}
+
+.a-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--a-space-2);
+}
+
+.a-type {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--a-space-3);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface);
+  color: var(--a-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.a-type:hover {
+  border-color: var(--a-accent);
+  background: var(--a-surface-hover);
+}
+
+/* A suggestion is the same control with the accent borrowed — it is a shortcut
+   to something already in the list below, not a different kind of thing. */
+.a-type--suggested {
+  border-color: var(--a-accent);
+  background: var(--a-accent-subtle);
+}
+
+.a-type__label {
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+}
+
+.a-type__description {
+  color: var(--a-text-secondary);
+  font-size: var(--a-text-xs);
+  line-height: 1.4;
+}
+
+/* --- dataset picker -------------------------------------------------------- */
+
+.a-dataset-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--a-space-2);
+}
+
+.a-dataset {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--a-space-3);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface);
+  color: var(--a-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.a-dataset:hover {
+  border-color: var(--a-accent);
+}
+
+.a-dataset--active {
+  border-color: var(--a-accent);
+  background: var(--a-accent-subtle);
+}
+
+.a-dataset__name {
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+}
+
+.a-dataset__meta {
+  color: var(--a-text-secondary);
+  font-size: var(--a-text-xs);
+}
+
+/* --- field mapper ---------------------------------------------------------- */
+
+.a-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--a-space-4);
+}
+
+.a-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-1);
+  min-width: 0;
+}
+
+.a-field__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--a-space-2);
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+}
+
+.a-field__optional,
+.a-field__note {
+  color: var(--a-text-muted);
+  font-size: var(--a-text-xs);
+  font-weight: 400;
+}
+
+.a-field__help {
+  margin: 0;
+  color: var(--a-text-secondary);
+  font-size: var(--a-text-xs);
+  line-height: 1.4;
+}
+
+/* An unfilled required slot is marked on the control, not only summarised at
+   the bottom — otherwise you read the warning and then hunt for the cause. */
+.a-field--missing .a-select,
+.a-field--missing .a-chosen {
+  border-color: var(--a-status-warning);
+}
+
+.a-chosen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-1);
+  margin: 0;
+  padding: var(--a-space-2);
+  list-style: none;
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface);
+}
+
+.a-chosen__item {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  font-size: var(--a-text-sm);
+}
+
+.a-chosen__index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface-sunken);
+  color: var(--a-text-secondary);
+  font-size: var(--a-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.a-chosen__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a-chosen__controls {
+  display: flex;
+  gap: 2px;
+}
+
+.a-chosen__empty {
+  color: var(--a-text-muted);
+  font-size: var(--a-text-xs);
+}
+
+/* --- span control ---------------------------------------------------------- */
+
+.a-span {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 2px;
+}
+
+.a-span__cell {
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--a-border-strong);
+  border-radius: 2px;
+  background: var(--a-surface);
+  cursor: pointer;
+}
+
+.a-span__cell--on {
+  background: var(--a-accent);
+  border-color: var(--a-accent);
+}
+
+.a-span__cell:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 1px;
+}
+
+/* --- placed widgets on the canvas ------------------------------------------ */
+
+.a-placed {
+  position: relative;
+}
+
+.a-placed[draggable='true'] {
+  cursor: grab;
+}
+
+.a-placed--dragging {
+  opacity: 0.4;
+}
+
+/* The drop target is marked on the card it would displace, so the gap opens
+   where the widget will actually land. */
+.a-placed--over > .a-card {
+  outline: 2px dashed var(--a-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * The corner grip.
+ *
+ * Hidden until the widget is pointed at or focused within — twelve permanent
+ * grips would be the loudest thing on a board. It stays put while a resize is
+ * in flight, since the pointer has usually left the card by then.
+ */
+.a-placed__grip {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--a-radius-sm);
+  background: none;
+  color: var(--a-text-muted);
+  cursor: nwse-resize;
+  opacity: 0;
+  transition: opacity 120ms ease, color 120ms ease;
+  /* The card owns the pointer for drag-to-reorder; the grip must win. */
+  touch-action: none;
+}
+
+.a-placed:hover .a-placed__grip,
+.a-placed:focus-within .a-placed__grip,
+.a-placed--resizing .a-placed__grip {
+  opacity: 1;
+}
+
+.a-placed__grip:hover,
+.a-placed__grip:focus-visible {
+  color: var(--a-accent);
+}
+
+.a-placed__grip:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 1px;
+  opacity: 1;
+}
+
+/* The card being resized reads as live, and loses its hover transition so it
+   tracks the pointer instead of easing behind it. */
+.a-placed--resizing > .a-card {
+  border-color: var(--a-accent);
+  transition: none;
+}
+
+/* Columns × pixels, shown only during the gesture — the numbers matter while
+   you are choosing them and are clutter the rest of the time. */
+.a-placed__readout {
+  position: absolute;
+  right: 24px;
+  bottom: 4px;
+  padding: 2px var(--a-space-2);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface-raised);
+  box-shadow: var(--a-shadow);
+  color: var(--a-text-secondary);
+  font-size: var(--a-text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+
+/* --- data sources ---------------------------------------------------------- */
+
+.a-source-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--a-space-3);
+  flex-wrap: wrap;
+}
+
+/* --- drafts list ----------------------------------------------------------- */
+
+.a-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.a-list__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--a-space-4);
+  padding: var(--a-space-3) var(--a-space-4);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-lg);
+  background: var(--a-surface);
+}
+
+.a-list__row:hover {
+  border-color: var(--a-border-strong);
+}
+
+.a-list__main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-1);
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.a-list__name {
+  font-size: var(--a-text-base);
+  font-weight: 600;
+}
+
+.a-list__meta {
+  color: var(--a-text-secondary);
+  font-size: var(--a-text-xs);
+}
+
+.a-list__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-space-1);
+  margin-top: var(--a-space-1);
+}
+
+.a-tag {
+  padding: 2px var(--a-space-2);
+  border-radius: 999px;
+  background: var(--a-surface-sunken);
+  color: var(--a-text-secondary);
+  font-size: var(--a-text-xs);
+}
+
+.a-list__actions {
+  display: flex;
+  gap: var(--a-space-2);
+}
+
+/* --- SPIKE: react-grid-layout cell. Remove with GridBoardSpike.tsx. --------- */
+
+.a-grid-cell {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.a-grid-cell > .a-card {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}

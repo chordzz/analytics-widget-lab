@@ -1,0 +1,353 @@
+/* Module shell — sidebar, rail and content region. */
+
+/* The shell owns the viewport; only the content region scrolls. A host that
+   mounts the module inside its own chrome can override this height. */
+.a-shell {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--a-bg);
+}
+
+/* --- sidebar -------------------------------------------------------------- */
+
+.a-side {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  width: 232px;
+  background: var(--a-surface);
+  border-right: 1px solid var(--a-border);
+  transition: width 160ms ease;
+  overflow: hidden;
+}
+
+.a-side[data-collapsed='true'] {
+  width: 60px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-side {
+    transition: none;
+  }
+}
+
+.a-side__head {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  height: 56px;
+  padding: 0 var(--a-space-3);
+  border-bottom: 1px solid var(--a-border);
+  flex-shrink: 0;
+}
+
+.a-side__mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--a-radius-sm);
+  background: var(--a-accent);
+  color: var(--a-text-inverse);
+}
+
+.a-side__wordmark {
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+  color: var(--a-text);
+  white-space: nowrap;
+}
+
+.a-side__nav {
+  flex: 1;
+  padding: var(--a-space-3) var(--a-space-2);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.a-side__group + .a-side__group {
+  margin-top: var(--a-space-4);
+}
+
+.a-side__group-label {
+  padding: 0 var(--a-space-2) var(--a-space-1);
+  font-size: var(--a-text-xs);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--a-text-muted);
+  white-space: nowrap;
+}
+
+/* Collapsed, the rail is 60px of icons. Everything that assumed a label —
+   left-aligned rows, a two-up footer, a group heading — has to change shape,
+   not just hide its text. */
+.a-side[data-collapsed='true'] .a-side__head {
+  justify-content: center;
+  padding: 0;
+}
+
+/* A group heading with no room for its text becomes a rule, so the grouping
+   survives the collapse instead of leaving an unexplained gap. */
+.a-side[data-collapsed='true'] .a-side__group-label {
+  height: 1px;
+  margin: 0 auto var(--a-space-2);
+  padding: 0;
+  width: 24px;
+  overflow: hidden;
+  text-indent: -999px;
+  background: var(--a-border);
+}
+
+.a-side[data-collapsed='true'] .a-side__nav {
+  padding-inline: var(--a-space-2);
+}
+
+.a-side[data-collapsed='true'] .a-nav-item {
+  justify-content: center;
+  padding-inline: 0;
+  width: 36px;
+  height: 36px;
+  margin-inline: auto;
+}
+
+.a-side[data-collapsed='true'] .a-side__foot {
+  flex-direction: column;
+  align-items: center;
+}
+
+.a-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-3);
+  width: 100%;
+  padding: 8px var(--a-space-2);
+  margin-bottom: 2px;
+  border: none;
+  border-radius: var(--a-radius-sm);
+  background: transparent;
+  color: var(--a-text-secondary);
+  font: inherit;
+  font-size: var(--a-text-sm);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.a-nav-item:hover {
+  background: var(--a-surface-hover);
+  color: var(--a-text);
+}
+
+.a-nav-item[aria-current='true'] {
+  background: var(--a-accent-subtle);
+  color: var(--a-accent);
+  font-weight: 500;
+}
+
+.a-nav-item:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: -2px;
+}
+
+.a-side__foot {
+  padding: var(--a-space-2);
+  border-top: 1px solid var(--a-border);
+  display: flex;
+  gap: var(--a-space-1);
+  flex-shrink: 0;
+}
+
+.a-icon-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--a-radius-sm);
+  background: transparent;
+  color: var(--a-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.a-icon-button:hover {
+  background: var(--a-surface-hover);
+  color: var(--a-text);
+}
+
+.a-icon-button--rotated svg {
+  transform: rotate(180deg);
+}
+
+/* --- content -------------------------------------------------------------- */
+
+.a-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.a-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--a-space-4);
+  height: 56px;
+  padding: 0 var(--a-space-5);
+  background: var(--a-surface);
+  border-bottom: 1px solid var(--a-border);
+  flex-shrink: 0;
+}
+
+.a-topbar__title {
+  margin: 0;
+  font-size: var(--a-text-lg);
+  font-weight: 600;
+  color: var(--a-text);
+}
+
+.a-topbar__caption {
+  margin: 1px 0 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-secondary);
+}
+
+.a-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+}
+
+.a-content {
+  flex: 1;
+  min-height: 0;
+  padding: var(--a-space-5);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+
+/* --- generic controls ----------------------------------------------------- */
+
+.a-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px var(--a-space-3);
+  border: 1px solid var(--a-border-strong);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface);
+  color: var(--a-text);
+  font: inherit;
+  font-size: var(--a-text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.a-button:hover {
+  background: var(--a-surface-hover);
+}
+
+.a-button--primary {
+  background: var(--a-accent);
+  border-color: var(--a-accent);
+  color: var(--a-text-inverse);
+}
+
+.a-button--primary:hover {
+  background: var(--a-accent-hover);
+}
+
+.a-button:focus-visible,
+.a-icon-button:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 2px;
+}
+
+.a-segmented {
+  display: inline-flex;
+  border: 1px solid var(--a-border-strong);
+  border-radius: var(--a-radius-sm);
+  overflow: hidden;
+}
+
+.a-segmented button {
+  padding: 5px var(--a-space-3);
+  border: none;
+  background: var(--a-surface);
+  color: var(--a-text-secondary);
+  font: inherit;
+  font-size: var(--a-text-xs);
+  cursor: pointer;
+}
+
+.a-segmented button + button {
+  border-left: 1px solid var(--a-border);
+}
+
+.a-segmented button[aria-pressed='true'] {
+  background: var(--a-surface-hover);
+  color: var(--a-text);
+  font-weight: 500;
+}
+
+/* --- dashboard grid ------------------------------------------------------- */
+
+.a-board {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--a-space-4);
+}
+
+.a-board__item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The card fills its grid cell. Without this the card sizes to its content and
+   a chart inside it never resolves a height, so ResponsiveContainer measures
+   zero and draws nothing. */
+.a-board__item > .a-card {
+  flex: 1;
+  min-height: 0;
+}
+
+/* A cell sizes its own card rather than stretching it — the gallery sets an
+   explicit height per size preset, which `flex: 1` would otherwise override. */
+.a-board__cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.a-board__cell > .a-card,
+.a-board__cell > div > .a-card {
+  height: 100%;
+}
+
+@media (max-width: 900px) {
+  .a-board__item,
+  .a-board__cell {
+    grid-column: span 12 !important;
+  }
+}
+
+.a-section-title {
+  margin: 0 0 var(--a-space-3);
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+  color: var(--a-text);
+}
+
+.a-muted {
+  color: var(--a-text-secondary);
+  font-size: var(--a-text-sm);
+}

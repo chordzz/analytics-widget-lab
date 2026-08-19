@@ -1,0 +1,107 @@
+/**
+ * Dashboards — the landing screen.
+ *
+ * Opens straight into a board rather than a list of links. The whole point of
+ * this module is judging how widgets look together, and a list of names shows
+ * none of that.
+ *
+ * Reads from the boards store, so a board published from the builder appears
+ * here immediately, and editing one is a click rather than a different flow.
+ */
+
+import { useState } from 'react'
+import { Widget } from '../widgets/Widget'
+import { heightForType } from '../widgets/layout'
+import { useBoards } from '../builder/useBoards'
+import type { ScreenId } from '../shell/nav'
+
+export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
+  const boards = useBoards()
+  const [activeId, setActiveId] = useState<string | null>(null)
+
+  // Prefer a published board, but fall back to whatever exists rather than
+  // showing an empty screen just because nothing has been published yet.
+  const active =
+    boards.boards.find((board) => board.id === activeId) ??
+    boards.published[0] ??
+    boards.boards[0]
+
+  if (!active) {
+    return (
+      <div className="a-empty">
+        <h3>No dashboards yet</h3>
+        <p>Build one and it will appear here.</p>
+        <button
+          type="button"
+          className="a-button a-button--primary"
+          onClick={() => {
+            boards.createBoard()
+            onNavigate('create')
+          }}
+        >
+          Create a dashboard
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="a-tabs">
+        {boards.boards.map((board) => (
+          <button
+            key={board.id}
+            type="button"
+            className={`a-button ${board.id === active.id ? 'a-button--primary' : ''}`}
+            onClick={() => setActiveId(board.id)}
+          >
+            {board.name}
+            {board.status === 'draft' && <span className="a-tabs__flag">· Draft</span>}
+          </button>
+        ))}
+      </div>
+
+      <div className="a-board-head a-board-head--compact">
+        <p className="a-muted">
+          {active.description ? `${active.description} · ` : ''}
+          {active.widgets.length} {active.widgets.length === 1 ? 'widget' : 'widgets'} · updated{' '}
+          {active.updated}
+        </p>
+        <button
+          type="button"
+          className="a-button"
+          onClick={() => {
+            boards.openBoard(active.id)
+            onNavigate('create')
+          }}
+        >
+          Edit
+        </button>
+      </div>
+
+      {active.widgets.length === 0 ? (
+        <div className="a-empty">
+          <h3>{active.name} is empty</h3>
+          <p>Open it in the builder to add widgets.</p>
+        </div>
+      ) : (
+        <div className="a-board">
+          {active.widgets.map((spec) => (
+            <div
+              key={spec.id}
+              className="a-board__item"
+              style={{
+                gridColumn: `span ${spec.span ?? 4}`,
+                // A height only exists on the spec once someone dragged it;
+                // otherwise the type's default still applies.
+                height: spec.height ?? heightForType(spec.typeId),
+              }}
+            >
+              <Widget spec={spec} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

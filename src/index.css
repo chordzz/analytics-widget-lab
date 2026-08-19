@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/*
+ * Analytics widget tokens — provisional.
+ * Snapshotted from @SMCDAO/ui's current light/dark palette (see docs/reference-tokens.md).
+ * Naming mirrors the real library's `--component-variant-state-token` convention on purpose:
+ * porting a widget back later is a rename of this file's variables to `getComponentClasses()`
+ * calls, not a rewrite of component internals. See Analytics_Widgets_Plan.md §4.
+ */
+:root {
+  --analytics-bg: #ffffff;
+  --analytics-surface: #ffffff;
+  --analytics-surface-hover: #ebebeb;
+  --analytics-border: #e5e5e5;
+  --analytics-text: #000000;
+  --analytics-text-secondary: #6b7280;
+  --analytics-text-muted: #9ca3af;
+
+  --analytics-grid: #e5e7eb;
+  --analytics-axis: #4b5563;
+  --analytics-tooltip-bg: #111827;
+  --analytics-tooltip-text: #ffffff;
+
+  /* categorical series palette (parity with Chart's defaultColors) */
+  --analytics-series-1: #8884d8;
+  --analytics-series-2: #82ca9d;
+  --analytics-series-3: #ffc658;
+  --analytics-series-4: #ff7300;
+  --analytics-series-5: #00c2c2;
+  --analytics-series-6: #ff66c4;
+
+  /* status / threshold palette (net new — no equivalent in the library yet) */
+  --analytics-status-positive: #16a34a;
+  --analytics-status-warning: #d97706;
+  --analytics-status-negative: #dc2626;
+  --analytics-status-neutral: #6b7280;
+
+  --analytics-focus-ring: #3b82f6;
+}
+
+[data-theme='dark'] {
+  --analytics-bg: #16171d;
+  --analytics-surface: #202020;
+  --analytics-surface-hover: #262626;
+  --analytics-border: #333333;
+  --analytics-text: #f2f2f2;
+  --analytics-text-secondary: #9ca3af;
+  --analytics-text-muted: #6b7280;
+
+  --analytics-grid: #374151;
+  --analytics-axis: #9ca3af;
+  --analytics-tooltip-bg: #f2f2f2;
+  --analytics-tooltip-text: #111827;
+
+  --analytics-status-positive: #4ade80;
+  --analytics-status-warning: #fbbf24;
+  --analytics-status-negative: #f87171;
+  --analytics-status-neutral: #9ca3af;
+
+  --analytics-focus-ring: #60a5fa;
+}
+
+body {
+  margin: 0;
+  background: var(--analytics-bg);
+  color: var(--analytics-text);
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+}
