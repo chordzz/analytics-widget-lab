@@ -11,7 +11,24 @@
  * seed that reappeared over your own work would be a bug, not a convenience.
  */
 
-import type { Board } from './boards'
+import { flowLayout, rowsForPx } from './grid'
+import { heightForType } from '../widgets/layout'
+import type { Board, PlacedWidget } from './boards'
+import type { WidgetSpec } from '../widgets/Widget'
+
+/**
+ * The seed is authored as widths in reading order, and placed from that.
+ *
+ * Writing `x` and `y` out by hand would be twelve pairs of numbers nobody can
+ * check by eye, and every edit to one widget's width would silently break the
+ * row below it. `flowLayout` is the same function the migration uses, so the
+ * seed and a board restored from the old format go through identical code.
+ *
+ * Height comes from the type rather than being authored at all — a KPI row is
+ * short and a table is tall, and that is the catalogue's opinion to hold.
+ */
+const place = (widgets: (WidgetSpec & { w: number })[]): PlacedWidget[] =>
+  flowLayout(widgets.map((widget) => ({ ...widget, h: rowsForPx(heightForType(widget.typeId)) })))
 
 export const revenueOverview: Board = {
   id: 'revenue-overview',
@@ -19,7 +36,7 @@ export const revenueOverview: Board = {
   description: 'Trading performance across regions and products.',
   status: 'published',
   updated: '2026-08-06',
-  widgets: [
+  widgets: place([
     {
       id: 'w-revenue-total',
       typeId: 'stat-card',
@@ -27,7 +44,7 @@ export const revenueOverview: Board = {
       title: 'Revenue',
       mapping: { value: 'revenue' },
       options: { comparisonLabel: 'vs. last month' },
-      span: 3,
+      w: 3,
     },
     {
       id: 'w-customers',
@@ -36,7 +53,7 @@ export const revenueOverview: Board = {
       title: 'Customers',
       mapping: { value: 'customers', x: 'month' },
       options: { comparisonLabel: 'vs. last month' },
-      span: 3,
+      w: 3,
     },
     {
       id: 'w-refunds',
@@ -45,7 +62,7 @@ export const revenueOverview: Board = {
       title: 'Refunds',
       mapping: { value: 'refunds', x: 'date' },
       options: { direction: 'down-is-good', comparisonLabel: 'vs. yesterday' },
-      span: 3,
+      w: 3,
     },
     {
       id: 'w-target',
@@ -53,7 +70,7 @@ export const revenueOverview: Board = {
       datasetId: 'revenue-monthly',
       title: 'Against target',
       mapping: { value: 'revenue', target: 'target' },
-      span: 3,
+      w: 3,
     },
 
     {
@@ -63,7 +80,7 @@ export const revenueOverview: Board = {
       title: 'Revenue and refunds',
       subtitle: 'Daily, last 365 days',
       mapping: { x: 'date', series: ['revenue', 'refunds'] },
-      span: 8,
+      w: 8,
     },
     {
       id: 'w-region-mix',
@@ -72,7 +89,7 @@ export const revenueOverview: Board = {
       title: 'Revenue by region',
       mapping: { x: 'region', value: 'revenue' },
       options: { centerLabel: 'All regions' },
-      span: 4,
+      w: 4,
     },
 
     {
@@ -81,7 +98,7 @@ export const revenueOverview: Board = {
       datasetId: 'product-performance',
       title: 'Revenue by product',
       mapping: { x: 'product', series: ['revenue'] },
-      span: 5,
+      w: 5,
     },
     {
       id: 'w-top-countries',
@@ -90,7 +107,7 @@ export const revenueOverview: Board = {
       title: 'Top countries',
       subtitle: 'By revenue',
       mapping: { x: 'country', value: 'revenue' },
-      span: 3,
+      w: 3,
     },
     {
       id: 'w-health',
@@ -98,7 +115,7 @@ export const revenueOverview: Board = {
       datasetId: 'service-health',
       title: 'Service health',
       mapping: { x: 'service', state: 'state', value: 'uptime' },
-      span: 4,
+      w: 4,
     },
 
     {
@@ -107,9 +124,9 @@ export const revenueOverview: Board = {
       datasetId: 'support-tickets',
       title: 'Recent support tickets',
       mapping: { columns: ['ref', 'opened', 'status', 'priority', 'team', 'ageDays', 'replies'] },
-      span: 12,
+      w: 12,
     },
-  ],
+  ]),
 }
 
 export const onboardingFunnel: Board = {
@@ -118,14 +135,14 @@ export const onboardingFunnel: Board = {
   description: 'Signup conversion and drop-off.',
   status: 'draft',
   updated: '2026-08-07',
-  widgets: [
+  widgets: place([
     {
       id: 'w-signups',
       typeId: 'stat-card',
       datasetId: 'signup-funnel',
       title: 'Visitors',
       mapping: { value: 'users' },
-      span: 3,
+      w: 3,
     },
     {
       id: 'w-funnel-bars',
@@ -134,9 +151,9 @@ export const onboardingFunnel: Board = {
       title: 'Stage volume',
       mapping: { x: 'stage', series: ['users'] },
       options: { colorByCategory: true },
-      span: 9,
+      w: 9,
     },
-  ],
+  ]),
 }
 
 export const seedBoards: Board[] = [revenueOverview, onboardingFunnel]

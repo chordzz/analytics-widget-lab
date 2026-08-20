@@ -107,23 +107,58 @@ without complaint, and the chart is simply not there.
 
 ## Sizing
 
-**Widgets are placed by column span** on a twelve-column board, so the same
-component renders anywhere from a twelfth of the width to all of it.
+**A widget on a board has a position, and a `WidgetSpec` does not.** A spec says
+what to draw; `PlacedWidget` in `builder/boards.ts` is that plus `x`, `y`, `w`,
+`h` on a twelve-column grid. Nothing in `WidgetSpec` names a column, which is
+what keeps entry points 2 and 3 above honest — a chart on a detail page has no
+board to be placed on.
 
-**Size is a default until someone changes it.** `WidgetSpec.span` and
-`WidgetSpec.height` are both optional; absent means "whatever this type is
-worth" — `defaultSpan` from the catalogue and `heightForType` for the height. Only
-deliberate choices are stored, so a board's untouched widgets keep tracking the
-type as it is tuned rather than freezing the default in place the day they were
-placed.
+**Placement is decided once, when the widget is added, and is never absent
+after.** This replaced a weaker rule worth knowing about, because a board saved
+before the change still relies on it: `span` and `height` used to be *optional*,
+and absent meant "whatever this type is worth", so an untouched widget kept
+tracking `defaultSpan` and `heightForType` as those were tuned. Free placement
+cannot keep that — two widgets can want the same cell, so the answer has to exist
+before anything is drawn. The type's defaults are now the seed for that one
+decision. Migration is the last moment the old indirection exists and resolves
+it; see below.
 
-In the builder a corner grip resizes both axes at once: width snaps to whole
-columns because the grid has no finer setting, height moves in 8px steps because
-free-dragging to the pixel produces boards where two widgets differ by three. The
-grip is a button, so the arrow keys do the same job. The arithmetic is in
-`builder/resize.ts`, kept clear of the component so the boundaries can be
-tested — the drag that has not moved yet, the drag past the edge of the grid, and
-the board that has not been measured.
+**Sizes are grid units, not pixels.** `builder/grid.ts` owns every conversion and
+is pure. The rule that catches people: **a row costs `ROW_HEIGHT + MARGIN_Y`**,
+because the margin sits between every row unit rather than only between widgets.
+Dividing a pixel height by `ROW_HEIGHT` inflates a widget about threefold.
+`rowsForPx` and `pxForRows` are exact inverses; nothing else should convert by
+hand.
+
+A new widget lands in the first cell it fits, scanning left to right and top to
+bottom — `firstFit`. Appending below everything is shorter and stranded the widget
+under a half-empty row.
+
+**Dragging pushes down; it does not swap.** Drop a widget on an occupied cell and
+the occupants move down, then everything compacts upward — no holes left behind.
+That is `react-grid-layout`'s behaviour, and Grafana's, because Grafana is the
+same library. The card **header** is the drag handle; a whole-card handle turns
+every press on the actions menu into a drag.
+
+**Every gesture has a keyboard equivalent, and they share one algorithm.** With a
+card focused, the arrow keys move it and shift plus an arrow resizes it. Those go
+through the library's own `moveElement` and compactor rather than a second
+implementation, so a nudge resolves collisions exactly the way a drag does. The
+grid's own keyboard support is weak; this is ours.
+
+**One gesture, one commit.** The grid reports a layout change on every frame of a
+drag. Persisting those would stamp the board's `updated` date and write to storage
+sixty times a second, so changes are swallowed while a gesture is live and
+committed once when it stops.
+
+**Below 900px of container width the board is a stack, and the stack is never
+saved.** A twelve-column absolute layout means nothing on a phone — three columns
+of a 360px screen is narrower than a card is allowed to be — so the widgets stack
+in reading order and the gestures switch off. That arrangement is a rendering of
+the board, not a board: writing it would flatten the real one to a single column.
+Measured against the container, not the viewport, for the same reason the cards
+use container queries. It cannot be done in CSS at all — a `grid-column` override
+has nothing to say about a transform.
 
 **Charts measure themselves.** Recharts' `ResponsiveContainer` reports 0×0 inside
 a `flex: 1` parent and never recovers — not on resize, not on re-render. Every
@@ -212,7 +247,8 @@ worth knowing before you wire your own data in:
 | Every type renders; nothing emits `NaN`; empty means empty | `widgets/render.test.tsx` |
 | No colour literals outside `tokens.css` | `theme/tokens.test.ts` |
 | Slot table, dataset eligibility, automatic mapping | `builder/requirements.test.ts` |
-| Board operations, reordering, persistence | `builder/boards.test.ts` |
+| Grid conversions, placement, flow | `builder/grid.test.ts` |
+| Board operations, placement, persistence, migration | `builder/boards.test.ts` |
 
 ---
 
@@ -223,7 +259,11 @@ worth knowing before you wire your own data in:
   dependency decision nobody has taken. The catalogue lists it as unbuilt rather
   than hiding it, and the point map covers the geospatial family using centroids.
 - **Recharts-backed primitives do not server-render.** Hand-rolled SVG ones do.
-- **Persistence is `localStorage`,** under `analytics.boards.v1`. That is honest
-  for a UI module with mock data, and it is one function to replace.
+- **Persistence is `localStorage`,** under `analytics.boards.v2`. That is honest
+  for a UI module with mock data, and it is one function to replace. A board saved
+  under `analytics.boards.v1` — a `span`, an array order and no position — is read
+  and flowed left to right, which is how CSS grid was drawing it anyway, so a
+  migrated board looks like the board you left. The old key is left in place after
+  a migration rather than cleared: it is the only way back.
 - **The hash router in `index.tsx` is a twenty-line shim** for running the module
   standalone. Pass `screen` and `onNavigate` and none of it runs.

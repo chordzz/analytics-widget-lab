@@ -10,8 +10,7 @@
  */
 
 import { useState } from 'react'
-import { Widget } from '../widgets/Widget'
-import { heightForType } from '../widgets/layout'
+import { GridBoard } from '../builder/GridBoard'
 import { useBoards } from '../builder/useBoards'
 import type { ScreenId } from '../shell/nav'
 
@@ -79,29 +78,20 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
         </button>
       </div>
 
-      {active.widgets.length === 0 ? (
-        <div className="a-empty">
-          <h3>{active.name} is empty</h3>
-          <p>Open it in the builder to add widgets.</p>
-        </div>
-      ) : (
-        <div className="a-board">
-          {active.widgets.map((spec) => (
-            <div
-              key={spec.id}
-              className="a-board__item"
-              style={{
-                gridColumn: `span ${spec.span ?? 4}`,
-                // A height only exists on the spec once someone dragged it;
-                // otherwise the type's default still applies.
-                height: spec.height ?? heightForType(spec.typeId),
-              }}
-            >
-              <Widget spec={spec} />
-            </div>
-          ))}
-        </div>
-      )}
+      {/*
+        The same component the builder renders, with the gestures switched off.
+        A published board that laid its widgets out even slightly differently
+        would make the builder untrustworthy.
+      */}
+      <GridBoard
+        widgets={active.widgets}
+        empty={
+          <div className="a-empty">
+            <h3>{active.name} is empty</h3>
+            <p>Open it in the builder to add widgets.</p>
+          </div>
+        }
+      />
     </div>
   )
 }

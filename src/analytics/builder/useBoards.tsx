@@ -21,6 +21,7 @@ import {
   type Board,
   type BoardsAction,
   type BoardsState,
+  type LayoutEntry,
 } from './boards'
 import { seedBoards } from './seed'
 import type { WidgetSpec } from '../widgets/Widget'
@@ -47,12 +48,17 @@ interface BoardsContextValue {
   deleteBoard: (id: string) => void
   publishBoard: (id: string) => void
   unpublishBoard: (id: string) => void
-  addWidget: (boardId: string, widget: Omit<WidgetSpec, 'id'>) => void
-  updateWidget: (boardId: string, widget: WidgetSpec) => void
+  /**
+   * Adds a widget. `size` is what the composer chose; anything it leaves out
+   * comes from the widget type, and the board decides where it goes.
+   */
+  addWidget: (boardId: string, widget: Omit<WidgetSpec, 'id'>, size?: { w?: number; h?: number }) => void
+  updateWidget: (boardId: string, widget: WidgetSpec, w?: number) => void
   removeWidget: (boardId: string, widgetId: string) => void
   duplicateWidget: (boardId: string, widgetId: string) => void
-  resizeWidget: (boardId: string, widgetId: string, size: { span?: number; height?: number }) => void
-  moveWidget: (boardId: string, from: number, to: number) => void
+  resizeWidget: (boardId: string, widgetId: string, size: { w?: number; h?: number }) => void
+  /** One gesture, every widget it moved. The grid reports the whole layout. */
+  applyLayout: (boardId: string, placements: readonly LayoutEntry[]) => void
 }
 
 const BoardsContext = createContext<BoardsContextValue | null>(null)
@@ -87,16 +93,24 @@ export function BoardsProvider({ children }: { children: ReactNode }) {
       publishBoard: (id) => dispatch({ type: 'set-status', id, status: 'published', at }),
       unpublishBoard: (id) => dispatch({ type: 'set-status', id, status: 'draft', at }),
 
-      addWidget: (boardId, widget) =>
-        dispatch({ type: 'add-widget', boardId, widget: { ...widget, id: newId('w') }, at }),
-      updateWidget: (boardId, widget) => dispatch({ type: 'update-widget', boardId, widget, at }),
+      addWidget: (boardId, widget, size) =>
+        dispatch({
+          type: 'add-widget',
+          boardId,
+          widget: { ...widget, id: newId('w') },
+          ...size,
+          at,
+        }),
+      updateWidget: (boardId, widget, w) =>
+        dispatch({ type: 'update-widget', boardId, widget, w, at }),
       removeWidget: (boardId, widgetId) =>
         dispatch({ type: 'remove-widget', boardId, widgetId, at }),
       duplicateWidget: (boardId, widgetId) =>
         dispatch({ type: 'duplicate-widget', boardId, widgetId, newId: newId('w'), at }),
       resizeWidget: (boardId, widgetId, size) =>
         dispatch({ type: 'resize-widget', boardId, widgetId, ...size, at }),
-      moveWidget: (boardId, from, to) => dispatch({ type: 'move-widget', boardId, from, to, at }),
+      applyLayout: (boardId, placements) =>
+        dispatch({ type: 'apply-layout', boardId, placements, at }),
     }
   }, [state])
 

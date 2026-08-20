@@ -67,17 +67,17 @@ export interface WidgetSpec {
   subtitle?: string
   mapping: WidgetMapping
   options?: Record<string, unknown>
-  /** Columns on a 12-column board. */
-  span?: number
-  /**
-   * Pixel height, once someone has dragged it.
+  /*
+   * No size and no position.
    *
-   * Absent means "whatever this type is worth" — `heightForType`. Storing only
-   * the deliberate choices keeps a board's defaults tracking the type as it is
-   * tuned, rather than freezing whatever the default happened to be the day the
-   * widget was placed.
+   * A spec says what to draw; where it sits is the board's business. Keeping
+   * placement off this type is what lets the two smaller entry points in
+   * CONTRACT.md stay honest — a chart on a detail page owes nothing to a
+   * dashboard, and it should not have to name a column to render.
+   *
+   * A widget on a board is a `PlacedWidget` — this plus `x`, `y`, `w`, `h`. See
+   * `builder/boards.ts`.
    */
-  height?: number
 }
 
 export interface WidgetProps {

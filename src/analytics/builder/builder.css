@@ -510,96 +510,121 @@
   outline-offset: 1px;
 }
 
-/* --- placed widgets on the canvas ------------------------------------------ */
+/* --- the board -------------------------------------------------------------- */
 
-.a-placed {
-  position: relative;
-}
+/*
+ * react-grid-layout positions its items absolutely, by transform. Two
+ * consequences worth knowing:
+ *
+ *   - The container has no intrinsic height. RGL sets one (`autoSize`), so this
+ *     block must not fight it with a height of its own.
+ *   - Nothing here can be done with a media query. The board's own collapse to a
+ *     single column is a layout decision made in JS, in `GridBoard`, because a
+ *     `grid-column` override cannot touch a transform.
+ */
 
-.a-placed[draggable='true'] {
-  cursor: grab;
-}
-
-.a-placed--dragging {
-  opacity: 0.4;
-}
-
-/* The drop target is marked on the card it would displace, so the gap opens
-   where the widget will actually land. */
-.a-placed--over > .a-card {
-  outline: 2px dashed var(--a-accent);
-  outline-offset: 2px;
+.a-grid {
+  /* A measured width of its own, independent of the page, so `useContainerWidth`
+     reports the board rather than the viewport. */
+  width: 100%;
+  min-width: 0;
 }
 
 /*
- * The corner grip.
+ * The cell must be told to fill the grid item.
  *
- * Hidden until the widget is pointed at or focused within — twelve permanent
- * grips would be the loudest thing on a board. It stays put while a resize is
- * in flight, since the pointer has usually left the card by then.
+ * `.a-board__item > .a-card { flex: 1 }` never matched `.react-grid-item`, so
+ * without this the card sizes to its content — 178px inside an 800px cell — and
+ * every self-measuring chart measures the wrong box.
  */
-.a-placed__grip {
-  position: absolute;
-  right: 2px;
-  bottom: 2px;
+.a-grid-cell {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  border-radius: var(--a-radius-sm);
-  background: none;
-  color: var(--a-text-muted);
-  cursor: nwse-resize;
-  opacity: 0;
-  transition: opacity 120ms ease, color 120ms ease;
-  /* The card owns the pointer for drag-to-reorder; the grip must win. */
-  touch-action: none;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
-.a-placed:hover .a-placed__grip,
-.a-placed:focus-within .a-placed__grip,
-.a-placed--resizing .a-placed__grip {
-  opacity: 1;
+.a-grid-cell > .a-card {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
-.a-placed__grip:hover,
-.a-placed__grip:focus-visible {
-  color: var(--a-accent);
-}
-
-.a-placed__grip:focus-visible {
+/* Keyboard focus on the cell, since arrow keys move and resize the widget. */
+.a-grid-cell:focus-visible {
   outline: 2px solid var(--a-focus-ring);
-  outline-offset: 1px;
-  opacity: 1;
+  outline-offset: 2px;
+  border-radius: var(--a-radius);
 }
 
-/* The card being resized reads as live, and loses its hover transition so it
-   tracks the pointer instead of easing behind it. */
-.a-placed--resizing > .a-card {
+/* The header is the drag handle, so it should say so. */
+.a-grid--editable .a-card__head {
+  cursor: grab;
+}
+
+.a-grid--editable .react-draggable-dragging .a-card__head {
+  cursor: grabbing;
+}
+
+/* The card being dragged or resized reads as live and loses its transition, so
+   it tracks the pointer instead of easing behind it. */
+.a-grid .react-draggable-dragging > .a-card,
+.a-grid .resizing > .a-card {
   border-color: var(--a-accent);
+  box-shadow: var(--a-shadow-raised);
   transition: none;
 }
 
-/* Columns × pixels, shown only during the gesture — the numbers matter while
-   you are choosing them and are clutter the rest of the time. */
-.a-placed__readout {
-  position: absolute;
-  right: 24px;
-  bottom: 4px;
-  padding: 2px var(--a-space-2);
-  border-radius: var(--a-radius-sm);
-  background: var(--a-surface-raised);
-  box-shadow: var(--a-shadow);
-  color: var(--a-text-secondary);
-  font-size: var(--a-text-xs);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  pointer-events: none;
+/*
+ * The landing zone.
+ *
+ * RGL ships `background: red` for this, which is a placeholder in both senses.
+ */
+.a-grid .react-grid-placeholder {
+  background: var(--a-accent);
+  border-radius: var(--a-radius);
+  opacity: 0.14;
 }
 
+/*
+ * The resize grip.
+ *
+ * RGL's own handle draws two `rgba(0, 0, 0, 0.4)` borders, which disappear on a
+ * dark surface. Redrawn here from tokens, and hidden until the widget is pointed
+ * at or focused within — twelve permanent grips would be the loudest thing on a
+ * board.
+ */
+.a-grid .react-resizable-handle {
+  width: 18px;
+  height: 18px;
+  right: 2px;
+  bottom: 2px;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.a-grid .react-grid-item:hover > .react-resizable-handle,
+.a-grid .react-grid-item:focus-within > .react-resizable-handle,
+.a-grid .resizing > .react-resizable-handle {
+  opacity: 1;
+}
+
+.a-grid .react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--a-text-muted);
+  border-bottom: 2px solid var(--a-text-muted);
+}
+
+.a-grid .react-grid-item:hover > .react-resizable-handle::after {
+  border-right-color: var(--a-accent);
+  border-bottom-color: var(--a-accent);
+}
 
 /* --- data sources ---------------------------------------------------------- */
 
@@ -680,19 +705,4 @@
 .a-list__actions {
   display: flex;
   gap: var(--a-space-2);
-}
-
-/* --- SPIKE: react-grid-layout cell. Remove with GridBoardSpike.tsx. --------- */
-
-.a-grid-cell {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-}
-
-.a-grid-cell > .a-card {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
 }

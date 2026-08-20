@@ -95,12 +95,12 @@ analytics/
     primitives/    the reusable visualisations
   builder/
     requirements   what each widget type needs from a dataset — the slot table
-    boards         the board reducer, selectors and persistence
+    grid           grid units: px <-> rows, clamps, first-fit and flow. Pure.
+    boards         the board reducer, selectors, persistence and the v1 migration
     useBoards      the store as React sees it
     useComposeIntent  one-shot "build a widget from this source" handoff
     WidgetComposer choose data → pick a widget → map fields, with a live preview
-    BoardCanvas    the editable board: drag to reorder, corner grip to resize
-    resize         drag-to-size arithmetic, kept pure and testable
+    GridBoard      the board, for the builder and the published view alike
     FieldMapper    one control per slot
   shell/           sidebar, nav, module frame
   screens/         Dashboards, Create, Drafts, Gallery, Data sources

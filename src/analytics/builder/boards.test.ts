@@ -1,36 +1,44 @@
 /**
  * Board operations.
  *
- * Reordering and duplication are the two that are easy to get subtly wrong and
- * hard to spot by eye — a drag that lands one position off looks like the drop
- * target was slightly out rather than like a bug in the splice.
+ * Placement and duplication are the two that are easy to get subtly wrong and
+ * hard to spot by eye — a widget that lands one cell off looks like the drop
+ * target was slightly out rather than like a bug in the arithmetic.
+ *
+ * The grid arithmetic itself is tested in `grid.test.ts`. What is tested here is
+ * that the reducer reaches for it: that adding a widget finds a gap, that a
+ * resize cannot push a widget off the board, and that a board saved in the
+ * one-dimensional format comes back looking like the board you left.
  */
 
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   boardsReducer,
-  clampSpan,
   draftBoards,
   loadState,
   publishedBoards,
   saveState,
-  MAX_SPAN,
-  MIN_SPAN,
   type Board,
   type BoardsState,
+  type PlacedWidget,
 } from './boards'
-import { MAX_HEIGHT, MIN_HEIGHT } from './resize'
+import { MAX_H, MAX_W, MIN_H, MIN_W, collides, flowLayout } from './grid'
 import type { WidgetSpec } from '../widgets/Widget'
 
 const AT = '2026-08-12'
 
-const widget = (id: string, span = 4): WidgetSpec => ({
+/** A spec, with no placement — what the composer hands over. */
+const spec = (id: string): WidgetSpec => ({
   id,
   typeId: 'stat-card',
   datasetId: 'revenue-monthly',
   mapping: { value: 'revenue' },
-  span,
 })
+
+const widget = (id: string, w = 4, h = 4): PlacedWidget => ({ ...spec(id), x: 0, y: 0, w, h })
+
+/** Placed left to right, so the default board has no two widgets in one cell. */
+const placed = (...ids: string[]): PlacedWidget[] => flowLayout(ids.map((id) => widget(id)))
 
 const board = (overrides: Partial<Board> = {}): Board => ({
   id: 'b1',
@@ -38,9 +46,12 @@ const board = (overrides: Partial<Board> = {}): Board => ({
   description: '',
   status: 'draft',
   updated: '2026-01-01',
-  widgets: [widget('a'), widget('b'), widget('c')],
+  widgets: placed('a', 'b', 'c'),
   ...overrides,
 })
+
+const widgetOn = (state: BoardsState, id: string, boardId = 'b1'): PlacedWidget =>
+  state.boards.find((entry) => entry.id === boardId)!.widgets.find((entry) => entry.id === id)!
 
 const stateWith = (...boards: Board[]): BoardsState => ({ boards, editingId: null })
 
@@ -146,7 +157,7 @@ describe('widgets on a board', () => {
     const next = boardsReducer(stateWith(board()), {
       type: 'add-widget',
       boardId: 'b1',
-      widget: widget('d'),
+      widget: spec('d'),
       at: AT,
     })
     expect(ids(next)).toEqual(['a', 'b', 'c', 'd'])
@@ -187,7 +198,7 @@ describe('widgets on a board', () => {
   })
 
   test('a widget only changes on its own board', () => {
-    const other = board({ id: 'b2', widgets: [widget('a')] })
+    const other = board({ id: 'b2', widgets: placed('a') })
     const next = boardsReducer(stateWith(board(), other), {
       type: 'remove-widget',
       boardId: 'b2',
@@ -199,58 +210,151 @@ describe('widgets on a board', () => {
   })
 })
 
-describe('reordering', () => {
-  const move = (from: number, to: number) =>
-    ids(boardsReducer(stateWith(board()), { type: 'move-widget', boardId: 'b1', from, to, at: AT }))
-
-  test('moving forwards lands at the target index', () => {
-    expect(move(0, 2)).toEqual(['b', 'c', 'a'])
+describe('placing a new widget', () => {
+  test('it lands in the first gap, not below the board', () => {
+    // The reducer's job is to reach for `firstFit`; where the gap is is
+    // `grid.test.ts`'s problem.
+    const next = boardsReducer(stateWith(board({ widgets: [widget('a', 8)] })), {
+      type: 'add-widget',
+      boardId: 'b1',
+      widget: spec('d'),
+      w: 4,
+      at: AT,
+    })
+    expect(widgetOn(next, 'd')).toMatchObject({ x: 8, y: 0, w: 4 })
   })
 
-  test('moving backwards lands at the target index', () => {
-    expect(move(2, 0)).toEqual(['c', 'a', 'b'])
+  test('a width the composer did not choose comes from the widget type', () => {
+    // `stat-card` asks for 3 columns and 132px, which is 4 rows.
+    const next = boardsReducer(stateWith(board({ widgets: [] })), {
+      type: 'add-widget',
+      boardId: 'b1',
+      widget: spec('d'),
+      at: AT,
+    })
+    expect(widgetOn(next, 'd')).toMatchObject({ x: 0, y: 0, w: 3, h: 4 })
   })
 
-  test('a one-step swap is a swap', () => {
-    expect(move(0, 1)).toEqual(['b', 'a', 'c'])
+  test('a size outside the grid is clamped on the way in', () => {
+    const next = boardsReducer(stateWith(board({ widgets: [] })), {
+      type: 'add-widget',
+      boardId: 'b1',
+      widget: spec('d'),
+      w: 99,
+      h: 1,
+      at: AT,
+    })
+    expect(widgetOn(next, 'd')).toMatchObject({ w: MAX_W, h: MIN_H })
   })
 
-  test('moving onto itself changes nothing', () => {
-    expect(move(1, 1)).toEqual(['a', 'b', 'c'])
-  })
-
-  test('an out-of-range source is ignored', () => {
-    expect(move(9, 0)).toEqual(['a', 'b', 'c'])
-    expect(move(-1, 0)).toEqual(['a', 'b', 'c'])
-  })
-
-  test('an over-far target clamps to the end rather than dropping the widget', () => {
-    expect(move(0, 99)).toEqual(['b', 'c', 'a'])
+  test('a duplicate gets a cell of its own', () => {
+    // Copying the original's placement too would stack the two exactly and only
+    // one of them would ever be visible.
+    const next = boardsReducer(stateWith(board()), {
+      type: 'duplicate-widget',
+      boardId: 'b1',
+      widgetId: 'a',
+      newId: 'a-copy',
+      at: AT,
+    })
+    expect(collides(widgetOn(next, 'a'), widgetOn(next, 'a-copy'))).toBe(false)
   })
 })
 
 describe('resizing', () => {
-  const spanOf = (span: number) =>
-    boardsReducer(stateWith(board()), {
-      type: 'resize-widget',
+  const resized = (size: { w?: number; h?: number }, widgets = placed('a', 'b', 'c')) =>
+    widgetOn(
+      boardsReducer(stateWith(board({ widgets })), {
+        type: 'resize-widget',
+        boardId: 'b1',
+        widgetId: 'a',
+        ...size,
+        at: AT,
+      }),
+      'a',
+    )
+
+  test('a size within range is kept', () => {
+    expect(resized({ w: 6 })).toMatchObject({ w: 6 })
+    expect(resized({ h: 9 })).toMatchObject({ h: 9 })
+  })
+
+  test('a size outside the grid is clamped', () => {
+    expect(resized({ w: 0 }).w).toBe(MIN_W)
+    expect(resized({ w: 40 }).w).toBe(MAX_W)
+    expect(resized({ h: 0 }).h).toBe(MIN_H)
+    expect(resized({ h: 999 }).h).toBe(MAX_H)
+  })
+
+  test('resizing one dimension leaves the other alone', () => {
+    // The grip sends whichever axis moved; an omitted axis must not be read as
+    // "set this to undefined" and silently reset the widget.
+    const widened = resized({ w: 8 }, [widget('a', 4, 9)])
+    expect(widened.w).toBe(8)
+    expect(widened.h).toBe(9)
+  })
+
+  test('a resize does not move the widget', () => {
+    const moved = resized({ w: 3 }, [{ ...widget('a'), x: 5, y: 7 }])
+    expect(moved).toMatchObject({ x: 5, y: 7 })
+  })
+
+  test('widening at the right edge slides the widget left', () => {
+    // Otherwise the widget hangs off the board, which the grid then has to
+    // rescue on the next render — visibly, one frame late.
+    const widened = resized({ w: 6 }, [{ ...widget('a'), x: 8, y: 0 }])
+    expect(widened).toMatchObject({ x: 6, w: 6 })
+  })
+})
+
+describe('applying a whole layout', () => {
+  const entries = [
+    { id: 'a', x: 0, y: 0, w: 6, h: 5 },
+    { id: 'b', x: 6, y: 0, w: 6, h: 5 },
+    { id: 'c', x: 0, y: 5, w: 12, h: 7 },
+  ]
+
+  const applied = (placements: typeof entries) =>
+    boardsReducer(stateWith(board()), { type: 'apply-layout', boardId: 'b1', placements, at: AT })
+
+  test('every widget named gets its new placement', () => {
+    const next = applied(entries)
+    expect(widgetOn(next, 'a')).toMatchObject({ x: 0, y: 0, w: 6, h: 5 })
+    expect(widgetOn(next, 'c')).toMatchObject({ x: 0, y: 5, w: 12, h: 7 })
+  })
+
+  test('a widget the layout does not mention is left where it was', () => {
+    const next = applied([entries[0]])
+    expect(widgetOn(next, 'b')).toMatchObject({ x: 4, y: 0, w: 4 })
+  })
+
+  test('an id that is not on the board is ignored rather than added', () => {
+    const next = applied([{ id: 'ghost', x: 0, y: 0, w: 4, h: 4 }])
+    expect(ids(next)).toEqual(['a', 'b', 'c'])
+  })
+
+  test('placements are clamped, however the grid reports them', () => {
+    const next = applied([{ id: 'a', x: -3, y: -9, w: 99, h: 1 }])
+    expect(widgetOn(next, 'a')).toMatchObject({ x: 0, y: 0, w: MAX_W, h: MIN_H })
+  })
+
+  test('an unchanged layout returns the very same board', () => {
+    /*
+     * Not merely an equal one — the same object.
+     *
+     * The grid reports a layout on mount and after every compaction. Treating
+     * those as edits would redate every board just by opening it, and the
+     * persist effect watching this state would write on every render.
+     */
+    const before = stateWith(board())
+    const unchanged = before.boards[0].widgets.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))
+    const next = boardsReducer(before, {
+      type: 'apply-layout',
       boardId: 'b1',
-      widgetId: 'a',
-      span,
+      placements: unchanged,
       at: AT,
-    }).boards[0].widgets[0].span
-
-  test('a span within range is kept', () => {
-    expect(spanOf(6)).toBe(6)
-  })
-
-  test('a span outside the grid is clamped', () => {
-    expect(spanOf(0)).toBe(MIN_SPAN)
-    expect(spanOf(40)).toBe(MAX_SPAN)
-  })
-
-  test('clampSpan rounds to whole columns', () => {
-    expect(clampSpan(4.4)).toBe(4)
-    expect(clampSpan(4.6)).toBe(5)
+    })
+    expect(next.boards[0]).toBe(before.boards[0])
   })
 })
 
@@ -276,7 +380,7 @@ function stubStorage() {
 }
 
 describe('persistence', () => {
-  const KEY = 'analytics.boards.v1'
+  const KEY = 'analytics.boards.v2'
   const seed = [board({ id: 'seeded' })]
 
   beforeEach(stubStorage)
@@ -291,6 +395,14 @@ describe('persistence', () => {
     const restored = loadState(seed)
     expect(restored.boards.map((entry) => entry.id)).toEqual(['saved'])
     expect(restored.editingId).toBe('saved')
+  })
+
+  test('placement survives the round trip untouched', () => {
+    // The load path normalises every board it reads. A valid placement must come
+    // back exactly as it went in, or opening a board would nudge it.
+    const put = { ...widget('a'), x: 5, y: 9, w: 6, h: 11 }
+    saveState({ boards: [board({ id: 'saved', widgets: [put] })], editingId: null })
+    expect(widgetOn(loadState(seed), 'a', 'saved')).toMatchObject({ x: 5, y: 9, w: 6, h: 11 })
   })
 
   test('a pointer to a board that no longer exists is dropped', () => {
@@ -316,39 +428,133 @@ describe('persistence', () => {
   })
 })
 
-describe('resizing height', () => {
-  const sized = (action: Partial<{ span: number; height: number }>) =>
-    boardsReducer(stateWith(board()), {
-      type: 'resize-widget',
-      boardId: 'b1',
-      widgetId: 'a',
-      ...action,
-      at: AT,
-    }).boards[0].widgets[0]
+/**
+ * Migrating the one-dimensional format.
+ *
+ * A v1 board stored a `span`, an array order and sometimes a pixel height. It
+ * never stored a position, because CSS grid supplied one by flowing the widgets
+ * left to right. Reading it is therefore not a translation so much as writing
+ * down what the browser was already doing — which is what makes "the board looks
+ * like the board you left" a testable claim rather than a hope.
+ */
+describe('migration from v1', () => {
+  const LEGACY_KEY = 'analytics.boards.v1'
+  const KEY = 'analytics.boards.v2'
+  const seed = [board({ id: 'seeded' })]
 
-  test('a height is stored on the widget', () => {
-    expect(sized({ height: 300 }).height).toBe(300)
+  /** Exactly the old shape: spans, an order, and no x or y anywhere. */
+  const legacy = (widgets: unknown[]) => ({
+    boards: [
+      {
+        id: 'old',
+        name: 'Old board',
+        description: '',
+        status: 'published',
+        updated: '2026-01-01',
+        widgets,
+      },
+    ],
+    editingId: 'old',
   })
 
-  test('height is clamped to what a card can usefully be', () => {
-    expect(sized({ height: 5 }).height).toBe(MIN_HEIGHT)
-    expect(sized({ height: 5000 }).height).toBe(MAX_HEIGHT)
+  const migrate = (widgets: unknown[]) => {
+    localStorage.setItem(LEGACY_KEY, JSON.stringify(legacy(widgets)))
+    return loadState(seed)
+  }
+
+  beforeEach(stubStorage)
+
+  test('a span becomes a width and the order becomes a position', () => {
+    const state = migrate([
+      { ...spec('a'), span: 3 },
+      { ...spec('b'), span: 9 },
+      { ...spec('c'), span: 12 },
+    ])
+
+    // Two widgets filling a row, then one that cannot fit beside them.
+    expect(widgetOn(state, 'a', 'old')).toMatchObject({ x: 0, y: 0, w: 3 })
+    expect(widgetOn(state, 'b', 'old')).toMatchObject({ x: 3, y: 0, w: 9 })
+    expect(widgetOn(state, 'c', 'old')).toMatchObject({ x: 0, w: 12 })
+    expect(widgetOn(state, 'c', 'old').y).toBeGreaterThan(0)
   })
 
-  test('resizing one dimension leaves the other alone', () => {
-    // The grip sends whichever axis moved; an omitted axis must not be read as
-    // "set this to undefined" and silently reset the widget.
-    const widened = boardsReducer(
-      stateWith(board({ widgets: [{ ...widget('a'), span: 6, height: 300 }] })),
-      { type: 'resize-widget', boardId: 'b1', widgetId: 'a', span: 8, at: AT },
-    ).boards[0].widgets[0]
-
-    expect(widened.span).toBe(8)
-    expect(widened.height).toBe(300)
+  test('a dragged pixel height becomes rows', () => {
+    // 300px is 8 rows at this pitch. Dividing by ROW_HEIGHT alone would say 13.
+    const state = migrate([{ ...spec('a'), span: 8, height: 300 }])
+    expect(widgetOn(state, 'a', 'old').h).toBe(8)
   })
 
-  test('a widget with no stored height keeps having none', () => {
-    // Absent means "use the type default", which is not the same as a number.
-    expect(sized({ span: 6 }).height).toBeUndefined()
+  test('a widget that was never resized takes its type default', () => {
+    /*
+     * This is the property the old model had and the new one cannot: `span` and
+     * `height` were optional, and absent meant "whatever this type is worth".
+     * Migration is the last moment that indirection exists, so it has to be
+     * resolved here rather than left as a hole.
+     */
+    const state = migrate([{ ...spec('a'), typeId: 'data-table' }])
+    expect(widgetOn(state, 'a', 'old')).toMatchObject({ w: 8, h: 8 })
+  })
+
+  test('nothing overlaps after a migration', () => {
+    const state = migrate(
+      [3, 3, 3, 3, 8, 4, 5, 3, 4, 12].map((span, index) => ({ ...spec(`w${index}`), span })),
+    )
+    const widgets = state.boards[0].widgets
+    for (const [i, item] of widgets.entries()) {
+      for (const other of widgets.slice(i + 1)) expect(collides(item, other)).toBe(false)
+    }
+  })
+
+  test('the old keys do not survive', () => {
+    const state = migrate([{ ...spec('a'), span: 3, height: 300 }])
+    const migrated = widgetOn(state, 'a', 'old') as unknown as Record<string, unknown>
+    expect('span' in migrated).toBe(false)
+    expect('height' in migrated).toBe(false)
+  })
+
+  test('which board was open survives', () => {
+    expect(migrate([{ ...spec('a'), span: 3 }]).editingId).toBe('old')
+  })
+
+  test('a current session wins over the legacy one', () => {
+    // Both keys exist after a migration: v1 is left in place as the way back.
+    // Reading it in preference to v2 would silently discard every later edit.
+    localStorage.setItem(LEGACY_KEY, JSON.stringify(legacy([{ ...spec('a'), span: 3 }])))
+    saveState({ boards: [board({ id: 'current' })], editingId: null })
+    expect(loadState(seed).boards.map((entry) => entry.id)).toEqual(['current'])
+  })
+
+  test('the legacy key is left alone rather than cleared', () => {
+    const raw = JSON.stringify(legacy([{ ...spec('a'), span: 3 }]))
+    localStorage.setItem(LEGACY_KEY, raw)
+    loadState(seed)
+    expect(localStorage.getItem(LEGACY_KEY)).toBe(raw)
+  })
+
+  test('a board missing one position is reflowed entirely', () => {
+    /*
+     * All-or-nothing, deliberately. A layout with a hole in it is not a layout
+     * worth half-trusting: keeping the positions that survived would leave the
+     * repaired widget overlapping one of them.
+     */
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        boards: [
+          board({
+            id: 'holed',
+            widgets: [
+              { ...widget('a'), x: 9, y: 4 },
+              { ...widget('b'), y: undefined as unknown as number },
+            ],
+          }),
+        ],
+        editingId: null,
+      }),
+    )
+
+    const state = loadState(seed)
+    expect(widgetOn(state, 'a', 'holed')).toMatchObject({ x: 0, y: 0 })
+    expect(widgetOn(state, 'b', 'holed')).toMatchObject({ x: 4, y: 0 })
   })
 })

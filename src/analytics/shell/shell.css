@@ -306,20 +306,6 @@
   gap: var(--a-space-4);
 }
 
-.a-board__item {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-/* The card fills its grid cell. Without this the card sizes to its content and
-   a chart inside it never resolves a height, so ResponsiveContainer measures
-   zero and draws nothing. */
-.a-board__item > .a-card {
-  flex: 1;
-  min-height: 0;
-}
-
 /* A cell sizes its own card rather than stretching it — the gallery sets an
    explicit height per size preset, which `flex: 1` would otherwise override. */
 .a-board__cell {
@@ -333,8 +319,10 @@
   height: 100%;
 }
 
+/* The gallery's own grid still collapses with a media query — it is a page of
+   specimens at fixed sizes, not a board, and nothing positions it by transform.
+   The board's collapse lives in `GridBoard`; see `STACK_BELOW`. */
 @media (max-width: 900px) {
-  .a-board__item,
   .a-board__cell {
     grid-column: span 12 !important;
   }

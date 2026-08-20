@@ -121,7 +121,7 @@ export function WidgetComposer({
 
   const preview: WidgetSpec | null =
     dataset && type
-      ? { id: 'preview', typeId, datasetId, title: title.trim() || type.label, mapping, span }
+      ? { id: 'preview', typeId, datasetId, title: title.trim() || type.label, mapping }
       : null
 
   return (

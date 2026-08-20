@@ -10,12 +10,11 @@
  */
 
 import { useEffect, useState } from 'react'
-import { BoardCanvas } from '../builder/BoardCanvas'
-import { GridBoardSpike } from '../builder/GridBoardSpike' // SPIKE — remove with the file
+import { GridBoard } from '../builder/GridBoard'
 import { WidgetComposer, type ComposerDraft } from '../builder/WidgetComposer'
 import { useBoards } from '../builder/useBoards'
 import { useComposeIntent } from '../builder/useComposeIntent'
-import type { WidgetSpec } from '../widgets/Widget'
+import type { PlacedWidget } from '../builder/boards'
 import type { ScreenId } from '../shell/nav'
 
 export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
@@ -30,9 +29,9 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
    * `new` — the add flow from scratch.
    * `{ datasetId }` — the add flow, arriving from Data sources with the source
    *   already chosen.
-   * a `WidgetSpec` — editing that widget.
+   * a `PlacedWidget` — editing that widget.
    */
-  const [composing, setComposing] = useState<'new' | { datasetId: string } | WidgetSpec | null>(
+  const [composing, setComposing] = useState<'new' | { datasetId: string } | PlacedWidget | null>(
     null,
   )
 
@@ -53,27 +52,33 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
 
   if (!editing) return null
 
-  const isEditing = (value: typeof composing): value is WidgetSpec =>
+  const isEditing = (value: typeof composing): value is PlacedWidget =>
     value !== null && value !== 'new' && 'id' in value
 
   const commit = (draft: ComposerDraft) => {
     if (!isEditing(composing)) {
-      boards.addWidget(editing.id, {
-        typeId: draft.typeId,
-        datasetId: draft.datasetId,
-        title: draft.title,
-        mapping: draft.mapping,
-        span: draft.span,
-      })
+      boards.addWidget(
+        editing.id,
+        {
+          typeId: draft.typeId,
+          datasetId: draft.datasetId,
+          title: draft.title,
+          mapping: draft.mapping,
+        },
+        { w: draft.span },
+      )
     } else {
-      boards.updateWidget(editing.id, {
-        ...composing,
-        typeId: draft.typeId,
-        datasetId: draft.datasetId,
-        title: draft.title,
-        mapping: draft.mapping,
-        span: draft.span,
-      })
+      boards.updateWidget(
+        editing.id,
+        {
+          ...composing,
+          typeId: draft.typeId,
+          datasetId: draft.datasetId,
+          title: draft.title,
+          mapping: draft.mapping,
+        },
+        draft.span,
+      )
     }
     setComposing(null)
   }
@@ -88,7 +93,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
                 datasetId: composing.datasetId,
                 title: composing.title ?? '',
                 mapping: composing.mapping,
-                span: composing.span ?? 6,
+                span: composing.w,
               }
             : undefined
         }
@@ -141,17 +146,13 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
         </div>
       </div>
 
-      {/* SPIKE: localStorage.spikeGrid = '1' swaps in the react-grid-layout board. */}
-      {typeof localStorage !== 'undefined' && localStorage.getItem('spikeGrid') === '1' ? (
-        <GridBoardSpike widgets={editing.widgets} />
-      ) : (
-      <BoardCanvas
+      <GridBoard
         widgets={editing.widgets}
+        editable
+        onLayoutChange={(placements) => boards.applyLayout(editing.id, placements)}
         onEdit={(widget) => setComposing(widget)}
         onDuplicate={(id) => boards.duplicateWidget(editing.id, id)}
         onRemove={(id) => boards.removeWidget(editing.id, id)}
-        onResize={(id, size) => boards.resizeWidget(editing.id, id, size)}
-        onMove={(from, to) => boards.moveWidget(editing.id, from, to)}
         empty={
           <div className="a-empty">
             <h3>Nothing on this board yet</h3>
@@ -169,7 +170,6 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           </div>
         }
       />
-      )}
     </div>
   )
 }
