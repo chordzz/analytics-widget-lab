@@ -17,7 +17,7 @@ export function heightForType(typeId: string): number {
   const type = widgetType(typeId)
 
   if (type?.family === 'single-value') return typeId === 'progress-tracker' ? 188 : 132
-  if (typeId === 'status-tile') return 132
+  if (typeId === 'status-indicator') return 132
   if (typeId === 'gauge') return 188
   if (typeId === 'activity-feed') return 300
   if (type?.family === 'tabular') return 320
@@ -29,7 +29,7 @@ export function heightForType(typeId: string): number {
    */
   if (typeId === 'calendar-heatmap') return 190
 
-  if (type?.family === 'temporal') return 300
+  if (type?.family === 'temporal-pattern') return 300
   if (type?.family === 'geospatial') return 320
 
   return 268

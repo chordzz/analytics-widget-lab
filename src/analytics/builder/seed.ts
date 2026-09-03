@@ -94,7 +94,7 @@ export const revenueOverview: Board = {
 
     {
       id: 'w-products',
-      typeId: 'bar-horizontal',
+      typeId: 'bar-chart-horizontal',
       datasetId: 'product-performance',
       title: 'Revenue by product',
       mapping: { x: 'product', series: ['revenue'] },
@@ -146,7 +146,7 @@ export const onboardingFunnel: Board = {
     },
     {
       id: 'w-funnel-bars',
-      typeId: 'bar-horizontal',
+      typeId: 'bar-chart-horizontal',
       datasetId: 'signup-funnel',
       title: 'Stage volume',
       mapping: { x: 'stage', series: ['users'] },

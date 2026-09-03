@@ -27,10 +27,10 @@ export const SAMPLES: Record<string, WidgetSample> = {
   'spline-chart': { datasetId: 'revenue-monthly', title: 'Customers', mapping: { x: 'month', series: ['customers'] } },
   'step-chart': { datasetId: 'revenue-monthly', title: 'Target steps', mapping: { x: 'month', series: ['target'] } },
 
-  'bar-vertical': { datasetId: 'sales-by-region', title: 'Revenue by region', mapping: { x: 'region', series: ['revenue'] }, options: { colorByCategory: true } },
-  'bar-horizontal': { datasetId: 'product-performance', title: 'Revenue by product', mapping: { x: 'product', series: ['revenue'] } },
-  'bar-grouped': { datasetId: 'sales-by-region', title: 'Revenue and orders', mapping: { x: 'region', series: ['revenue', 'orders'] } },
-  'bar-stacked': { datasetId: 'sales-by-region', title: 'Composition by region', mapping: { x: 'region', series: ['revenue', 'orders'] } },
+  'bar-chart-vertical': { datasetId: 'sales-by-region', title: 'Revenue by region', mapping: { x: 'region', series: ['revenue'] }, options: { colorByCategory: true } },
+  'bar-chart-horizontal': { datasetId: 'product-performance', title: 'Revenue by product', mapping: { x: 'product', series: ['revenue'] } },
+  'grouped-bar-chart': { datasetId: 'sales-by-region', title: 'Revenue and orders', mapping: { x: 'region', series: ['revenue', 'orders'] } },
+  'stacked-bar-chart': { datasetId: 'sales-by-region', title: 'Composition by region', mapping: { x: 'region', series: ['revenue', 'orders'] } },
 
   'pie-chart': { datasetId: 'sales-by-region', title: 'Share by region', mapping: { x: 'region', value: 'revenue' } },
   'donut-chart': { datasetId: 'sales-by-region', title: 'Share by region', mapping: { x: 'region', value: 'revenue' }, options: { centerLabel: 'All regions' } },
@@ -39,7 +39,7 @@ export const SAMPLES: Record<string, WidgetSample> = {
   leaderboard: { datasetId: 'product-performance', title: 'Product leaderboard', mapping: { x: 'product', value: 'revenue' } },
 
   'status-list': { datasetId: 'service-health', title: 'Service health', mapping: { x: 'service', state: 'state', value: 'uptime' } },
-  'status-tile': { datasetId: 'service-health', title: 'Worst service', mapping: { x: 'service', state: 'state' }, options: { detail: 'Highest severity right now' } },
+  'status-indicator': { datasetId: 'service-health', title: 'Worst service', mapping: { x: 'service', state: 'state' }, options: { detail: 'Highest severity right now' } },
 
   gauge: { datasetId: 'revenue-monthly', title: 'Against target', mapping: { value: 'revenue', target: 'target' } },
 
@@ -61,7 +61,7 @@ export const SAMPLES: Record<string, WidgetSample> = {
 
   'calendar-heatmap': { datasetId: 'revenue-daily', title: 'Daily revenue', mapping: { x: 'date', value: 'revenue' } },
   'cohort-grid': { datasetId: 'cohort-retention', title: 'Retention by cohort', mapping: { x: 'cohort', secondary: 'period', value: 'retention' } },
-  'gantt-chart': { datasetId: 'project-timeline', title: 'Delivery plan', mapping: { x: 'task', series: ['start', 'end'], secondary: 'phase', value: 'progress' } },
+  'timeline-chart': { datasetId: 'project-timeline', title: 'Delivery plan', mapping: { x: 'task', series: ['start', 'end'], secondary: 'phase', value: 'progress' } },
 
   'activity-feed': { datasetId: 'activity-events', title: 'Recent activity', mapping: { x: 'at', secondary: 'actor', value: 'action' }, options: { severityKey: 'severity' } },
 

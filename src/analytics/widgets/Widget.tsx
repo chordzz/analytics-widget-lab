@@ -121,7 +121,7 @@ export function Widget({ spec, state, actions, selected, onSelect, height }: Wid
   }
 
   const resolved: WidgetState = state ?? (dataset.rows.length === 0 ? 'empty' : 'ready')
-  const bare = type.family === 'single-value' || type.id === 'status-tile'
+  const bare = type.family === 'single-value' || type.id === 'status-indicator'
   // Lists and tables read as text, so they keep the wider inset. Plots give
   // the padding back to the plot.
   const textLed =
@@ -175,16 +175,16 @@ function renderBody(
         />
       )
 
-    case 'bar-vertical':
-    case 'bar-horizontal':
-    case 'bar-grouped':
-    case 'bar-stacked': {
+    case 'bar-chart-vertical':
+    case 'bar-chart-horizontal':
+    case 'grouped-bar-chart':
+    case 'stacked-bar-chart': {
       const variant =
-        typeId === 'bar-horizontal'
+        typeId === 'bar-chart-horizontal'
           ? 'horizontal'
-          : typeId === 'bar-grouped'
+          : typeId === 'grouped-bar-chart'
             ? 'grouped'
-            : typeId === 'bar-stacked'
+            : typeId === 'stacked-bar-chart'
               ? 'stacked'
               : 'vertical'
       return (
@@ -297,7 +297,7 @@ function renderBody(
         />
       )
 
-    case 'status-tile': {
+    case 'status-indicator': {
       const worst = [...rows].sort(
         (a, b) => severity(b[mapping.state ?? '']) - severity(a[mapping.state ?? '']),
       )[0]
@@ -409,7 +409,7 @@ function renderBody(
         />
       )
 
-    case 'gantt-chart': {
+    case 'timeline-chart': {
       const [start, end] = mapping.series ?? []
       return (
         <GanttChart

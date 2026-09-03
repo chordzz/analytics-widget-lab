@@ -93,7 +93,7 @@ const salesByRegion = (): Dataset => {
 
   return {
     id: 'sales-by-region',
-    suits: ['donut-chart', 'pie-chart', 'bar-vertical'],
+    suits: ['donut-chart', 'pie-chart', 'bar-chart-vertical'],
     name: 'Sales by region',
     description: 'Revenue and order volume across six regions.',
     source: 'Billing',
@@ -332,7 +332,7 @@ const projectTimeline = (): Dataset => {
 
   return {
     id: 'project-timeline',
-    suits: ['gantt-chart'],
+    suits: ['timeline-chart'],
     name: 'Project timeline',
     description: 'Nine workstreams with start and end offsets, grouped by phase.',
     source: 'Delivery',
@@ -392,7 +392,7 @@ const activityEvents = (): Dataset => {
 
 const serviceHealth = (): Dataset => ({
   id: 'service-health',
-    suits: ['status-list', 'status-tile'],
+    suits: ['status-list', 'status-indicator'],
   name: 'Service health',
   description: 'Nine services with uptime, latency and current state.',
   source: 'Platform',

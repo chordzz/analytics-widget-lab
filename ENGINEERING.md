@@ -28,7 +28,7 @@ reading one and thinking you have read both.
 | **Lives in** | `src/analytics/**` | `src/{domain,visualization,retrieval,widget-runtime,renderers,catalogue,access,governance,authoring,composition,dashboard,contract-docs,ui}` |
 | **What it is** | The shippable UI. Sidebar, boards, builder, 34 widget types. | A requirements-proving harness for the Analytics FRD. |
 | **Data** | 13 mock datasets compiled into the bundle, rows and all | 5 fixture Datasets behind an async port, with per-Dataset failure scenarios |
-| **Persistence** | `localStorage`, `analytics.boards.v2` | `localStorage`, behind `DashboardStorePort` |
+| **Persistence** | `localStorage`, `analytics.boards.v3` | `localStorage`, behind `DashboardStorePort` |
 | **Async?** | No. Nothing in it awaits anything. | Yes, throughout. |
 | **Authorization?** | No concept of a viewer at all. | `ViewerIdentity` on every port call; denial is a first-class render state. |
 | **Design tokens** | 61 `--a-*` tokens in `src/analytics/theme/tokens.css` | 17 `--analytics-*` tokens in `src/index.css` |
@@ -59,7 +59,7 @@ mostly the job of bringing it across.
 bun install
 bun dev              # http://localhost:5173  → the workbench
                      # http://localhost:5173/#/analytics → the product module
-bun test             # 437 tests, 17 files
+bun test             # 456 tests, 18 files
 bun run typecheck    # tsc -b
 bun run docs         # regenerate docs/ from the code that implements it
 ```
@@ -253,13 +253,19 @@ Two subtleties worth knowing before you touch it:
 Two functions, `loadState` and `saveState`, at the bottom of `boards.ts`. They are
 the whole persistence surface.
 
-`analytics.boards.v2` holds `{ boards, editingId }`. `editingId` is persisted with
+`analytics.boards.v3` holds `{ boards, editingId }`. `editingId` is persisted with
 the boards on purpose: without it, reloading the builder finds nothing open,
 starts a new board, and quietly abandons your work behind an empty draft.
 
-`analytics.boards.v1` — a `span`, an array order and no position — is still
-**read, never written**, and left in place after migrating rather than cleared. It
-costs a few kilobytes and it is the only way back.
+Two older keys are still **read, never written**, and left in place after
+migrating rather than cleared — they cost a few kilobytes and they are the only
+way back. `analytics.boards.v1` is a `span`, an array order and no position.
+`analytics.boards.v2` has free placement but the module's own Visualization Type
+ids, before it adopted the FRD's; seven of those were renamed, and because
+`typeId` is persisted, reading a v2 board without translating it turns every bar
+chart into an error card. `RENAMED_TYPES` in `widgets/catalog.ts` is the map, and
+`renamed()` in `boards.ts` applies it — **before** `sized()`, because the fallback
+width and height are looked up by type.
 
 Migration is not a separate code path, which is the nice part: `sized()` handles
 every source with one expression, because a v1 widget is simply a v2 widget with
@@ -449,7 +455,7 @@ have to move into the query:
 - **`gauge` / `progress-tracker`** (`Widget.tsx:261`) — `rows[rows.length - 1]`.
   "Latest" is implicit in array order. A server response has no order unless the
   query asked for one, so this needs an explicit sort and limit.
-- **`status-tile`** (`Widget.tsx:300`) — sorts every row by severity to find the
+- **`status-indicator`** (`Widget.tsx:300`) — sorts every row by severity to find the
   worst. Fine over 8 services; not fine as a table grows.
 - **`Distribution`** (histogram, box plot) bins client-side over every value, and
   **`CohortGrid`** derives its periods from distinct values. Both need either
@@ -506,7 +512,8 @@ Not conventions. Each has a guard, and breaking one turns something red.
 | No colour literal outside `tokens.css` | `theme/tokens.test.ts` |
 | Slot table, dataset eligibility, automatic mapping | `builder/requirements.test.ts` |
 | Grid conversions, placement, flow | `builder/grid.test.ts` |
-| Board operations, placement, persistence, v1→v2 migration | `builder/boards.test.ts` |
+| Board operations, placement, persistence, v1→v2→v3 migration | `builder/boards.test.ts` |
+| Module catalogue matches the FRD manifest | `widgets/taxonomy.test.ts` |
 | The six render states | `retrieval/render-state` tests |
 | Renderer props contain no callables | `widget-runtime/renderer.test.ts` |
 | Generated docs match the code | `contract-docs/render.test.ts` |

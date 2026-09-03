@@ -110,19 +110,19 @@ const SLOTS: Record<string, Slot[]> = {
   ],
 
   // Categorical
-  'bar-vertical': [
+  'bar-chart-vertical': [
     slot('x', 'Categories', 'One bar per value.', CATEGORY),
     slot('series', 'Measures', 'Bar height.', MEASURE, 1, 4),
   ],
-  'bar-horizontal': [
+  'bar-chart-horizontal': [
     slot('x', 'Categories', 'One bar per value. Suits long labels.', CATEGORY),
     slot('series', 'Measures', 'Bar length.', MEASURE, 1, 4),
   ],
-  'bar-grouped': [
+  'grouped-bar-chart': [
     slot('x', 'Categories', 'One group of bars per value.', CATEGORY),
     slot('series', 'Measures', 'One bar within each group.', MEASURE, 2, 4),
   ],
-  'bar-stacked': [
+  'stacked-bar-chart': [
     slot('x', 'Categories', 'One stack per value.', CATEGORY),
     slot('series', 'Measures', 'One segment within each stack.', MEASURE, 2, 4),
   ],
@@ -166,7 +166,7 @@ const SLOTS: Record<string, Slot[]> = {
     slot('state', 'State', 'Drives the status colour.', DIMENSION),
     slot('value', 'Measure', 'Optional figure beside each row.', MEASURE, 0, 1),
   ],
-  'status-tile': [
+  'status-indicator': [
     slot('x', 'Entities', 'The worst one is shown.', DIMENSION),
     slot('state', 'State', 'Drives the status colour.', DIMENSION),
   ],
@@ -210,7 +210,7 @@ const SLOTS: Record<string, Slot[]> = {
     slot('secondary', 'Elapsed period', 'One column each.', CATEGORY),
     slot('value', 'Measure', 'Cell shade.', MEASURE),
   ],
-  'gantt-chart': [
+  'timeline-chart': [
     slot('x', 'Rows', 'One bar per value.', DIMENSION),
     slot('series', 'Start and end', 'Exactly two — where the bar begins and ends.', MEASURE, 2, 2),
     slot('secondary', 'Grouping', 'Optional. Colours bars by group.', DIMENSION, 0, 1),

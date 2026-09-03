@@ -142,7 +142,7 @@ function heightFor(family: string, preset: number): number {
   if (family === 'status') return Math.round(preset * 0.8)
   // A calendar year and a cohort matrix need vertical room a 4-span chart cell
   // does not give them.
-  if (family === 'temporal') return Math.round(preset * 1.15)
+  if (family === 'temporal-pattern') return Math.round(preset * 1.15)
   return preset
 }
 

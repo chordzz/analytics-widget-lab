@@ -43,7 +43,7 @@ describe('slot table', () => {
   })
 
   test('unbuilt types are not offered slots', () => {
-    expect(slotsFor('choropleth')).toEqual([])
+    expect(slotsFor('choropleth-map')).toEqual([])
   })
 
   test('slot bounds are coherent', () => {
@@ -186,7 +186,7 @@ describe('autoMap', () => {
     const ranked = autoMap('ranked-list', requireDataset('sales-by-country'))!
     expect(ranked.value).toBe('revenue')
 
-    const bars = autoMap('bar-vertical', requireDataset('sales-by-country'))!
+    const bars = autoMap('bar-chart-vertical', requireDataset('sales-by-country'))!
     expect(bars.series).not.toContain('lat')
     expect(bars.series).not.toContain('lng')
   })
@@ -267,7 +267,7 @@ describe('the widget picker', () => {
     const suggested = (id: string) =>
       suggestedTypesFor(requireDataset(id)).map((type) => type.id)
     expect(suggested('signup-funnel')).toContain('funnel')
-    expect(suggested('project-timeline')).toContain('gantt-chart')
+    expect(suggested('project-timeline')).toContain('timeline-chart')
     expect(suggested('traffic-flow')).toContain('sankey')
   })
 })
@@ -284,8 +284,8 @@ describe('completeness', () => {
   })
 
   test('a multi-field slot below its minimum is not placeable', () => {
-    expect(isComplete('bar-grouped', { x: 'region', series: ['revenue'] })).toBe(false)
-    expect(isComplete('bar-grouped', { x: 'region', series: ['revenue', 'orders'] })).toBe(true)
+    expect(isComplete('grouped-bar-chart', { x: 'region', series: ['revenue'] })).toBe(false)
+    expect(isComplete('grouped-bar-chart', { x: 'region', series: ['revenue', 'orders'] })).toBe(true)
   })
 
   test('an unknown type is never placeable', () => {
@@ -296,7 +296,7 @@ describe('completeness', () => {
 describe('the unbuilt', () => {
   test('a type with no renderer is never reachable', () => {
     for (const dataset of datasets) {
-      expect(typesFor(dataset).map((type) => type.id)).not.toContain('choropleth')
+      expect(typesFor(dataset).map((type) => type.id)).not.toContain('choropleth-map')
     }
   })
 })
@@ -305,14 +305,14 @@ describe('identifiers versus labels', () => {
   test('a unique label in a short table is the axis', () => {
     // Every row of project-timeline is a task; that is the row label, even
     // though it is unique per row.
-    const mapping = autoMap('gantt-chart', requireDataset('project-timeline'))!
+    const mapping = autoMap('timeline-chart', requireDataset('project-timeline'))!
     expect(mapping.x).toBe('task')
   })
 
   test('optional slots are left for the person to fill', () => {
     // A Gantt is valid without a grouping or a progress measure. Guessing at
     // them would put data on the chart nobody asked to see.
-    const mapping = autoMap('gantt-chart', requireDataset('project-timeline'))!
+    const mapping = autoMap('timeline-chart', requireDataset('project-timeline'))!
     expect(mapping.secondary).toBeUndefined()
     expect(mapping.value).toBeUndefined()
   })

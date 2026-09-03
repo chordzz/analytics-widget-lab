@@ -22,7 +22,9 @@ import {
   type BoardsState,
   type PlacedWidget,
 } from './boards'
-import { MAX_H, MAX_W, MIN_H, MIN_W, collides, flowLayout } from './grid'
+import { MAX_H, MAX_W, MIN_H, MIN_W, collides, flowLayout, rowsForPx } from './grid'
+import { RENAMED_TYPES, widgetType } from '../widgets/catalog'
+import { heightForType } from '../widgets/layout'
 import type { WidgetSpec } from '../widgets/Widget'
 
 const AT = '2026-08-12'
@@ -380,7 +382,7 @@ function stubStorage() {
 }
 
 describe('persistence', () => {
-  const KEY = 'analytics.boards.v2'
+  const KEY = 'analytics.boards.v3'
   const seed = [board({ id: 'seeded' })]
 
   beforeEach(stubStorage)
@@ -439,7 +441,7 @@ describe('persistence', () => {
  */
 describe('migration from v1', () => {
   const LEGACY_KEY = 'analytics.boards.v1'
-  const KEY = 'analytics.boards.v2'
+  const KEY = 'analytics.boards.v3'
   const seed = [board({ id: 'seeded' })]
 
   /** Exactly the old shape: spans, an order, and no x or y anywhere. */
@@ -518,7 +520,8 @@ describe('migration from v1', () => {
 
   test('a current session wins over the legacy one', () => {
     // Both keys exist after a migration: v1 is left in place as the way back.
-    // Reading it in preference to v2 would silently discard every later edit.
+    // Reading it in preference to the current key would silently discard
+    // every later edit.
     localStorage.setItem(LEGACY_KEY, JSON.stringify(legacy([{ ...spec('a'), span: 3 }])))
     saveState({ boards: [board({ id: 'current' })], editingId: null })
     expect(loadState(seed).boards.map((entry) => entry.id)).toEqual(['current'])
@@ -556,5 +559,147 @@ describe('migration from v1', () => {
     const state = loadState(seed)
     expect(widgetOn(state, 'a', 'holed')).toMatchObject({ x: 0, y: 0 })
     expect(widgetOn(state, 'b', 'holed')).toMatchObject({ x: 4, y: 0 })
+  })
+})
+
+/**
+ * Migrating v2 — same shape, renamed vocabulary.
+ *
+ * Nothing about a v2 board's structure changed: it already had free placement.
+ * What changed is that adopting the FRD's Visualization Type ids renamed seven
+ * of them, and `typeId` is *persisted*. Without translation every bar chart,
+ * gauge, Gantt and status tile on every saved board becomes an error card
+ * reading "No widget type 'bar-vertical'" — a silent break that would only show
+ * up on somebody's own saved work, which is the worst place to find it.
+ */
+describe('migration from v2', () => {
+  const V2_KEY = 'analytics.boards.v2'
+  const KEY = 'analytics.boards.v3'
+  const seed = [board({ id: 'seeded' })]
+
+  /** A v2 board: positioned already, but speaking the module's old vocabulary. */
+  const v2 = (widgets: unknown[]) => ({
+    boards: [
+      {
+        id: 'old',
+        name: 'Old board',
+        description: '',
+        status: 'published',
+        updated: '2026-01-01',
+        widgets,
+      },
+    ],
+    editingId: 'old',
+  })
+
+  const migrate = (widgets: unknown[]) => {
+    localStorage.setItem(V2_KEY, JSON.stringify(v2(widgets)))
+    return loadState(seed)
+  }
+
+  const placed = (id: string, typeId: string, extra: Record<string, unknown> = {}) => ({
+    ...spec(id),
+    typeId,
+    x: 0,
+    y: 0,
+    w: 4,
+    h: 7,
+    ...extra,
+  })
+
+  beforeEach(stubStorage)
+
+  test('every renamed id becomes the one the catalogue knows', () => {
+    const state = migrate(
+      Object.keys(RENAMED_TYPES).map((old, index) =>
+        placed(`w${index}`, old, { x: 0, y: index * 7 }),
+      ),
+    )
+
+    const got = state.boards[0].widgets.map((entry) => entry.typeId)
+    expect(got).toEqual(Object.values(RENAMED_TYPES))
+    // The point of the exercise: all of them resolve to a real widget type.
+    for (const typeId of got) expect(widgetType(typeId)).toBeDefined()
+  })
+
+  test('a renamed widget keeps the placement it was saved with', () => {
+    // The rename must not disturb the layout. Falling back to the type's
+    // defaults here would quietly re-lay-out a board somebody had arranged.
+    const state = migrate([placed('a', 'bar-vertical', { x: 5, y: 3, w: 6, h: 9 })])
+    expect(widgetOn(state, 'a', 'old')).toMatchObject({
+      typeId: 'bar-chart-vertical',
+      x: 5,
+      y: 3,
+      w: 6,
+      h: 9,
+    })
+  })
+
+  test('an id that was never renamed is untouched', () => {
+    const state = migrate([placed('a', 'line-chart', { x: 2, y: 1 })])
+    expect(widgetOn(state, 'a', 'old')).toMatchObject({ typeId: 'line-chart', x: 2, y: 1 })
+  })
+
+  test('a renamed widget with no size falls back to its *new* type, not the generic default', () => {
+    /*
+     * This is why `renamed` runs before `sized`. A widget still carrying
+     * `status-tile` misses the catalogue, so it would take the 4-column, 268px
+     * generic default instead of the 3-column, 132px a status indicator asks
+     * for — the board would come back subtly wrong rather than obviously broken.
+     */
+    const state = migrate([{ ...spec('a'), typeId: 'status-tile', x: 0, y: 0 }])
+    const widget = widgetOn(state, 'a', 'old')!
+    expect(widget.typeId).toBe('status-indicator')
+    expect(widget.w).toBe(widgetType('status-indicator')!.defaultSpan)
+    expect(widget.h).toBe(rowsForPx(heightForType('status-indicator')))
+  })
+
+  test('a current session wins over the v2 one', () => {
+    localStorage.setItem(V2_KEY, JSON.stringify(v2([placed('a', 'bar-vertical')])))
+    saveState({ boards: [board({ id: 'current' })], editingId: null })
+    expect(loadState(seed).boards.map((entry) => entry.id)).toEqual(['current'])
+  })
+
+  test('the v2 key is left alone rather than cleared', () => {
+    // Same rule as v1: the previous key is the way back, and it costs kilobytes.
+    const raw = JSON.stringify(v2([placed('a', 'bar-vertical')]))
+    localStorage.setItem(V2_KEY, raw)
+    loadState(seed)
+    expect(localStorage.getItem(V2_KEY)).toBe(raw)
+  })
+
+  test('a v1 board carrying old type ids is renamed as well as reflowed', () => {
+    // The two migrations compose: v1 boards predate the rename by definition, so
+    // one that flows through `flowLayout` must still come out speaking v3.
+    localStorage.setItem(
+      'analytics.boards.v1',
+      JSON.stringify({
+        boards: [
+          {
+            id: 'ancient',
+            name: 'Ancient',
+            description: '',
+            status: 'published',
+            updated: '2026-01-01',
+            widgets: [{ ...spec('a'), typeId: 'gantt-chart', span: 6 }],
+          },
+        ],
+        editingId: null,
+      }),
+    )
+
+    const state = loadState(seed)
+    expect(widgetOn(state, 'a', 'ancient')).toMatchObject({
+      typeId: 'timeline-chart',
+      x: 0,
+      y: 0,
+      w: 6,
+    })
+  })
+
+  test('saving writes the current key, never the old one', () => {
+    saveState({ boards: [board({ id: 'x' })], editingId: null })
+    expect(localStorage.getItem(KEY)).not.toBeNull()
+    expect(localStorage.getItem(V2_KEY)).toBeNull()
   })
 })

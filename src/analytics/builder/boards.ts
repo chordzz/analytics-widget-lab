@@ -20,7 +20,7 @@ import {
   rowsForPx,
   type Placement,
 } from './grid'
-import { widgetType } from '../widgets/catalog'
+import { currentTypeId, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
 import type { WidgetSpec } from '../widgets/Widget'
 
@@ -291,7 +291,18 @@ export const publishedBoards = (state: BoardsState): Board[] =>
 
 // --- persistence ------------------------------------------------------------
 
-const STORAGE_KEY = 'analytics.boards.v2'
+const STORAGE_KEY = 'analytics.boards.v3'
+
+/**
+ * v2 — free placement, but the module's own type ids.
+ *
+ * The shape did not change between v2 and v3; the *vocabulary* did. Adopting
+ * the FRD's Visualization Type ids renamed seven of them, and a widget's
+ * `typeId` is persisted, so a v2 board read without translation renders an
+ * error card per renamed widget. `renamed()` does the translation and
+ * `RENAMED_TYPES` is the map.
+ */
+const V2_KEY = 'analytics.boards.v2'
 
 /**
  * The one-dimensional format: a `span`, an array order, and no position.
@@ -321,6 +332,18 @@ const isNumber = (value: unknown): value is number => typeof value === 'number' 
  * and maybe a pixel `height`, and a v1 widget that never got dragged has
  * neither and falls back to what its type asks for.
  */
+/**
+ * A stored widget's type id brought up to the current catalogue.
+ *
+ * Runs before `sized`, because the width and height a widget falls back to are
+ * looked up *by type* — a widget still carrying `bar-vertical` would miss the
+ * catalogue and take the 4-column, 268px default rather than its own.
+ */
+const renamed = (stored: StoredWidget): StoredWidget =>
+  stored.typeId === currentTypeId(stored.typeId)
+    ? stored
+    : { ...stored, typeId: currentTypeId(stored.typeId) }
+
 function sized(stored: StoredWidget): StoredWidget & { w: number; h: number } {
   const { span, height, ...spec } = stored
 
@@ -349,7 +372,7 @@ function sized(stored: StoredWidget): StoredWidget & { w: number; h: number } {
  * disagree.
  */
 function normalizeBoard(board: Board): Board {
-  const widgets = (board.widgets as StoredWidget[]).map(sized)
+  const widgets = (board.widgets as StoredWidget[]).map(renamed).map(sized)
   const positioned = widgets.every((widget) => isNumber(widget.x) && isNumber(widget.y))
 
   return {
@@ -400,6 +423,7 @@ export function loadState(seed: Board[]): BoardsState {
   try {
     return (
       readBoards(localStorage.getItem(STORAGE_KEY)) ??
+      readBoards(localStorage.getItem(V2_KEY)) ??
       readBoards(localStorage.getItem(LEGACY_KEY)) ??
       fallback
     )
