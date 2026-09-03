@@ -27,12 +27,12 @@ reading one and thinking you have read both.
 | **Route** | `#/analytics` | every other hash |
 | **Lives in** | `src/analytics/**` | `src/{domain,visualization,retrieval,widget-runtime,renderers,catalogue,access,governance,authoring,composition,dashboard,contract-docs,ui}` |
 | **What it is** | The shippable UI. Sidebar, boards, builder, 34 widget types. | A requirements-proving harness for the Analytics FRD. |
-| **Data** | 13 mock datasets compiled into the bundle, rows and all | 5 fixture Datasets behind an async port, with per-Dataset failure scenarios |
+| **Data** | 13 mock datasets behind `CataloguePort` + `DatasetRetrievalPort` | 5 fixture Datasets behind an async port, with per-Dataset failure scenarios |
 | **Persistence** | `localStorage`, `analytics.boards.v3` | `localStorage`, behind `DashboardStorePort` |
-| **Async?** | No. Nothing in it awaits anything. | Yes, throughout. |
+| **Async?** | Yes — ports, since merge Stage 5. | Yes, throughout. |
 | **Authorization?** | No concept of a viewer at all. | `ViewerIdentity` on every port call; denial is a first-class render state. |
 | **Design tokens** | 61 `--a-*` tokens in `src/analytics/theme/tokens.css` | 17 `--analytics-*` tokens in `src/index.css` |
-| **Backend seam** | **None** | **Complete, and already documented for the backend** |
+| **Backend seam** | **`data/adapters.ts`** — swap the fixtures for HTTP | **Complete, and already documented for the backend** |
 
 The switch is five lines of [`src/App.tsx`](src/App.tsx):
 
@@ -59,7 +59,7 @@ mostly the job of bringing it across.
 bun install
 bun dev              # http://localhost:5173  → the workbench
                      # http://localhost:5173/#/analytics → the product module
-bun test             # 456 tests, 18 files
+bun test             # 525 tests, 23 files
 bun run typecheck    # tsc -b
 bun run docs         # regenerate docs/ from the code that implements it
 ```
@@ -377,129 +377,51 @@ enforceable half; a backend can mirror its rules directly.
 
 ## 5. Wiring a backend
 
-The module is entirely synchronous today: `datasetById(id)` returns a `Dataset`
-with its `rows` already inside it, called from a render body. Everything below
-follows from changing that.
+**Most of this is done.** Merge Plan stages 1–5 were the same work, and they
+landed on `merge/stage-1-taxonomy`. What follows is what the seam looks like now
+and what is genuinely left.
 
-The good news first, because it is substantial: **the 25 primitives do not
-change.** They take an array and keys and know nothing about where rows came from.
-Neither does `WidgetCard`, `GridBoard`, `grid.ts`, or the reducer's placement
-logic. The surface that has to move is small and enumerated below.
+### 5.1 Where the boundary is
 
-### 5.1 Every place data is read today
-
-Seven sites. That is the complete list.
-
-| Site | Reads | Becomes |
-| --- | --- | --- |
-| `widgets/Widget.tsx:96` | `datasetById(spec.datasetId)` in the render body | an async query, per widget |
-| `widgets/Widget.tsx:123` | `dataset.rows.length === 0 ? 'empty' : 'ready'` | resolved from the outcome, never inferred from row count |
-| `widgets/Widget.tsx:143` | `renderBody(spec, typeId, dataset.rows, dataset)` | rows from the query result |
-| `builder/WidgetComposer.tsx:25,87,97` | `datasets` list + `datasetById` | `CataloguePort.browse` / `.describe` |
-| `screens/DataScreen.tsx:14,45,114` | `datasets`, `.rows.length`, all rows for the preview table | catalogue browse + a bounded sample query |
-| `builder/requirements.ts:298,336` | distinct values, and row count, inside `autoMap` | field statistics as metadata, or a stats call — see 5.4 |
-| `builder/FieldMapper.tsx:216` | `dataset.rows.length` for a caption | row count as metadata |
-
-### 5.2 Split `Dataset` into metadata and rows
-
-`src/analytics/data/types.ts` couples them:
-
-```ts
-interface Dataset { id, name, description, source, fields, rows, suits? }
+```
+screens / builder / widgets     specs and render states
+        │
+        ├─ data/AnalyticsData.tsx   provider + hooks   (useDatasets, useWidgetRows, …)
+        ├─ data/query.ts            mapping → DatasetQuery
+        └─ data/adapters.ts         FixtureCatalogue, FixtureRetrieval   ← replace these
+                │
+                └─ data/datasets.ts   the 13 fixtures
 ```
 
-A backend gives you `fields` from a catalogue call and `rows` from a query call,
-at different times, with different failure modes. `rows` must come off this type —
-or become explicitly optional and absent by default. Leaving it required is what
-would make every consumer accidentally synchronous again.
+Nothing above `data/` imports the fixture registry, and a source scan in
+`data/adapters.test.ts` fails the build if that changes. Swapping in HTTP is a new
+pair of classes implementing `CataloguePort` and `DatasetRetrievalPort`, handed to
+`AnalyticsDataProvider`.
 
-`CataloguePort.describe` and `DatasetSummary` in `catalogue/port.ts` already model
-the metadata half. Reconcile the two `Dataset` types here rather than later; the
-vocabulary was kept aligned precisely so this step is a merge and not a
-translation.
+### 5.2 What each stage settled
 
-### 5.3 Widget gains a retrieval lifecycle, and two more states
+| Was | Now |
+|---|---|
+| `Dataset` carried `rows`; `Widget` read them in a render body | metadata and records are separate calls; `rowsFor` is behind the port |
+| `kind`, no governance metadata | the FRD's `role`, plus `filterable`, `sortable`, `aggregations`, `classification`, `exposesPersonalData` |
+| four render states | six — `denied` and `withdrawn` have their own treatments |
+| `renderBody` reduced columns, picking sum-vs-average from the field's *format* | the Measure declares its aggregations; `queryFor` asks for one |
+| `autoMap` scanned records to count distinct values | published statistics (`distinctCount`, `recordCount`) |
+| `loadState` / `saveState` in a `useReducer` initialiser | an async `BoardStorePort`, with debounced writes and a real loading state |
+| ids from `Math.random()`, `updated` from the browser clock | both from the store |
 
-`WidgetCard`'s `WidgetState` is `ready | loading | empty | error`. It needs
-`denied` and `withdrawn` as well, for the reasons in §4. Do not invent them — copy
-`retrieval/render-state.ts` and its tests, and give `WidgetCard` the two extra
-treatments. The workbench's `WidgetFrame.tsx` already has a distinct colour, icon
-and wording per state; use it as the reference.
+### 5.3 What is actually left
 
-`widget-runtime/WidgetHost.tsx` is the shape of the per-widget lifecycle:
-retrieval, cancellation, an error boundary per widget so one failing widget does
-not take the board with it. `Widget.tsx` should end up as the module's equivalent.
-
-The empty check at `Widget.tsx:123` must become a state carried by the response.
-Inferring `empty` from a row count is exactly how `denied` and `withdrawn` get
-silently rendered as zero.
-
-### 5.4 `WidgetMapping` → `DatasetQuery`, and the aggregation that must move
-
-This is the real work, and the part most likely to be underestimated.
-
-`WidgetMapping` already holds precisely the information a query needs — `x` is the
-grouping dimension, `series`/`value` are the measures, `secondary` is the second
-dimension. Writing `mapping → DatasetQuery` is mechanical.
-
-What is not mechanical: **`Widget.tsx`'s `renderBody` aggregates on the client
-today, and `domain/query.ts` forbids exactly that.** Four places, all of which
-have to move into the query:
-
-- **`stat-card` / `sparkline-card` / `delta-card`** (`Widget.tsx:215`) —
-  `values.reduce(...)` sums or averages the whole column, and picks which from the
-  field's *format*: percent and duration average, everything else totals. The
-  comment there is right about why (adding uptime across services gives 890%,
-  which is not a number that exists) and that logic belongs in the Dataset's
-  declared aggregations, not in a switch statement in the view.
-- **`gauge` / `progress-tracker`** (`Widget.tsx:261`) — `rows[rows.length - 1]`.
-  "Latest" is implicit in array order. A server response has no order unless the
-  query asked for one, so this needs an explicit sort and limit.
-- **`status-indicator`** (`Widget.tsx:300`) — sorts every row by severity to find the
-  worst. Fine over 8 services; not fine as a table grows.
-- **`Distribution`** (histogram, box plot) bins client-side over every value, and
-  **`CohortGrid`** derives its periods from distinct values. Both need either
-  server-side bucketing or an explicit, bounded row budget.
-
-Sorting purely for display — `DataTable`, `ActivityFeed`, `CalendarHeatmap` — is
-legitimate and stays. The test is whether the number shown would change if the
-server sent a different page of the same data.
-
-Until the aggregation moves, a backend either ships whole tables (defeating the
-point) or silently changes what every stat card shows.
-
-### 5.5 Boards: persistence, identity, ownership
-
-`loadState` / `saveState` in `boards.ts` are the two functions to replace, and they
-are already isolated. What is not isolated is their being synchronous:
-`loadState` runs in a `useReducer` initializer and `saveState` in an effect. Going
-async means the board list has a loading state of its own, and that raises three
-questions the module currently has no answer to:
-
-- **IDs.** `useBoards.tsx:33` mints them with `Math.random()`, with a comment
-  saying no server is issuing them. One will be.
-- **`updated`.** A local `new Date()` date string. The server's clock should win.
-- **Ownership and visibility.** The module has no viewer concept whatsoever;
-  `status: 'draft' | 'published'` is the whole model. `dashboard/store.ts` and
-  `access/dashboard-access.ts` already model this properly — publishing and Scope
-  are *separate gates*, and a published Dashboard scoped Personal stays private.
-
-Also worth deciding early: a `saveState` on every reducer tick is fine for
-`localStorage` and is not fine as an HTTP call. The debounce that a drag already
-needs (`GridBoard`'s one-gesture-one-commit) has to extend to the network.
-
-### 5.6 A sane order
-
-1. Split `Dataset` (5.2), reconciling with `domain/dataset.ts`. Types only, no behaviour — the whole test suite still runs.
-2. Bring the six render states into `WidgetCard` (5.3). Still no network; the gallery's state switcher exercises all six.
-3. Put a port in front of the data. Keep `data/datasets.ts` as the fake behind it — the workbench's `FakeDatasetRetrieval` is the model, complete with per-Dataset failure scenarios. **The module becomes async here while still having no backend**, which is where the real bugs surface, on your own schedule.
-4. Move the aggregation into the query (5.4). This is the long step; do it with the fake still in place so the numbers are comparable before and after.
-5. Replace the fake with HTTP. If steps 1–4 are done, this is the smallest step.
-6. Boards persistence and identity (5.5), last — it is orthogonal, and the board's own behaviour is the most thoroughly tested thing in the repo.
-
-Steps 1–4 need no backend to exist and no decisions from whoever builds it.
-
----
+- **Authorization has shape but no substance.** Every port call carries a
+  `ViewerIdentity` and the fixtures authorize everyone. A real
+  `AuthorizationPort` is an adapter change, not a call-site change.
+- **Two reductions still happen in the browser** — `status-indicator`'s severity
+  sort and `Distribution`'s binning. Both are registered as D13 and D14 with the
+  FRD extension each would need.
+- **Boards are not `Dashboard`s.** No Scope, no Share Grants, and widgets are
+  embedded rather than referenced (D10, D16). That is Merge Stage 6.
+- **No Controls, Sections or exposed filters.** Also Stage 6, and the largest
+  remaining body of work.
 
 ## 6. Enforced invariants
 
@@ -513,6 +435,11 @@ Not conventions. Each has a guard, and breaking one turns something red.
 | Slot table, dataset eligibility, automatic mapping | `builder/requirements.test.ts` |
 | Grid conversions, placement, flow | `builder/grid.test.ts` |
 | Board operations, placement, persistence, v1→v2→v3 migration | `builder/boards.test.ts` |
+| Fixtures satisfy the enforceable publication contract | `data/publication.test.ts` |
+| Aggregation happens in the query; figures did not move | `data/query.test.ts` |
+| Four retrieval outcomes stay distinct; nothing above `data/` reaches the fixtures | `data/adapters.test.ts` |
+| The six render states are distinguishable on screen | `widgets/states.test.tsx` |
+| Async board store: load never erases a saved session | `builder/store.test.ts` |
 | Module catalogue matches the FRD manifest | `widgets/taxonomy.test.ts` |
 | The six render states | `retrieval/render-state` tests |
 | Renderer props contain no callables | `widget-runtime/renderer.test.ts` |
