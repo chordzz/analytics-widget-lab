@@ -68,6 +68,8 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           datasetId: draft.datasetId,
           title: draft.title,
           mapping: draft.mapping,
+          exposedFilters: draft.exposedFilters,
+          exposedSorts: draft.exposedSorts,
         },
         { w: draft.span },
       )
@@ -80,6 +82,8 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           datasetId: draft.datasetId,
           title: draft.title,
           mapping: draft.mapping,
+          exposedFilters: draft.exposedFilters,
+          exposedSorts: draft.exposedSorts,
         },
         draft.span,
       )
@@ -98,6 +102,8 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
                 title: composing.title ?? '',
                 mapping: composing.mapping,
                 span: composing.w,
+                exposedFilters: composing.exposedFilters ?? [],
+                exposedSorts: composing.exposedSorts ?? [],
               }
             : undefined
         }

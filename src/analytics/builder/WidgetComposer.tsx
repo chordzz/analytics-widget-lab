@@ -42,6 +42,9 @@ export interface ComposerDraft {
   subtitle?: string
   mapping: WidgetMapping
   span: number
+  /** FR-VZ-06 — Fields a Viewer may filter on and reorder by. */
+  exposedFilters: string[]
+  exposedSorts: string[]
 }
 
 const BUILT_COUNT = WIDGET_TYPES.filter((type) => type.built).length
@@ -100,6 +103,8 @@ export function WidgetComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [datasets, startWith, titled])
   const [span, setSpan] = useState(initial?.span ?? 0)
+  const [exposedFilters, setExposedFilters] = useState<string[]>(initial?.exposedFilters ?? [])
+  const [exposedSorts, setExposedSorts] = useState<string[]>(initial?.exposedSorts ?? [])
   const [query, setQuery] = useState('')
 
   const dataset = datasetId ? byId(datasetId) : undefined
@@ -139,7 +144,17 @@ export function WidgetComposer({
 
   const preview: WidgetSpec | null =
     dataset && type
-      ? { id: 'preview', typeId, datasetId, title: title.trim() || type.label, mapping }
+      ? {
+          id: 'preview',
+          typeId,
+          datasetId,
+          title: title.trim() || type.label,
+          mapping,
+          // The preview is the real runtime, so it shows the filter row an
+          // Author is composing rather than describing it in prose.
+          exposedFilters,
+          exposedSorts,
+        }
       : null
 
   return (
@@ -231,6 +246,16 @@ export function WidgetComposer({
             </label>
 
             <SpanControl span={span} onChange={setSpan} />
+
+            {dataset && (
+              <ExposeControl
+                dataset={dataset}
+                filters={exposedFilters}
+                sorts={exposedSorts}
+                onChangeFilters={setExposedFilters}
+                onChangeSorts={setExposedSorts}
+              />
+            )}
           </Step>
         )}
       </div>
@@ -273,6 +298,8 @@ export function WidgetComposer({
                 title: title.trim() || type!.label,
                 mapping,
                 span,
+                exposedFilters,
+                exposedSorts,
               })
             }
           >
@@ -436,6 +463,78 @@ function SpanControl({ span, onChange }: { span: number; onChange: (next: number
         ))}
       </div>
       <p className="a-field__help">How much of the board's width this widget takes.</p>
+    </div>
+  )
+}
+
+/**
+ * Which of a Dataset's Fields a Viewer may act on — FR-VZ-06.
+ *
+ * The list is the *publisher's*, not everything the Dataset has. FR-DP-05 lets a
+ * Source System say a Field may not be filtered or sorted on, and an Author
+ * cannot expose what was withheld. Fields that were withheld are absent rather
+ * than shown disabled: a checkbox nobody may ever tick is an invitation to ask
+ * why, and the answer is not the Author's to give.
+ */
+function ExposeControl({
+  dataset,
+  filters,
+  sorts,
+  onChangeFilters,
+  onChangeSorts,
+}: {
+  dataset: Dataset
+  filters: string[]
+  sorts: string[]
+  onChangeFilters: (next: string[]) => void
+  onChangeSorts: (next: string[]) => void
+}) {
+  const filterable = dataset.fields.filter((field) => field.filterable)
+  const sortable = dataset.fields.filter((field) => field.sortable)
+
+  if (filterable.length === 0 && sortable.length === 0) return null
+
+  const toggle = (list: string[], key: string) =>
+    list.includes(key) ? list.filter((entry) => entry !== key) : [...list, key]
+
+  return (
+    <div className="a-field">
+      <span className="a-field__label">Let viewers</span>
+      <p className="a-field__help">
+        Viewers change what this widget shows for themselves. It does not change the board.
+      </p>
+
+      {filterable.length > 0 && (
+        <fieldset className="a-expose">
+          <legend className="a-expose__legend">Filter by</legend>
+          {filterable.map((field) => (
+            <label key={field.key} className="a-expose__item">
+              <input
+                type="checkbox"
+                checked={filters.includes(field.key)}
+                onChange={() => onChangeFilters(toggle(filters, field.key))}
+              />
+              <span>{field.label}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
+
+      {sortable.length > 0 && (
+        <fieldset className="a-expose">
+          <legend className="a-expose__legend">Sort by</legend>
+          {sortable.map((field) => (
+            <label key={field.key} className="a-expose__item">
+              <input
+                type="checkbox"
+                checked={sorts.includes(field.key)}
+                onChange={() => onChangeSorts(toggle(sorts, field.key))}
+              />
+              <span>{field.label}</span>
+            </label>
+          ))}
+        </fieldset>
+      )}
     </div>
   )
 }

@@ -69,6 +69,55 @@ const selection = (field: string, aggregation: Aggregation): MeasureSelection =>
 })
 
 /**
+ * What a Viewer has chosen from the filters an Author exposed.
+ *
+ * Session state, not board state. A Viewer narrowing a chart to one region is
+ * reading the Author's dashboard, not editing it — persisting these would change
+ * what everyone else sees because one person looked.
+ */
+export interface ViewerChoices {
+  /** Keyed by Field key. */
+  filters?: Record<string, string | number>
+  sort?: { field: string; direction: 'ascending' | 'descending' }
+}
+
+/**
+ * The Viewer's choices, reduced to what the publisher actually permits.
+ *
+ * Applied here rather than trusted from the UI, for the same reason
+ * `aggregationFor` ignores an undeclared aggregation: the control that offered
+ * the choice and the query that acts on it are different code, and only one of
+ * them is the enforcement point. A filter on a Field the publisher did not mark
+ * `filterable` is dropped, not honoured — FR-DP-05 binds the Author and the
+ * Viewer both.
+ */
+function permitted(
+  spec: WidgetSpec,
+  dataset: Dataset,
+  choices: ViewerChoices | undefined,
+): { filters?: Record<string, string | number>; sort?: DatasetQuery['sort'] } {
+  if (!choices) return {}
+
+  const exposed = new Set(spec.exposedFilters ?? [])
+  const entries = Object.entries(choices.filters ?? {}).filter(([key, value]) => {
+    if (value === '' || value === undefined) return false
+    if (!exposed.has(key)) return false
+    return fieldOf(dataset, key)?.filterable === true
+  })
+
+  const wanted = choices.sort
+  const sortable =
+    wanted &&
+    (spec.exposedSorts ?? []).includes(wanted.field) &&
+    fieldOf(dataset, wanted.field)?.sortable === true
+
+  return {
+    ...(entries.length > 0 ? { filters: Object.fromEntries(entries) } : {}),
+    ...(sortable && wanted ? { sort: [wanted] } : {}),
+  }
+}
+
+/**
  * The query a widget's spec amounts to.
  *
  * Most types return an empty query, and that is correct rather than lazy: a bar
@@ -85,28 +134,44 @@ const selection = (field: string, aggregation: Aggregation): MeasureSelection =>
  *     place — a server has no obligation to return rows in any order at all
  *   - anything reading a **series** orders by its Time Dimension explicitly, for
  *     the same reason
+ *
+ * A Viewer's exposed-filter choices narrow whichever of those it would otherwise
+ * have asked for, and their chosen sort replaces the widget's own ordering.
  */
-export function queryFor(spec: WidgetSpec, dataset: Dataset): DatasetQuery {
+export function queryFor(
+  spec: WidgetSpec,
+  dataset: Dataset,
+  choices?: ViewerChoices,
+): DatasetQuery {
   const { typeId, mapping, options = {} } = spec
   const override = typeof options.aggregation === 'string' ? options.aggregation : undefined
   const timeKey = timeKeyOf(dataset, mapping)
+  const chosen = permitted(spec, dataset, choices)
+
+  // A Viewer's sort replaces the widget's own ordering; their filters narrow
+  // whatever it would otherwise have asked for.
+  const withChoices = (base: DatasetQuery): DatasetQuery => ({
+    ...base,
+    ...(chosen.filters ? { filters: chosen.filters } : {}),
+    ...(chosen.sort ? { sort: chosen.sort } : {}),
+  })
 
   switch (typeId) {
     case 'stat-card': {
       const key = mapping.value
-      if (!key) return {}
+      if (!key) return withChoices({})
       // `latest` is not an aggregation — it is one record, most recent first.
       if (override === 'latest') {
-        return timeKey
-          ? { sort: [{ field: timeKey, direction: 'descending' }], limit: 1 }
-          : { limit: 1 }
+        return withChoices(
+          timeKey ? { sort: [{ field: timeKey, direction: 'descending' }], limit: 1 } : { limit: 1 },
+        )
       }
-      return { measures: [selection(key, aggregationFor(dataset, key, override))] }
+      return withChoices({ measures: [selection(key, aggregationFor(dataset, key, override))] })
     }
 
     case 'gauge':
     case 'progress-tracker':
-      return timeKey ? { sort: [{ field: timeKey, direction: 'ascending' }] } : {}
+      return withChoices(timeKey ? { sort: [{ field: timeKey, direction: 'ascending' }] } : {})
 
     case 'sparkline-card':
     case 'delta-card':
@@ -115,10 +180,10 @@ export function queryFor(spec: WidgetSpec, dataset: Dataset): DatasetQuery {
     case 'spline-chart':
     case 'step-chart':
     case 'calendar-heatmap':
-      return timeKey ? { sort: [{ field: timeKey, direction: 'ascending' }] } : {}
+      return withChoices(timeKey ? { sort: [{ field: timeKey, direction: 'ascending' }] } : {})
 
     default:
-      return {}
+      return withChoices({})
   }
 }
 
@@ -129,6 +194,10 @@ export function queryFor(spec: WidgetSpec, dataset: Dataset): DatasetQuery {
  * above it deals in specs and receives rows; nothing above it knows whether the
  * records came from a fixture, a cache or a Source System.
  */
-export function rowsForWidget(spec: WidgetSpec, dataset: Dataset): Row[] {
-  return executeQuery(rowsFor(dataset.id), queryFor(spec, dataset))
+export function rowsForWidget(
+  spec: WidgetSpec,
+  dataset: Dataset,
+  choices?: ViewerChoices,
+): Row[] {
+  return executeQuery(rowsFor(dataset.id), queryFor(spec, dataset, choices))
 }

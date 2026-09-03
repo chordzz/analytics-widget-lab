@@ -9,7 +9,10 @@
 
 import { WidgetCard, type WidgetAction, type WidgetState } from './WidgetCard'
 import { widgetType } from './catalog'
+import { useState, type ReactNode } from 'react'
 import { useDataset, useWidgetRows } from '../data/AnalyticsData'
+import { WidgetFilters } from './WidgetFilters'
+import type { ViewerChoices } from '../data/query'
 import { fieldOf } from '../data/types'
 import {
   ActivityFeed,
@@ -67,6 +70,20 @@ export interface WidgetSpec {
   subtitle?: string
   mapping: WidgetMapping
   options?: Record<string, unknown>
+  /**
+   * FR-VZ-06 — Fields of the bound Dataset a Viewer may filter on.
+   *
+   * The Author's choice, and bounded twice over. Only Fields the *publisher*
+   * declared `filterable` may appear here (FR-DP-05): an Author cannot expose
+   * what the Source System withheld, and a Widget cannot overrule a publisher
+   * any more than a Dashboard Control can.
+   *
+   * Distinct from a Dashboard Control (FR-CO-05), which acts across Widgets.
+   * These belong to this Widget alone.
+   */
+  exposedFilters?: string[]
+  /** FR-VZ-06 — Fields a Viewer may reorder by. Same constraint, via `sortable`. */
+  exposedSorts?: string[]
   /*
    * No size and no position.
    *
@@ -96,6 +113,8 @@ export interface WidgetViewProps extends WidgetProps {
   dataset: Dataset | null
   rows?: readonly Row[]
   errorMessage?: string
+  /** The exposed filters, already resolved. Pure: this component owns no state. */
+  controls?: ReactNode
 }
 
 /**
@@ -116,6 +135,7 @@ export function WidgetView({
   onSelect,
   height,
   errorMessage,
+  controls,
 }: WidgetViewProps) {
   const type = widgetType(spec.typeId)
 
@@ -162,6 +182,7 @@ export function WidgetView({
       onSelect={onSelect}
       bare={bare}
       textLed={textLed}
+      controls={controls}
       style={height ? { height } : undefined}
     >
       {state === 'ready' && dataset ? renderBody(spec, type.id, rows, dataset) : null}
@@ -182,7 +203,30 @@ export function WidgetView({
  */
 export function Widget({ spec, state: override, actions, selected, onSelect, height }: WidgetProps) {
   const { dataset, loading: describing } = useDataset(spec.datasetId)
-  const retrieved = useWidgetRows(spec, dataset)
+
+  /*
+   * The Viewer's filter choices live here and go no further.
+   *
+   * Not in the boards store, which is persisted: a Viewer narrowing a chart is
+   * reading the Author's dashboard, not editing it, and writing their choice
+   * would change what everyone else sees because one person looked. Per widget
+   * rather than per board for the same reason FR-VZ-06 is per Widget — these
+   * belong to this card alone. A Dashboard Control (FR-CO-05) is the other
+   * thing, and it is Stage 6.3.
+   */
+  const [choices, setChoices] = useState<ViewerChoices>({})
+  const retrieved = useWidgetRows(spec, dataset, choices)
+
+  const controls =
+    dataset && (spec.exposedFilters?.length || spec.exposedSorts?.length) ? (
+      <WidgetFilters
+        dataset={dataset}
+        filters={spec.exposedFilters ?? []}
+        sorts={spec.exposedSorts ?? []}
+        choices={choices}
+        onChange={setChoices}
+      />
+    ) : undefined
 
   if (override) {
     return (
@@ -191,6 +235,7 @@ export function Widget({ spec, state: override, actions, selected, onSelect, hei
         dataset={dataset}
         rows={retrieved.status === 'ready' ? retrieved.rows : []}
         state={override}
+        controls={controls}
         actions={actions}
         selected={selected}
         onSelect={onSelect}
@@ -215,6 +260,7 @@ export function Widget({ spec, state: override, actions, selected, onSelect, hei
       rows={retrieved.status === 'ready' ? retrieved.rows : []}
       state={state}
       errorMessage={retrieved.status === 'failed' ? retrieved.message : undefined}
+      controls={controls}
       actions={actions}
       selected={selected}
       onSelect={onSelect}

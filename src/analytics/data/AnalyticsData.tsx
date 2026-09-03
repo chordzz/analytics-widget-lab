@@ -26,7 +26,7 @@ import type { DatasetRetrievalPort, ViewerIdentity } from '../../retrieval/port'
 import { resolveFailure, resolveRenderState, type WidgetRenderState } from '../../retrieval/render-state'
 import type { Dataset } from '../../domain/dataset'
 import { FixtureCatalogue, FixtureRetrieval, LOCAL_VIEWER, type Scenario } from './adapters'
-import { queryFor } from './query'
+import { queryFor, type ViewerChoices } from './query'
 import type { WidgetSpec } from '../widgets/Widget'
 import type { Row } from './types'
 
@@ -134,15 +134,24 @@ export function useDataset(datasetId: string | undefined): {
  * second Dataset while the first retrieval is still in flight will paint the
  * first one's rows when it lands — silently, and under the new widget's title.
  */
-export function useWidgetRows(spec: WidgetSpec, dataset: Dataset | null): WidgetRenderState {
+export function useWidgetRows(
+  spec: WidgetSpec,
+  dataset: Dataset | null,
+  choices?: ViewerChoices,
+): WidgetRenderState {
   const { retrieval, viewer } = useAnalyticsData()
   const [state, setState] = useState<WidgetRenderState>({ status: 'loading' })
 
   // The query is derived, so it must not be a new object every render or the
   // effect below re-runs forever.
+  // Serialised, because a fresh `choices` object every render would restart the
+  // retrieval every render. The *values* are what changed, not the identity.
+  const choiceKey = JSON.stringify(choices ?? null)
+
   const query = useMemo(
-    () => (dataset ? queryFor(spec, dataset) : null),
-    [spec, dataset],
+    () => (dataset ? queryFor(spec, dataset, choices) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [spec, dataset, choiceKey],
   )
 
   useEffect(() => {
@@ -231,4 +240,40 @@ export function useRows(datasetId: string | undefined, limit = 20): Row[] {
   }, [retrieval, viewer, datasetId, limit])
 
   return rows
+}
+
+/**
+ * The values a Viewer may choose from for one exposed filter.
+ *
+ * Finding 8: the FRD lets an Author expose a filter and never says how a Viewer
+ * discovers what they can pick. The listing has to be scoped to the Viewer's
+ * authorization or the dropdown itself discloses values from data they could not
+ * otherwise obtain — which FR-DA-12 forbids just as firmly as returning the rows
+ * would.
+ */
+export function useFilterValues(
+  datasetId: string | undefined,
+  field: string | undefined,
+): (string | number)[] {
+  const { retrieval, viewer } = useAnalyticsData()
+  const [values, setValues] = useState<(string | number)[]>([])
+
+  useEffect(() => {
+    if (!datasetId || !field) {
+      setValues([])
+      return
+    }
+
+    let live = true
+    retrieval
+      .listFilterValues(datasetId, field, viewer)
+      .then((result) => live && setValues(result))
+      .catch(() => live && setValues([]))
+
+    return () => {
+      live = false
+    }
+  }, [retrieval, viewer, datasetId, field])
+
+  return values
 }

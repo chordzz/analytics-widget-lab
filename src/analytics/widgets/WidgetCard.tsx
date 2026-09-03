@@ -53,6 +53,14 @@ export interface WidgetCardProps {
   emptyMessage?: string
   /** Rendered under the content, e.g. a legend or a footnote. */
   footer?: ReactNode
+  /**
+   * Viewer-facing controls, between the header and the picture.
+   *
+   * Above the body rather than below it because they change what the body says:
+   * a filter a Viewer has to scroll past the chart to find is one they will read
+   * the wrong number before noticing.
+   */
+  controls?: ReactNode
   /** Drops the header. For a stat tile whose value is its own headline. */
   bare?: boolean
   /**
@@ -79,6 +87,7 @@ export const WidgetCard = forwardRef<
     errorMessage,
     emptyMessage,
     footer,
+    controls,
     bare = false,
     textLed = false,
     selected = false,
@@ -117,6 +126,8 @@ export const WidgetCard = forwardRef<
           </div>
         </header>
       )}
+
+      {controls && <div className="a-card__controls">{controls}</div>}
 
       <div className="a-card__body">
         {state === 'ready' && children}

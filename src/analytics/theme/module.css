@@ -386,3 +386,103 @@
 .a-tabular {
   font-variant-numeric: tabular-nums;
 }
+
+/* --- exposed filters (FR-VZ-06) -------------------------------------------
+ * Between the header and the picture, and deliberately quiet. These are the
+ * Viewer's controls over somebody else's widget: legible when looked for, never
+ * competing with the figure they modify.
+ */
+.a-card__controls {
+  padding: 0 var(--a-space-4) var(--a-space-3);
+  border-bottom: 1px solid var(--a-border);
+}
+
+.a-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--a-space-2) var(--a-space-3);
+}
+
+.a-filters__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.a-filters__label {
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+.a-filters__select {
+  font: inherit;
+  font-size: var(--a-text-xs);
+  color: var(--a-text);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+  padding: 3px 6px;
+  max-width: 14ch;
+}
+
+.a-filters__select:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 1px;
+}
+
+.a-filters__clear {
+  font: inherit;
+  font-size: var(--a-text-xs);
+  color: var(--a-accent);
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.a-filters__clear:hover {
+  text-decoration: underline;
+}
+
+/*
+ * A widget at three columns has no room for a filter row beside its chart. The
+ * card is the container, as everywhere else in this module — the viewport says
+ * nothing about how wide this particular card is.
+ */
+@container (max-width: 260px) {
+  .a-filters__select {
+    max-width: 100%;
+  }
+
+  .a-filters__field {
+    flex: 1 1 100%;
+  }
+}
+
+/* --- the Author's side of FR-VZ-06 --------------------------------------- */
+.a-expose {
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+  padding: var(--a-space-2) var(--a-space-3) var(--a-space-3);
+  margin: var(--a-space-2) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-space-2) var(--a-space-4);
+}
+
+.a-expose__legend {
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+  padding: 0 var(--a-space-1);
+}
+
+.a-expose__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--a-text-sm);
+  color: var(--a-text);
+  cursor: pointer;
+}
