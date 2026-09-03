@@ -9,7 +9,8 @@
 
 import { WidgetCard, type WidgetAction, type WidgetState } from './WidgetCard'
 import { widgetType } from './catalog'
-import { datasetById, rowsFor } from '../data/datasets'
+import { datasetById } from '../data/datasets'
+import { rowsForWidget } from '../data/query'
 import { fieldOf } from '../data/types'
 import {
   ActivityFeed,
@@ -128,7 +129,7 @@ export function Widget({ spec, state, actions, selected, onSelect, height }: Wid
    * say" from "not authorized" from "the Dataset is gone", and rendering the
    * last two as `empty` teaches a Viewer the figure is zero.
    */
-  const rows = rowsFor(dataset.id)
+  const rows = rowsForWidget(spec, dataset)
   const resolved: WidgetState = state ?? (rows.length === 0 ? 'empty' : 'ready')
   const bare = type.family === 'single-value' || type.id === 'status-indicator'
   // Lists and tables read as text, so they keep the wider inset. Plots give
@@ -230,37 +231,50 @@ function renderBody(
       const previous = values[values.length - 2] ?? latest
 
       /*
-       * How a measure rolls up depends on what it *is*, not on the widget.
-       * Adding revenue across months gives revenue for the year; adding uptime
-       * across services gives 890%, which is not a number that exists. Rates and
-       * durations average, quantities total — inferred from the field's format,
-       * since that is where the module already records the difference.
+       * The roll-up is gone from here.
+       *
+       * It used to be computed in this switch — sum unless the field's *format*
+       * was a percent or a duration, in which case average. The rule was right
+       * and the location was wrong: how a Measure rolls up is a property of what
+       * it is, the publisher declares it (FR-DP-04), and letting each widget
+       * re-derive it is the divergent-definition failure this capability exists
+       * to remove.
+       *
+       * A stat card now asks for the aggregate and receives one row. Delta and
+       * sparkline cards are about the latest point and how it moved, so they
+       * receive the series, ordered by its Time Dimension rather than by
+       * whatever order the rows happened to arrive in.
        */
-      const rollUp =
-        (options.aggregation as 'sum' | 'average' | 'latest' | undefined) ??
-        (primaryFormat === 'percent' || primaryFormat === 'duration' ? 'average' : 'sum')
-
-      const summary =
-        rollUp === 'latest'
-          ? latest
-          : rollUp === 'average'
-            ? values.reduce((total, value) => total + value, 0) / (values.length || 1)
-            : values.reduce((total, value) => total + value, 0)
-
-      // A stat card summarises the period; delta and sparkline cards are about
-      // the latest point and how it moved.
-      const showTotal = typeId === 'stat-card'
+      /*
+       * A stat card receives one aggregated row, so it has one number and no
+       * comparison. That surfaced something the old code got wrong rather than
+       * breaking something it got right: it displayed the whole period's
+       * *total* beside a delta computed from the last two *records* — a
+       * 24-month figure labelled "vs. last month". The two never described the
+       * same thing.
+       *
+       * A comparison needs a second aggregate over a previous period, which is
+       * a query this widget does not yet make. Until it does, a stat card shows
+       * its figure and says nothing about movement, and the cards that exist to
+       * show movement keep their series.
+       */
+      const isAggregate = typeId === 'stat-card'
+      const comparable = !isAggregate && previous !== 0
 
       return (
         <StatTile
           label={spec.title ?? fieldOf(dataset, key)?.label ?? key}
-          value={showTotal ? summary : latest}
+          value={isAggregate ? (values[0] ?? 0) : latest}
           format={primaryFormat}
-          delta={previous === 0 ? undefined : latest / previous - 1}
+          delta={comparable ? latest / previous - 1 : undefined}
           direction={
             (options.direction as 'up-is-good' | 'down-is-good' | 'neutral') ?? 'up-is-good'
           }
-          comparisonLabel={typeof options.comparisonLabel === 'string' ? options.comparisonLabel : undefined}
+          comparisonLabel={
+            comparable && typeof options.comparisonLabel === 'string'
+              ? options.comparisonLabel
+              : undefined
+          }
           trend={typeId === 'sparkline-card' ? rows.slice(-40) : undefined}
           trendKey={typeId === 'sparkline-card' ? key : undefined}
         />
@@ -271,6 +285,13 @@ function renderBody(
     case 'gauge': {
       const valueKey = mapping.value ?? ''
       const targetKey = mapping.target ?? ''
+      /*
+       * "Current" is the last record of a time-ordered series, and the ordering
+       * is now asked for in the query rather than assumed — see `queryFor`. A
+       * Source System has no obligation to return rows in any order, so taking
+       * the tail of an unordered response would show an arbitrary month as the
+       * current one and be wrong without looking wrong.
+       */
       const latest = rows[rows.length - 1]
       return (
         <GaugeTile
@@ -307,6 +328,21 @@ function renderBody(
       )
 
     case 'status-indicator': {
+      /*
+       * D13 — this still reduces records in the browser, and cannot stop yet.
+       *
+       * It picks the worst of many states, and "worst" is an ordering over
+       * `good | warning | serious | critical` that `DatasetQuery` has no way to
+       * express: sorting by the state Field alphabetically puts `critical`
+       * before `good` by accident and `warning` after both. A query-side answer
+       * needs either an ordered-Dimension semantic or a `severity` aggregation,
+       * neither of which the FRD has.
+       *
+       * The test from the Merge Plan — would the number change if the server
+       * returned a different page of the same data? — says yes, so this is a
+       * real divergence rather than presentation. It is bounded in practice
+       * (8 services) and registered rather than hidden.
+       */
       const worst = [...rows].sort(
         (a, b) => severity(b[mapping.state ?? '']) - severity(a[mapping.state ?? '']),
       )[0]

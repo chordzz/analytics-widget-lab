@@ -51,6 +51,15 @@ export function Histogram({
 
   // Sturges' rule — a reasonable default that scales with n rather than a
   // fixed count that is too coarse for 2,000 rows and too fine for 20.
+  /*
+   * D14 — binning is a reduction over every value, done here.
+   *
+   * A histogram's shape is a property of the whole distribution, so a paged or
+   * filtered response produces a different and silently wrong picture.
+   * `DatasetQuery` cannot ask for buckets: there is no bucket-width parameter
+   * and no `histogram` aggregation. Registered rather than hidden; the fix is a
+   * query-side bucketing primitive, which is an FRD extension.
+   */
   const count = buckets ?? Math.max(6, Math.min(24, Math.ceil(Math.log2(values.length) + 1)))
 
   const min = values[0]
