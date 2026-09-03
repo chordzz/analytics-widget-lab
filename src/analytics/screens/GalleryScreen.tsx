@@ -27,7 +27,9 @@ const STATES: { id: WidgetState | 'auto'; label: string }[] = [
   { id: 'auto', label: 'Ready' },
   { id: 'loading', label: 'Loading' },
   { id: 'empty', label: 'Empty' },
-  { id: 'error', label: 'Error' },
+  { id: 'denied', label: 'Denied' },
+  { id: 'withdrawn', label: 'Withdrawn' },
+  { id: 'failed', label: 'Failed' },
 ]
 
 export function GalleryScreen() {

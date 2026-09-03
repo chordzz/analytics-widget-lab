@@ -274,6 +274,25 @@
   color: var(--a-status-critical);
 }
 
+/*
+ * Denied is neutral, not negative. It is a deliberate, legible outcome rather
+ * than a fault, and drawing it in the failure colour would tell the Viewer the
+ * system is broken when the system is working exactly as intended.
+ */
+.a-placeholder--neutral {
+  color: var(--a-status-neutral);
+}
+
+/* Withdrawn is cautionary: something changed underneath this widget. */
+.a-placeholder--warning {
+  color: var(--a-status-warning);
+}
+
+.a-placeholder__heading {
+  font-weight: 600;
+  color: var(--a-text);
+}
+
 /* --- visualisation layout -------------------------------------------------
  * A primitive returns exactly one element, so the card body's `flex: 1` lands
  * on the wrapper rather than being split between the plot and the legend —

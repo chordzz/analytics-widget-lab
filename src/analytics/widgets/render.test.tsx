@@ -89,7 +89,7 @@ describe('every built widget type', () => {
   test('renders loading and error states for every type', () => {
     for (const type of builtTypes) {
       const sample = SAMPLES[type.id]
-      for (const state of ['loading', 'error'] as const) {
+      for (const state of ['loading', 'denied', 'withdrawn', 'failed'] as const) {
         const markup = render(
           `${type.id} (${state})`,
           <Widget spec={{ id: 'test', typeId: type.id, ...sample }} state={state} />,

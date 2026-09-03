@@ -101,7 +101,7 @@ export function Widget({ spec, state, actions, selected, onSelect, height }: Wid
     return (
       <WidgetCard
         title={spec.title ?? spec.typeId}
-        state="error"
+        state="failed"
         errorMessage={
           !type ? `No widget type '${spec.typeId}'.` : `No dataset '${spec.datasetId}'.`
         }

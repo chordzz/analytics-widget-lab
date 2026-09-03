@@ -13,7 +13,28 @@
 
 import { forwardRef, useState, type HTMLAttributes, type ReactNode } from 'react'
 
-export type WidgetState = 'ready' | 'loading' | 'empty' | 'error'
+/**
+ * The six render states, and why there are six.
+ *
+ * These are `WidgetRenderState`'s statuses from `retrieval/render-state.ts`,
+ * deliberately the same six words — the model resolves an outcome into one of
+ * them and the chrome draws it, and a card that could only show four would
+ * force two of them to be rendered as something they are not.
+ *
+ * The requirements turn on the distinctions, so none may be collapsed:
+ *
+ *   empty      authorized, nothing to say. Not a fault (FR-VZ-10).
+ *   denied     not authorized. Drawn as empty it teaches the Viewer the figure
+ *              is zero; drawn as an error it teaches them the system is broken
+ *              (FR-DA-10, FR-DA-11).
+ *   withdrawn  the Dataset is gone. Figures are withheld rather than shown,
+ *              because stale ones would read as current (FR-DP-13, FR-DP-14).
+ *   failed     the only treatment that says something is broken.
+ *
+ * `failed` was `error` while the module was a parallel track. Renamed for the
+ * same reason the type ids were: one vocabulary, and the model owns it.
+ */
+export type WidgetState = 'ready' | 'loading' | 'empty' | 'denied' | 'withdrawn' | 'failed'
 
 export interface WidgetAction {
   label: string
@@ -100,9 +121,8 @@ export const WidgetCard = forwardRef<
       <div className="a-card__body">
         {state === 'ready' && children}
         {state === 'loading' && <LoadingState />}
-        {state === 'empty' && <Placeholder tone="muted" message={emptyMessage ?? 'No data for this selection.'} />}
-        {state === 'error' && (
-          <Placeholder tone="critical" message={errorMessage ?? 'This widget could not load.'} />
+        {state !== 'ready' && state !== 'loading' && (
+          <StatePanel state={state} emptyMessage={emptyMessage} errorMessage={errorMessage} />
         )}
       </div>
 
@@ -172,25 +192,97 @@ function LoadingState() {
   )
 }
 
-function Placeholder({ tone, message }: { tone: 'muted' | 'critical'; message: string }) {
+/**
+ * The four states that are not `ready` and not `loading`.
+ *
+ * Each gets its own tone, icon and wording. A shared "nothing here" treatment
+ * would be less code and would defeat the point: the whole reason these are
+ * four states rather than one is that a Viewer must be able to tell them apart
+ * without asking anyone.
+ */
+function StatePanel({
+  state,
+  emptyMessage,
+  errorMessage,
+}: {
+  state: Exclude<WidgetState, 'ready' | 'loading'>
+  emptyMessage?: string
+  errorMessage?: string
+}) {
+  const panel = {
+    empty: {
+      tone: 'muted' as const,
+      icon: <BarsIcon />,
+      heading: undefined,
+      body: emptyMessage ?? 'No data for this selection.',
+    },
+    denied: {
+      tone: 'neutral' as const,
+      icon: <LockIcon />,
+      heading: 'Access denied',
+      body: 'You are not authorized to view this data. This is not a zero — the figures exist and are withheld.',
+    },
+    withdrawn: {
+      tone: 'warning' as const,
+      icon: <WithdrawnIcon />,
+      heading: 'Dataset withdrawn',
+      body: 'The source system has withdrawn this dataset. Earlier figures are withheld rather than shown, because they would no longer be current.',
+    },
+    failed: {
+      tone: 'critical' as const,
+      icon: <FailureIcon />,
+      heading: undefined,
+      body: errorMessage ?? 'This widget could not load.',
+    },
+  }[state]
+
   return (
-    <div className={`a-placeholder a-placeholder--${tone}`} role="status">
-      <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none">
-        {tone === 'critical' ? (
-          <>
-            <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.4" />
-            <path d="M10 6v5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            <circle cx="10" cy="13.6" r="0.9" fill="currentColor" />
-          </>
-        ) : (
-          <>
-            <rect x="2.5" y="11" width="3.4" height="6" rx="1" stroke="currentColor" strokeWidth="1.3" />
-            <rect x="8.3" y="7" width="3.4" height="10" rx="1" stroke="currentColor" strokeWidth="1.3" />
-            <rect x="14.1" y="13" width="3.4" height="4" rx="1" stroke="currentColor" strokeWidth="1.3" />
-          </>
-        )}
-      </svg>
-      <p>{message}</p>
+    <div className={`a-placeholder a-placeholder--${panel.tone}`} role="status">
+      <span aria-hidden="true">{panel.icon}</span>
+      {panel.heading && <p className="a-placeholder__heading">{panel.heading}</p>}
+      <p>{panel.body}</p>
     </div>
   )
 }
+
+const iconProps = {
+  width: 20,
+  height: 20,
+  viewBox: '0 0 20 20',
+  fill: 'none',
+  'aria-hidden': true,
+} as const
+
+/** Empty — chart-shaped, so the state reads as "this chart has no data". */
+const BarsIcon = () => (
+  <svg {...iconProps}>
+    <rect x="2.5" y="11" width="3.4" height="6" rx="1" stroke="currentColor" strokeWidth="1.3" />
+    <rect x="8.3" y="7" width="3.4" height="10" rx="1" stroke="currentColor" strokeWidth="1.3" />
+    <rect x="14.1" y="13" width="3.4" height="4" rx="1" stroke="currentColor" strokeWidth="1.3" />
+  </svg>
+)
+
+/** Denied — a lock, because the data exists and is being kept from you. */
+const LockIcon = () => (
+  <svg {...iconProps}>
+    <rect x="4.5" y="9" width="11" height="7.5" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M7 9V6.8a3 3 0 0 1 6 0V9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+)
+
+/** Withdrawn — struck through, because it was here and is not any more. */
+const WithdrawnIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M5.2 5.2l9.6 9.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+  </svg>
+)
+
+/** Failed — the only one that means something is broken. */
+const FailureIcon = () => (
+  <svg {...iconProps}>
+    <circle cx="10" cy="10" r="7.5" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M10 6v5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <circle cx="10" cy="13.6" r="0.9" fill="currentColor" />
+  </svg>
+)
