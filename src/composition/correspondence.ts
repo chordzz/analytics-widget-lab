@@ -17,7 +17,6 @@
 
 import type { Dataset } from '../domain/dataset'
 import type { DatasetQuery } from '../domain/query'
-import type { Widget } from '../domain/widget'
 import type { Control, ControlValues, DateRangeValue } from '../domain/composition'
 import { getVisualizationType } from '../visualization/visualization-types'
 import { canPresent } from '../visualization/registry'
@@ -26,6 +25,29 @@ import { canPresent } from '../visualization/registry'
 export interface QueryContribution {
   timeRange?: { field: string; from?: string; to?: string }
   filters?: Record<string, string | number>
+}
+
+/**
+ * The parts of a Widget that decide whether a Control reaches it.
+ *
+ * Narrower than `Widget` for the same reason `AccessSubject` is narrower than
+ * `Dashboard`: correspondence turns on four facts, and demanding the whole
+ * record couples these rules to a mapping vocabulary they have no opinion
+ * about. The product module's `WidgetMapping` has ten slot roles where
+ * `FieldMapping` has four (D1), so it could not satisfy `Widget` without
+ * pretending — and correspondence never needed it to.
+ */
+export interface ControlSubject {
+  id: string
+  datasetId: string
+  visualizationTypeId: string
+  /**
+   * The Time Dimension this Widget is actually drawn against, if it named one.
+   *
+   * Used so a Dataset with two timestamps is filtered on the one the Widget
+   * plots rather than whichever is declared first.
+   */
+  timeDimension?: string
 }
 
 export type Correspondence =
@@ -43,7 +65,7 @@ export type Correspondence =
  */
 export function correspondenceFor(
   control: Control,
-  widget: Widget,
+  widget: ControlSubject,
   dataset: Dataset,
 ): Correspondence {
   switch (control.correspondence.kind) {
@@ -52,8 +74,8 @@ export function correspondenceFor(
       // Prefer the Field the Author already mapped, so a Widget with two
       // timestamps is filtered on the one it is actually drawn against.
       const mapped =
-        role === 'time-dimension' && widget.mapping.timeDimension
-          ? dataset.fields.find((f) => f.key === widget.mapping.timeDimension && f.role === role)
+        role === 'time-dimension' && widget.timeDimension
+          ? dataset.fields.find((f) => f.key === widget.timeDimension && f.role === role)
           : undefined
       const field = mapped ?? dataset.fields.find((f) => f.role === role)
 
@@ -151,7 +173,7 @@ export function canSwitchTo(
 export function effectFor(
   controls: Control[],
   values: ControlValues,
-  widget: Widget,
+  widget: ControlSubject,
   dataset: Dataset,
   hasRenderer: (typeId: string) => boolean = () => true,
 ): ControlEffect {
@@ -200,7 +222,7 @@ export function effectFor(
 export function contributionFor(
   controls: Control[],
   values: ControlValues,
-  widget: Widget,
+  widget: ControlSubject,
   dataset: Dataset,
 ): QueryContribution {
   return effectFor(controls, values, widget, dataset).query
@@ -243,7 +265,7 @@ export interface ControlReach {
  */
 export function resolveControlReach(
   control: Control,
-  widgets: Widget[],
+  widgets: ControlSubject[],
   datasets: Record<string, Dataset>,
   /**
    * The Control's current value, and what can be drawn. Supplied for a view

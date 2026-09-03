@@ -43,6 +43,7 @@ import 'react-grid-layout/css/styles.css'
 import { Widget } from '../widgets/Widget'
 import { COLUMNS, MARGIN_X, MARGIN_Y, MAX_H, MIN_H, MIN_W, ROW_HEIGHT, clampH, clampW } from './grid'
 import type { LayoutEntry, PlacedWidget } from './boards'
+import type { QueryContribution } from '../../composition/correspondence'
 
 const MARGIN: readonly [number, number] = [MARGIN_X, MARGIN_Y]
 
@@ -106,6 +107,14 @@ export interface GridBoardProps {
   onEdit?: (widget: PlacedWidget) => void
   onDuplicate?: (widgetId: string) => void
   onRemove?: (widgetId: string) => void
+  /**
+   * What a Dashboard Control contributes to each widget (FR-CO-06).
+   *
+   * A function rather than a value because correspondence is per Widget: the
+   * same Control reaches one card and not the next, and the board is where that
+   * is known.
+   */
+  contributionFor?: (widget: PlacedWidget) => QueryContribution
   /** Rendered when the board has nothing on it. */
   empty?: React.ReactNode
 }
@@ -117,6 +126,7 @@ export function GridBoard({
   onEdit,
   onDuplicate,
   onRemove,
+  contributionFor,
   empty,
 }: GridBoardProps) {
   const { containerRef, width } = useContainerWidth()
@@ -283,6 +293,7 @@ export function GridBoard({
             >
               <Widget
                 spec={spec}
+                contribution={contributionFor?.(spec)}
                 actions={
                   editable
                     ? [

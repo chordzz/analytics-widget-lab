@@ -529,3 +529,46 @@
   flex: 1 1 100%;
   margin: 0;
 }
+
+/* --- dashboard controls (FR-CO-05, FR-CO-06) ----------------------------- */
+.a-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-space-3) var(--a-space-5);
+  padding: var(--a-space-3) var(--a-space-4);
+  margin-bottom: var(--a-space-4);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+}
+
+.a-controls__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.a-controls__field {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  flex-wrap: wrap;
+}
+
+.a-controls__range {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--a-space-2);
+}
+
+/*
+ * The second half of FR-CO-06, and the reason this line exists at all: a
+ * Control that silently moves two widgets out of three leaves a Viewer to guess
+ * whether the third is stale, filtered differently, or broken. Quiet, because it
+ * is reassurance rather than a warning.
+ */
+.a-controls__reach {
+  margin: 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}

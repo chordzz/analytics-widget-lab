@@ -24,9 +24,10 @@ import { currentTypeId, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
 import type { WidgetSpec } from '../widgets/Widget'
 import type { Dashboard, DashboardScope, DashboardStatus, ShareGrant } from '../../domain/dashboard'
+import type { Control } from '../../domain/composition'
 import type { Placement as DashboardPlacement } from '../../domain/composition'
 
-export type { DashboardScope, ShareGrant }
+export type { Control, DashboardScope, ShareGrant }
 
 export type BoardStatus = DashboardStatus
 
@@ -68,7 +69,7 @@ export interface PlacedWidget extends WidgetSpec, Placement {}
  * shows, and `updated`, which it sorts by. Neither is in the FRD's `Dashboard`
  * and neither contradicts it.
  */
-export interface Board extends Omit<Dashboard, 'controls' | 'sections' | 'widgets'> {
+export interface Board extends Omit<Dashboard, 'sections' | 'widgets'> {
   description: string
   /** ISO date, as a string, because that is all it is ever displayed as. */
   updated: string
@@ -127,6 +128,8 @@ export type BoardsAction =
   | { type: 'set-scope'; id: string; scope: DashboardScope; at: string }
   | { type: 'add-grant'; id: string; grant: ShareGrant; at: string }
   | { type: 'remove-grant'; id: string; grantId: string; at: string }
+  | { type: 'add-control'; id: string; control: Control; at: string }
+  | { type: 'remove-control'; id: string; controlId: string; at: string }
   | {
       type: 'add-widget'
       boardId: string
@@ -186,6 +189,7 @@ export function boardsReducer(state: BoardsState, action: BoardsAction): BoardsS
         updated: action.at,
         widgets: {},
         placements: [],
+        controls: [],
       }
       // Newest first: a board you just made should not be below six older ones.
       return { boards: [board, ...state.boards], editingId: board.id }
@@ -280,6 +284,27 @@ function applyToBoard(board: Board, action: BoardsAction): Board {
       return {
         ...board,
         shareGrants: board.shareGrants.filter((grant) => grant.id !== action.grantId),
+        updated: at,
+      }
+
+    /*
+     * FR-CO-05 — a Control is a Composition Element, and FR-CO-08 says a
+     * Composition Element draws from no Dataset. Nothing here carries a
+     * `datasetId`, and the type in `domain/composition.ts` has nowhere to put
+     * one, so that holds structurally rather than by care.
+     *
+     * A Control never names the Widgets it acts on. Correspondence is computed
+     * per Widget at render time, so adding a Widget to a board brings it under
+     * an existing Control with no reconfiguration — and removes the whole class
+     * of bug where a Control's Widget list goes stale.
+     */
+    case 'add-control':
+      return { ...board, controls: [...board.controls, action.control], updated: at }
+
+    case 'remove-control':
+      return {
+        ...board,
+        controls: board.controls.filter((control) => control.id !== action.controlId),
         updated: at,
       }
 
@@ -596,6 +621,7 @@ function normalizeBoard(board: StoredBoard, authorId: string): Board {
     updated: typeof board.updated === 'string' ? board.updated : '',
     widgets,
     placements,
+    controls: Array.isArray(board.controls) ? (board.controls as Control[]) : [],
   }
 }
 

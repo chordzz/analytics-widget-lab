@@ -13,6 +13,7 @@ import { useState, type ReactNode } from 'react'
 import { useDataset, useWidgetRows } from '../data/AnalyticsData'
 import { WidgetFilters } from './WidgetFilters'
 import type { ViewerChoices } from '../data/query'
+import type { QueryContribution } from '../../composition/correspondence'
 import { fieldOf } from '../data/types'
 import {
   ActivityFeed,
@@ -106,6 +107,14 @@ export interface WidgetProps {
   onSelect?: () => void
   /** Fixed body height. Omit to fill the grid cell. */
   height?: number
+  /**
+   * What a Dashboard Control contributes to this widget's query (FR-CO-05).
+   *
+   * Already resolved by the board — a widget does not know which Controls
+   * exist, only what reached it, which is why adding a Control needs no change
+   * here.
+   */
+  contribution?: QueryContribution
 }
 
 export interface WidgetViewProps extends WidgetProps {
@@ -201,7 +210,15 @@ export function WidgetView({
  * `state` overrides everything, which is how the Gallery shows all six
  * treatments without needing a Source System that can produce them on demand.
  */
-export function Widget({ spec, state: override, actions, selected, onSelect, height }: WidgetProps) {
+export function Widget({
+  spec,
+  state: override,
+  actions,
+  selected,
+  onSelect,
+  height,
+  contribution,
+}: WidgetProps) {
   const { dataset, loading: describing } = useDataset(spec.datasetId)
 
   /*
@@ -215,7 +232,7 @@ export function Widget({ spec, state: override, actions, selected, onSelect, hei
    * thing, and it is Stage 6.3.
    */
   const [choices, setChoices] = useState<ViewerChoices>({})
-  const retrieved = useWidgetRows(spec, dataset, choices)
+  const retrieved = useWidgetRows(spec, dataset, choices, contribution)
 
   const controls =
     dataset && (spec.exposedFilters?.length || spec.exposedSorts?.length) ? (
@@ -373,7 +390,13 @@ function renderBody(
        * show movement keep their series.
        */
       const isAggregate = typeId === 'stat-card'
-      const comparable = !isAggregate && previous !== 0
+      /*
+       * A comparison needs two points. One is not a flat period, it is a period
+       * with nothing to compare against — which a Control makes reachable, by
+       * narrowing a delta card to a single month. Showing "0%" there asserts
+       * something false about the data.
+       */
+      const comparable = !isAggregate && values.length > 1 && previous !== 0
 
       return (
         <StatTile

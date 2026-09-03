@@ -12,6 +12,8 @@
 import { useEffect, useState } from 'react'
 import { GridBoard } from '../builder/GridBoard'
 import { SharePanel } from '../builder/SharePanel'
+import { BoardControls } from '../builder/BoardControls'
+import { useBoardControls } from '../builder/useBoardControls'
 import { WidgetComposer, type ComposerDraft } from '../builder/WidgetComposer'
 import { useBoards } from '../builder/useBoards'
 import { useComposeIntent } from '../builder/useComposeIntent'
@@ -21,6 +23,7 @@ import type { ScreenId } from '../shell/nav'
 export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const boards = useBoards()
   const { editing } = boards
+  const controls = useBoardControls(editing)
 
   const intent = useComposeIntent()
 
@@ -133,6 +136,15 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           <button type="button" className="a-button" onClick={() => setComposing('new')}>
             Add widget
           </button>
+          {editing.controls.length === 0 && (
+            <button
+              type="button"
+              className="a-button"
+              onClick={() => boards.addDateRangeControl(editing.id)}
+            >
+              Add date range
+            </button>
+          )}
           {editing.status === 'draft' ? (
             <button
               type="button"
@@ -159,8 +171,17 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
 
       <SharePanel board={editing} />
 
+      <BoardControls
+        controls={editing.controls}
+        widgets={placedWidgets(editing)}
+        values={controls.values}
+        onChange={controls.setValues}
+        onRemove={(controlId) => boards.removeControl(editing.id, controlId)}
+      />
+
       <GridBoard
         widgets={placedWidgets(editing)}
+        contributionFor={controls.contribution}
         editable
         onLayoutChange={(placements) => boards.applyLayout(editing.id, placements)}
         onEdit={(widget) => setComposing(widget)}

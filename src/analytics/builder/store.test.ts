@@ -37,6 +37,7 @@ const board = (id: string): Board => ({
   updated: '2026-01-01',
   widgets: {},
   placements: [],
+  controls: [],
 })
 
 const state = (id: string): BoardsState => ({ boards: [board(id)], editingId: id })

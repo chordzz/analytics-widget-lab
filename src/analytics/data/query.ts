@@ -25,6 +25,11 @@
  */
 
 import { executeQuery } from '../../retrieval/aggregate'
+import {
+  applyContribution,
+  type ControlSubject,
+  type QueryContribution,
+} from '../../composition/correspondence'
 import type { Aggregation, Dataset } from '../../domain/dataset'
 import type { DatasetQuery, MeasureSelection } from '../../domain/query'
 import type { WidgetSpec } from '../widgets/Widget'
@@ -142,6 +147,13 @@ export function queryFor(
   spec: WidgetSpec,
   dataset: Dataset,
   choices?: ViewerChoices,
+  /**
+   * What a Dashboard Control contributes to this widget, already resolved by
+   * `contributionFor`. Empty when no Control reaches it — which is the same
+   * thing as the widget being unaffected, and is why an unreachable Control
+   * needs no special case here.
+   */
+  contribution?: QueryContribution,
 ): DatasetQuery {
   const { typeId, mapping, options = {} } = spec
   const override = typeof options.aggregation === 'string' ? options.aggregation : undefined
@@ -150,11 +162,23 @@ export function queryFor(
 
   // A Viewer's sort replaces the widget's own ordering; their filters narrow
   // whatever it would otherwise have asked for.
-  const withChoices = (base: DatasetQuery): DatasetQuery => ({
-    ...base,
-    ...(chosen.filters ? { filters: chosen.filters } : {}),
-    ...(chosen.sort ? { sort: chosen.sort } : {}),
-  })
+  const withChoices = (base: DatasetQuery): DatasetQuery => {
+    const own: DatasetQuery = {
+      ...base,
+      ...(chosen.filters ? { filters: chosen.filters } : {}),
+      ...(chosen.sort ? { sort: chosen.sort } : {}),
+    }
+
+    /*
+     * Finding 10 — where a Dashboard Control and this widget's own exposed
+     * filter name the same Field, the widget's wins. Both are the Viewer's
+     * choices; the widget-level one is the more specific, and silently
+     * overriding the control someone just used on a particular card is the more
+     * surprising outcome. `applyContribution` is where that precedence lives, so
+     * it is decided once rather than per caller.
+     */
+    return contribution ? applyContribution(own, contribution) : own
+  }
 
   switch (typeId) {
     case 'stat-card': {
@@ -198,6 +222,25 @@ export function rowsForWidget(
   spec: WidgetSpec,
   dataset: Dataset,
   choices?: ViewerChoices,
+  contribution?: QueryContribution,
 ): Row[] {
-  return executeQuery(rowsFor(dataset.id), queryFor(spec, dataset, choices))
+  return executeQuery(rowsFor(dataset.id), queryFor(spec, dataset, choices, contribution))
+}
+
+/**
+ * The module's spec, as the correspondence rules need to see it.
+ *
+ * `ControlSubject` asks for the Time Dimension a widget is *drawn against*, and
+ * the module keeps that in `mapping.x` — which may equally hold a category. So
+ * the Dataset decides: `x` counts only when it names a Time Dimension.
+ */
+export function controlSubjectFor(spec: WidgetSpec, dataset: Dataset): ControlSubject {
+  const mapped = spec.mapping.x !== undefined ? fieldOf(dataset, spec.mapping.x) : undefined
+
+  return {
+    id: spec.id,
+    datasetId: spec.datasetId,
+    visualizationTypeId: spec.typeId,
+    timeDimension: mapped?.role === 'time-dimension' ? mapped.key : undefined,
+  }
 }

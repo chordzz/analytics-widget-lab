@@ -11,6 +11,8 @@
 
 import { useState } from 'react'
 import { GridBoard } from '../builder/GridBoard'
+import { BoardControls } from '../builder/BoardControls'
+import { useBoardControls } from '../builder/useBoardControls'
 import { placedWidgets, widgetCountOf } from '../builder/boards'
 import { useBoards } from '../builder/useBoards'
 import type { ScreenId } from '../shell/nav'
@@ -25,6 +27,8 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
     boards.boards.find((board) => board.id === activeId) ??
     boards.published[0] ??
     boards.boards[0]
+
+  const controls = useBoardControls(active)
 
   // An empty state shown while the store is still answering reads as "you have
   // nothing", which is a different and more alarming claim than "not yet".
@@ -88,8 +92,16 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
         A published board that laid its widgets out even slightly differently
         would make the builder untrustworthy.
       */}
+      <BoardControls
+        controls={active.controls}
+        widgets={placedWidgets(active)}
+        values={controls.values}
+        onChange={controls.setValues}
+      />
+
       <GridBoard
         widgets={placedWidgets(active)}
+        contributionFor={controls.contribution}
         empty={
           <div className="a-empty">
             <h3>{active.name} is empty</h3>

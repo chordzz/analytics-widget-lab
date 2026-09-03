@@ -74,6 +74,7 @@ const board = (
     shareGrants: [],
     status: 'draft',
     updated: '2026-01-01',
+    controls: [],
     ...split(given ?? placed('a', 'b', 'c')),
     ...rest,
   }

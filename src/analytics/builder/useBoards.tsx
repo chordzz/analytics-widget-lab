@@ -29,6 +29,7 @@ import {
   type BoardsState,
   type LayoutEntry,
 } from './boards'
+import { dateRangeControl } from '../../domain/composition'
 import { visibleDashboards } from '../../access/dashboard-access'
 import { useAnalyticsData } from '../data/AnalyticsData'
 import { seedBoards } from './seed'
@@ -79,6 +80,9 @@ interface BoardsContextValue {
   /** FR-DA-06 — refines who within the Scope sees it. Never reaches beyond. */
   addGrant: (id: string, recipient: { kind: 'individual' | 'group'; id: string; label: string }) => void
   removeGrant: (id: string, grantId: string) => void
+  /** FR-CO-05 — a Composition Element that changes how Widgets present data. */
+  addDateRangeControl: (id: string, label?: string) => void
+  removeControl: (id: string, controlId: string) => void
   /**
    * Adds a widget. `size` is what the composer chose; anything it leaves out
    * comes from the widget type, and the board decides where it goes.
@@ -214,6 +218,9 @@ export function BoardsProvider({
           at,
         }),
       removeGrant: (id, grantId) => dispatch({ type: 'remove-grant', id, grantId, at }),
+      addDateRangeControl: (id, label) =>
+        dispatch({ type: 'add-control', id, control: dateRangeControl(newId('control'), label), at }),
+      removeControl: (id, controlId) => dispatch({ type: 'remove-control', id, controlId, at }),
 
       addWidget: (boardId, widget, size) =>
         dispatch({

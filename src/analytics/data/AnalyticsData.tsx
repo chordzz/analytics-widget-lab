@@ -34,6 +34,7 @@ import {
   type Scenario,
 } from './adapters'
 import { queryFor, type ViewerChoices } from './query'
+import type { QueryContribution } from '../../composition/correspondence'
 import type { WidgetSpec } from '../widgets/Widget'
 import type { Row } from './types'
 
@@ -150,6 +151,7 @@ export function useWidgetRows(
   spec: WidgetSpec,
   dataset: Dataset | null,
   choices?: ViewerChoices,
+  contribution?: QueryContribution,
 ): WidgetRenderState {
   const { retrieval, viewer } = useAnalyticsData()
   const [state, setState] = useState<WidgetRenderState>({ status: 'loading' })
@@ -158,10 +160,10 @@ export function useWidgetRows(
   // effect below re-runs forever.
   // Serialised, because a fresh `choices` object every render would restart the
   // retrieval every render. The *values* are what changed, not the identity.
-  const choiceKey = JSON.stringify(choices ?? null)
+  const choiceKey = JSON.stringify([choices ?? null, contribution ?? null])
 
   const query = useMemo(
-    () => (dataset ? queryFor(spec, dataset, choices) : null),
+    () => (dataset ? queryFor(spec, dataset, choices, contribution) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [spec, dataset, choiceKey],
   )

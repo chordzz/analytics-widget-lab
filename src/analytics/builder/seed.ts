@@ -12,6 +12,7 @@
  */
 
 import { flowLayout, rowsForPx } from './grid'
+import { dateRangeControl } from '../../domain/composition'
 import { heightForType } from '../widgets/layout'
 import type { Board, PlacedWidget } from './boards'
 import type { WidgetSpec } from '../widgets/Widget'
@@ -65,6 +66,14 @@ export const revenueOverview: Board = {
   authorId: SEED_AUTHOR,
   scope: { kind: 'organization-wide' },
   shareGrants: [],
+  /*
+   * One Control, so FR-CO-06 is reachable by opening the module rather than by
+   * building a board first. It also happens to be the interesting case: this
+   * board mixes time-series widgets with `sales-by-region` and
+   * `service-health`, neither of which has a Time Dimension — so the Control
+   * visibly reaches some widgets and says why it leaves the others alone.
+   */
+  controls: [dateRangeControl('c-period', 'Period')],
   ...place([
     {
       id: 'w-revenue-total',
@@ -167,6 +176,7 @@ export const onboardingFunnel: Board = {
   authorId: SEED_AUTHOR,
   scope: { kind: 'organization-wide' },
   shareGrants: [],
+  controls: [],
   ...place([
     {
       id: 'w-signups',
