@@ -105,6 +105,8 @@ export const WIDGET_TYPES: WidgetType[] = [
   // Status
   { id: 'status-list', label: 'Status list', family: 'status', description: 'Several entities and their current state.', needs: { dimensions: 2 }, defaultSpan: 4, built: true },
   { id: 'status-indicator', label: 'Status tile', family: 'status', description: 'One headline state.', needs: { dimensions: 2 }, defaultSpan: 3, built: true },
+  { id: 'threshold-indicator', label: 'Threshold indicator', family: 'status', description: 'One figure against a line the author drew.', needs: { measures: 1 }, defaultSpan: 3, built: true },
+  { id: 'alert-banner', label: 'Alert banner', family: 'status', description: 'A threshold breach as a strip across the board.', needs: { measures: 1 }, defaultSpan: 6, built: true },
 
   // Radial
   { id: 'gauge', label: 'Gauge', family: 'radial', description: 'A value against a target, as an arc.', needs: { measures: 2 }, defaultSpan: 3, built: true },
@@ -123,6 +125,7 @@ export const WIDGET_TYPES: WidgetType[] = [
   { id: 'cohort-grid', label: 'Cohort grid', family: 'temporal-pattern', description: 'Cohorts down, elapsed periods across.', needs: { time: 1, dimensions: 1, measures: 1 }, defaultSpan: 8, built: true },
   { id: 'timeline-chart', label: 'Gantt chart', family: 'temporal-pattern', description: 'Spans along a time axis.', needs: { dimensions: 1, measures: 2 }, defaultSpan: 8, built: true },
   { id: 'activity-feed', label: 'Activity feed', family: 'chronological', description: 'Events, most recent first.', needs: { time: 1 }, defaultSpan: 4, built: true },
+  { id: 'event-log-view', label: 'Event log', family: 'chronological', description: 'The same events as a dense record.', needs: { time: 1 }, defaultSpan: 6, built: true },
   { id: 'point-map', label: 'Point map', family: 'geospatial', description: 'Places plotted as points, sized by a measure.', needs: { geo: true, measures: 1 }, defaultSpan: 8, built: true },
   { id: 'choropleth-map', label: 'Choropleth map', family: 'geospatial', description: 'Regions shaded by a measure. Needs boundary geometry.', needs: { geo: true, measures: 1 }, defaultSpan: 6, built: false },
 ]

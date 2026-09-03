@@ -18,8 +18,13 @@ export function heightForType(typeId: string): number {
 
   if (type?.family === 'single-value') return typeId === 'progress-tracker' ? 188 : 132
   if (typeId === 'status-indicator') return 132
+  if (typeId === 'threshold-indicator') return 168
+  // A banner is a strip. Given a plot's height it becomes a mostly-empty card
+  // with a sentence at the top.
+  if (typeId === 'alert-banner') return 108
   if (typeId === 'gauge') return 188
   if (typeId === 'activity-feed') return 300
+  if (typeId === 'event-log-view') return 300
   if (type?.family === 'tabular') return 320
 
   /*

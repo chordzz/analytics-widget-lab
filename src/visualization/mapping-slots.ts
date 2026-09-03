@@ -92,7 +92,25 @@ export const mappingSlotsByFamily: Record<string, MappingSlot[]> = {
    * a Measure alone needs a threshold to compare against, and `MappingSlotId`
    * has nowhere to put a threshold (D1 again).
    */
-  status: [category(1, 1), measures(0, 1)],
+  /*
+   * Nothing is required here, and that is the honest encoding rather than a
+   * weakening. §4.2's Status shape is a **disjunction** — "one Measure with a
+   * threshold, *or* one state Dimension" — and its two routes need different
+   * slots: `threshold-indicator` takes a Measure and no Dimension,
+   * `status-indicator` takes a state Dimension. A per-Family table can only
+   * express a conjunction, so requiring either slot asserts something the Family
+   * does not require and makes the other route unrepresentable.
+   *
+   * The eligibility guarantee is not lost: the disjunction is modelled correctly
+   * in the Data Shape clause in `families.ts`, which is what FR-VZ-05 evaluates.
+   * This table says which Fields may fill which role, and its own header is
+   * explicit that those are different questions.
+   *
+   * D20 / Finding 17 records the gap. The guard against "nothing required"
+   * becoming "anything goes" is in `builder/refinement.test.ts`: every built
+   * Type must still require at least one slot from its Family's vocabulary.
+   */
+  status: [category(0, 1), measures(0, 1)],
 }
 
 export function slotsForFamily(familyId: string): MappingSlot[] {

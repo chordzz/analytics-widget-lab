@@ -177,6 +177,17 @@ const SLOTS: Record<string, Slot[]> = {
     slot('x', 'Entities', 'The worst one is shown.', DIMENSION),
     slot('state', 'State', 'Drives the status colour.', DIMENSION),
   ],
+  /*
+   * The Family's *other* Data Shape — one Measure with a threshold. The
+   * threshold is Widget configuration rather than a Dataset property, which is
+   * why a bare Measure satisfies these two and no `state` slot appears.
+   */
+  'threshold-indicator': [
+    slot('value', 'Measure', 'The figure to assess.', MEASURE, 1, 1),
+  ],
+  'alert-banner': [
+    slot('value', 'Measure', 'The figure to assess.', MEASURE, 1, 1),
+  ],
 
   // Radial
   gauge: [
@@ -239,6 +250,15 @@ const SLOTS: Record<string, Slot[]> = {
     slot('x', 'When', 'Orders the feed, most recent first.', TIME),
     slot('secondary', 'Actor', 'Who did it.', DIMENSION),
     slot('value', 'Action', 'What they did.', DIMENSION),
+  ],
+  /*
+   * A log takes columns rather than named roles, because a log row is a record
+   * and a feed row is a sentence. Chronological is the Family with no Measure,
+   * so `columns` accepts anything — the figures are shown, never aggregated.
+   */
+  'event-log-view': [
+    slot('x', 'When', 'Orders the log, most recent first.', TIME),
+    slot('columns', 'Columns', 'Shown after the timestamp, in this order.', ANY, 1, 8),
   ],
 
   // Geospatial

@@ -9,6 +9,7 @@
 
 import { WidgetCard, type WidgetAction, type WidgetState } from './WidgetCard'
 import { widgetType } from './catalog'
+import { thresholdFrom } from './threshold'
 import { useState, type ReactNode } from 'react'
 import { useDataset, useWidgetRows } from '../data/AnalyticsData'
 import { WidgetFilters } from './WidgetFilters'
@@ -35,6 +36,9 @@ import {
   ScatterChart,
   StatTile,
   StatusList,
+  ThresholdTile,
+  AlertBanner,
+  EventLog,
   StatusTile,
   Treemap,
   TrendChart,
@@ -461,6 +465,44 @@ function renderBody(
           stateKey={mapping.state ?? ''}
           valueKey={mapping.value}
           format={primaryFormat}
+        />
+      )
+
+    /*
+     * The Status Family's threshold route (merge §2). The figure arrives already
+     * aggregated by the query, so the comparison below is presentation — see
+     * `widgets/threshold.ts`.
+     */
+    case 'threshold-indicator':
+    case 'alert-banner': {
+      const key = mapping.value ?? ''
+      const value = Number(rows[0]?.[key] ?? Number.NaN)
+      const label = spec.title ?? fieldOf(dataset, key)?.label ?? key
+      const config = thresholdFrom(options)
+      const format = primaryFormat
+
+      return typeId === 'alert-banner' ? (
+        <AlertBanner value={value} label={label} config={config} format={format} />
+      ) : (
+        <ThresholdTile
+          value={value}
+          label={fieldOf(dataset, key)?.label ?? key}
+          config={config}
+          format={format}
+          showThreshold
+        />
+      )
+    }
+
+    case 'event-log-view':
+      return (
+        <EventLog
+          data={rows}
+          timeKey={mapping.x ?? ''}
+          columns={(mapping.columns ?? [])
+            .map((key) => fieldOf(dataset, key))
+            .filter((field): field is NonNullable<typeof field> => field !== undefined)}
+          limit={typeof options.limit === 'number' ? options.limit : undefined}
         />
       )
 

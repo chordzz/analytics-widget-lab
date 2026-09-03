@@ -169,6 +169,21 @@ const primitives: { name: string; element: ReactElement }[] = [
   { name: 'Sparkline', element: <P.Sparkline data={NO_ROWS} seriesKey="v" /> },
   { name: 'Treemap', element: <P.Treemap data={NO_ROWS} xKey="x" valueKey="v" /> },
   { name: 'TrendChart', element: <P.TrendChart data={NO_ROWS} xKey="x" series={SERIES} /> },
+  { name: 'EventLog', element: <P.EventLog data={NO_ROWS} timeKey="t" /> },
+  /*
+   * The threshold pair are tiles, so "no data" for them is no *threshold* — the
+   * figure is a bare number that always arrives. An unconfigured tile must not
+   * read as healthy, which is asserted properly in `threshold.test.ts`; here we
+   * only need it to render and to emit no NaN.
+   */
+  {
+    name: 'ThresholdTile',
+    element: <P.ThresholdTile value={Number.NaN} label="Empty" config={{ direction: 'below-is-bad' }} />,
+  },
+  {
+    name: 'AlertBanner',
+    element: <P.AlertBanner value={Number.NaN} label="Empty" config={{ direction: 'below-is-bad' }} />,
+  },
 ]
 
 describe('primitives with no data', () => {

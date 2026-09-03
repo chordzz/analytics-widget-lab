@@ -163,10 +163,29 @@ describe('prop naming', () => {
 describe('tiles', () => {
   const tiles = blocks.filter((block) => !has(block, 'data'))
 
-  test('are the only primitives without data, and are few', () => {
-    // If this list grows, the exception has become the rule and the contract
-    // needs rewriting rather than exempting.
-    expect(report(tiles).length).toBeLessThanOrEqual(3)
+  /*
+   * This was `length <= 3`, with a note saying that if the list grew the
+   * contract needed rewriting rather than exempting. It grew — the Status
+   * Family's threshold route added two — so here is the rewrite.
+   *
+   * A count was a proxy for the real rule and a poor one: it would have passed a
+   * fourth primitive that took neither rows nor a computed value, and failed a
+   * fifth that was a perfectly ordinary tile. What actually defines a tile is
+   * what CONTRACT.md says — it takes an **already-computed value** instead of
+   * rows — so that is what is asserted now, per primitive, with no ceiling.
+   */
+  test('take a computed value rather than rows', () => {
+    const failing = tiles.filter(
+      (block) => !has(block, 'value') && !has(block, 'tone') && !has(block, 'config'),
+    )
+    expect(report(failing)).toEqual([])
+  })
+
+  test('take no height, because a tile sizes to its content', () => {
+    // The other half of the definition. A height prop on a tile would only
+    // stretch whitespace, and a primitive that wants one is a data primitive
+    // that forgot its rows.
+    expect(report(tiles.filter((block) => has(block, 'height')))).toEqual([])
   })
 
   test('take a label and className', () => {

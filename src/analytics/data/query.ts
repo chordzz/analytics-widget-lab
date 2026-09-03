@@ -193,6 +193,27 @@ export function queryFor(
       return withChoices({ measures: [selection(key, aggregationFor(dataset, key, override))] })
     }
 
+    /*
+     * The Status Family's threshold route. One Measure, no grouping — so the
+     * query returns a single aggregate row and the widget assesses that.
+     *
+     * Without this the query was empty, every raw row came back, and
+     * `rows[0]` took whichever record happened to be first: the tile reported
+     * Payments API at 99.98% while FX rates sat at 94.12%. That is the same
+     * failure Stage 4 removed from the single-value cards, and it is worse here,
+     * because a Status widget's entire job is to be trusted when it says
+     * healthy.
+     *
+     * The aggregation comes from the Measure's declared set, which is what stops
+     * uptime being summed across nine services into 898%.
+     */
+    case 'threshold-indicator':
+    case 'alert-banner': {
+      const key = mapping.value
+      if (!key) return withChoices({})
+      return withChoices({ measures: [selection(key, aggregationFor(dataset, key, override))] })
+    }
+
     case 'gauge':
     case 'progress-tracker':
       return withChoices(timeKey ? { sort: [{ field: timeKey, direction: 'ascending' }] } : {})

@@ -144,3 +144,56 @@ describe('a query never quietly changes what a chart draws', () => {
     expect(starved).toEqual([])
   })
 })
+
+describe('the Status threshold route asks for one aggregate', () => {
+  const health = requireDataset('service-health')
+  const spec = (typeId: string, value: string): WidgetSpec => ({
+    id: typeId,
+    typeId,
+    datasetId: 'service-health',
+    mapping: { value },
+  })
+
+  test('it groups by nothing, so one row comes back', () => {
+    /*
+     * The bug this pins. With no case in `queryFor` the query was `{}`, every
+     * raw record came back, and the widget's `rows[0]` took whichever service
+     * happened to be first — reporting Payments API at 99.98% while FX rates sat
+     * at 94.12%. A Status widget's whole job is to be trusted when it says
+     * healthy, so an arbitrary row is the worst possible answer here.
+     */
+    const rows = rowsForWidget(spec('threshold-indicator', 'uptime'), health)
+
+    expect(rows).toHaveLength(1)
+    expect(rowsFor('service-health').length).toBeGreaterThan(1)
+  })
+
+  test('and it averages rather than sums', () => {
+    // Nine services summed gives 898% uptime, which is not a number that
+    // exists. The Measure declares which aggregations are meaningful; this is
+    // that declaration being honoured rather than a rule repeated here.
+    const query = queryFor(spec('threshold-indicator', 'uptime'), health)
+    expect(query.measures).toEqual([{ field: 'uptime', aggregation: 'average' }])
+  })
+
+  test('the figure is the mean of the column', () => {
+    const raw = rowsFor('service-health').map((row) => Number(row.uptime))
+    const mean = raw.reduce((total, value) => total + value, 0) / raw.length
+    const rows = rowsForWidget(spec('threshold-indicator', 'uptime'), health)
+
+    expect(Number(rows[0].uptime)).toBeCloseTo(mean, 10)
+  })
+
+  test('a banner asks the same way', () => {
+    // Same Data Shape, different presentation. If only one of the two had a
+    // query case, the pair would disagree about the same dataset.
+    expect(queryFor(spec('alert-banner', 'errorRate'), health).measures).toEqual([
+      { field: 'errorRate', aggregation: 'average' },
+    ])
+  })
+
+  test('an unmapped Measure asks for nothing rather than everything', () => {
+    // A half-configured widget must not fall back to fetching the whole table.
+    expect(queryFor(spec('threshold-indicator', ''), health).measures).toBeUndefined()
+  })
+})

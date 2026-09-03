@@ -695,3 +695,109 @@
 @container (max-width: 520px) {
   .a-record__row { grid-template-columns: 1fr; gap: 0; }
 }
+
+/* --- threshold status (§4.2's second Status Data Shape) ------------------ */
+.a-threshold {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-1);
+  justify-content: center;
+  height: 100%;
+}
+
+.a-threshold__state {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  margin: 0;
+  font-size: var(--a-text-xs);
+  font-weight: 500;
+}
+
+.a-threshold__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.a-threshold__value {
+  margin: 0;
+  font-size: var(--a-text-2xl);
+  font-weight: 600;
+  color: var(--a-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.a-threshold__label {
+  margin: 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-secondary);
+}
+
+.a-threshold__rule {
+  margin: 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+/*
+ * A banner is bordered rather than filled: a filled strip in a status colour
+ * competes with the widgets around it for attention on a board where several
+ * cards may be unhealthy at once.
+ */
+.a-alert {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-3);
+  height: 100%;
+  padding: var(--a-space-3);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+}
+
+.a-alert__body { min-width: 0; }
+
+.a-alert__state {
+  margin: 0;
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+}
+
+.a-alert__detail {
+  margin: 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- event log (Chronological's record form) ---------------------------- */
+.a-log {
+  height: 100%;
+  overflow: auto;
+}
+
+.a-log__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--a-font-mono);
+  font-size: var(--a-text-xs);
+}
+
+.a-log__table tr { border-bottom: 1px solid var(--a-border); }
+.a-log__table tr:last-child { border-bottom: 0; }
+
+.a-log__time {
+  padding: var(--a-space-1) var(--a-space-3) var(--a-space-1) 0;
+  white-space: nowrap;
+  vertical-align: top;
+  color: var(--a-text-muted);
+}
+
+.a-log__entry {
+  padding: var(--a-space-1) 0;
+  color: var(--a-text);
+}

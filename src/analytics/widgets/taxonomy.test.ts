@@ -114,7 +114,7 @@ describe('the rename map', () => {
 })
 
 describe('coverage against the FRD', () => {
-  test('the gap is the eight types the merge plan names', () => {
+  test('the gap is the five types the merge plan names', () => {
     /*
      * Not a count — the names. A count passes while the *contents* change, which
      * is exactly the drift this file exists to catch, and it would let a built
@@ -125,13 +125,10 @@ describe('coverage against the FRD', () => {
 
     expect(absent.sort()).toEqual(
       [
-        'alert-banner',
         'bar-chart-race',
         'comparison-table',
-        'event-log-view',
         'heatmap-matrix',
         'stacked-100-bar',
-        'threshold-indicator',
         'violin-plot',
       ].sort(),
     )

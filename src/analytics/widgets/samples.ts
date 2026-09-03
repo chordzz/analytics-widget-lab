@@ -41,6 +41,9 @@ export const SAMPLES: Record<string, WidgetSample> = {
   'status-list': { datasetId: 'service-health', title: 'Service health', mapping: { x: 'service', state: 'state', value: 'uptime' } },
   'status-indicator': { datasetId: 'service-health', title: 'Worst service', mapping: { x: 'service', state: 'state' }, options: { detail: 'Highest severity right now' } },
 
+  'threshold-indicator': { datasetId: 'service-health', title: 'Uptime', mapping: { value: 'uptime' }, options: { threshold: 0.99, warnAt: 0.995, direction: 'below-is-bad' } },
+  'alert-banner': { datasetId: 'service-health', title: 'Error rate', mapping: { value: 'errorRate' }, options: { threshold: 0.05, direction: 'above-is-bad' } },
+
   gauge: { datasetId: 'revenue-monthly', title: 'Against target', mapping: { value: 'revenue', target: 'target' } },
 
   'data-table': { datasetId: 'support-tickets', title: 'Support tickets', mapping: { columns: ['ref', 'status', 'priority', 'team', 'ageDays'] } },
@@ -64,6 +67,8 @@ export const SAMPLES: Record<string, WidgetSample> = {
   'timeline-chart': { datasetId: 'project-timeline', title: 'Delivery plan', mapping: { x: 'task', series: ['start', 'end'], secondary: 'phase', value: 'progress' } },
 
   'activity-feed': { datasetId: 'activity-events', title: 'Recent activity', mapping: { x: 'at', secondary: 'actor', value: 'action' }, options: { severityKey: 'severity' } },
+
+  'event-log-view': { datasetId: 'activity-events', title: 'Event log', mapping: { x: 'at', columns: ['actor', 'action', 'severity'] } },
 
   'point-map': { datasetId: 'sales-by-country', title: 'Revenue by country', mapping: { x: 'country', value: 'revenue', lat: 'lat', lng: 'lng' } },
 }

@@ -63,6 +63,29 @@ describe('every built Type refines its Family', () => {
     },
   )
 
+  /*
+   * The counterpart to the loop above, and the reason making Status's slots
+   * optional is safe.
+   *
+   * A Family whose Data Shape is a disjunction cannot require any one route's
+   * slots (see `mapping-slots.ts`, D20). But "the Family requires nothing" must
+   * not become "a Type may require nothing" — that would let a Type be offered
+   * for a Dataset it cannot draw from. So every built Type has to demand at
+   * least one slot from its Family's vocabulary, whatever the Family's own
+   * minimums are.
+   */
+  test.each(built.map((type) => [type.id, type.family] as const))(
+    '%s (%s) requires at least one slot of its own',
+    (typeId, familyId) => {
+      if (DECLARED_EXCEPTIONS[typeId]) return
+
+      const vocabulary = slotsForFamily(familyId)
+      const demanded = vocabulary.filter((slot) => demandFor(typeId, slot) > 0)
+
+      expect(demanded.length).toBeGreaterThanOrEqual(1)
+    },
+  )
+
   test('a Family with no slot table is a gap, not a pass', () => {
     // If `slotsForFamily` returned `[]` for everything the loop above would be
     // vacuous and every Type would "refine" its Family. This is the assertion
