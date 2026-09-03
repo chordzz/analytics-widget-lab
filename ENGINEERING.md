@@ -11,7 +11,7 @@ Companion documents, all still current:
 | [`src/analytics/README.md`](src/analytics/README.md) | The product module's own tour — layers, create flow, theming. |
 | [`docs/PUBLICATION_CONTRACT.md`](docs/PUBLICATION_CONTRACT.md) | **Enforceable.** What a Source System must declare. The backend validates against this. |
 | [`docs/DATA_SHAPES.md`](docs/DATA_SHAPES.md) | **Guidance.** What each Visualization Family needs. Not a publication gate. |
-| [`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) | **Every departure from the FRD**, numbered, with the clause and the reason. Generated; 13 open, 4 resolved. |
+| [`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) | **Every departure from the FRD**, numbered, with the clause and the reason. Generated; 14 open, 4 resolved. |
 | [`README.md`](README.md) | Phase-by-phase record of the requirements work. Historical narrative, not orientation. |
 | [`../Analytics_Merge_Plan.md`](../Analytics_Merge_Plan.md) | **The plan for ending the two-application split** — sequenced stages, the divergence register, and the taxonomy reconciliation. Read it with §1 and §5 below. |
 
@@ -19,41 +19,51 @@ Companion documents, all still current:
 
 ## 1. The one thing to know before anything else
 
-**This repository contains two applications.** They share a build, a `package.json`
-and nothing else. Nearly every wrong assumption about this codebase comes from
-reading one and thinking you have read both.
+**One application, two layers — and the layers are not where you would guess.**
 
-| | The product module | The workbench |
+`src/analytics/` is the whole product. Everything else under `src/` is the FRD's
+model in code: it is imported by the module and by tests, and most of it is
+never bundled.
+
+| | The module | The model |
 | --- | --- | --- |
-| **Route** | `#/analytics` | every other hash |
-| **Lives in** | `src/analytics/**` | `src/{domain,visualization,retrieval,widget-runtime,renderers,catalogue,access,governance,authoring,composition,dashboard,contract-docs,ui}` |
-| **What it is** | The shippable UI. Sidebar, boards, builder, Controls, Sections, 34 widget types. | A requirements-proving harness for the Analytics FRD. |
-| **Data** | 13 mock datasets behind `CataloguePort` + `DatasetRetrievalPort` | 5 fixture Datasets behind an async port, with per-Dataset failure scenarios |
-| **Persistence** | `localStorage`, `analytics.boards.v4`, behind `BoardStorePort` | `localStorage`, behind `DashboardStorePort` |
-| **Async?** | Yes — ports, since merge Stage 5. | Yes, throughout. |
-| **Authorization?** | `ViewerIdentity` on every port call; Scope and Share Grants since 6.2. | `ViewerIdentity` on every port call; denial is a first-class render state. |
-| **Design tokens** | 61 `--a-*` tokens in `src/analytics/theme/tokens.css` | 17 `--analytics-*` tokens in `src/index.css` |
-| **Backend seam** | **`data/adapters.ts`** — swap the fixtures for HTTP | **Complete, and already documented for the backend** |
+| **Lives in** | `src/analytics/**` | `src/{domain, visualization, retrieval, catalogue, access, governance, composition, dashboard, authoring, widget-runtime, contract-docs}` |
+| **What it is** | The application. Shell, boards, builder, Controls, Sections, 37 widget types. | The Ubiquitous Language as types, the eligibility predicate, the ports, the access rules, the generated contract docs. |
+| **Reached from** | `main.tsx` → `App.tsx` → `<AnalyticsModule />` | the module, for the parts it uses; tests, for the rest |
+| **Shipped?** | Yes | 85 of 100 files ship; the other 15 are fixtures, fakes and docs machinery |
 
-The switch is five lines of [`src/App.tsx`](src/App.tsx):
+That split used to be something else entirely, and the history is worth one
+paragraph because it explains the directory layout. Until merge §2 this
+repository held **two applications**: the module on `#/analytics`, and a tabbed
+workbench of six harness screens on every other hash, with its own renderers,
+its own 17-token stylesheet and its own composition root. The workbench proved
+the FRD was implementable before a backend existed. `Analytics_Merge_Plan.md` is
+the record of converging them, and `src/App.tsx` records where each of the
+workbench's demonstrations went.
+
+So when you find `domain/dataset.ts` outside `src/analytics/`, that is not an
+oversight — it is the model the module adopted in merge Stage 2, still sitting
+where it was written. §2 of the plan wanted it moved to `analytics/model/`;
+that move has not happened and is cosmetic.
 
 ```tsx
-if (hash.startsWith('#/analytics')) return <AnalyticsModule />
-return <PortsProvider><Shell /></PortsProvider>
+// src/App.tsx, in full
+export default function App() {
+  return <AnalyticsModule />
+}
 ```
 
-Both halves say `Dataset`, `Field`, `Dimension`, `Measure`, `Time Dimension` —
+Both layers say `Dataset`, `Field`, `Dimension`, `Measure`, `Time Dimension` —
 the FRD's Ubiquitous Language, used deliberately and identically. They are now
-also **the same types**: merge Stage 2 retired the module's lighter
-`data/types.ts` model in favour of `domain/dataset.ts`, so `Field` carries
-`role`, `filterable`, `sortable` and a Measure's meaningful `aggregations`, and
-`Dataset` no longer carries its own rows.
+**the same types**: Stage 2 retired the module's lighter `data/types.ts` model in
+favour of `domain/dataset.ts`, so `Field` carries `role`, `filterable`,
+`sortable` and a Measure's meaningful `aggregations`, and `Dataset` no longer
+carries its own rows.
 
-What remains of the split is the *surface*, not the model. **The port boundary a backend
-needs already exists — in the half that is not the product.** Wiring a backend is
-mostly the job of bringing it across.
-
----
+**The port boundary a backend needs is `analytics/data/adapters.ts`** — two
+classes implementing `CataloguePort` and `DatasetRetrievalPort`, plus a
+`BoardStorePort`. Nothing above `data/` imports the fixtures, and a source scan
+fails the build if that changes. See §5.
 
 ## 2. Running it
 
@@ -79,7 +89,7 @@ bunx --bun vite build
 source ~/.nvm/nvm.sh && nvm use 22.23.0 && bun run build
 ```
 
-Either produces `dist/` at ~966 kB / 274 kB gzipped in one chunk. The 500 kB chunk
+Either produces `dist/` at ~867 kB / 249 kB gzipped in one chunk. The 500 kB chunk
 warning is expected and unaddressed — code-splitting a demo bundle buys nothing.
 
 `bun test` and `bun run typecheck` are unaffected by the Node version; they run on
@@ -355,12 +365,17 @@ that promotes types to a "Suggested" shelf — never an exclusion.
 
 ---
 
-## 4. The workbench
+## 4. The model layer
 
-`src/{domain,visualization,retrieval,…}` — ports and adapters, built to prove the
-FRD is implementable before the backend exists. **Read this section even if you
-only care about the product module**, because it is where the backend contract
-already lives.
+`src/{domain, visualization, retrieval, …}` — the FRD in code: the types, the
+eligibility predicate, the ports, the access rules. Written as a standalone
+workbench to prove the FRD was implementable before a backend existed, and
+adopted wholesale by the module in merge Stage 2. Its harness UI is gone (§2);
+the model it proved is what the module now runs on.
+
+**Read this section even if you only care about the screens** — it is where every
+requirement-traceable guarantee lives, and where a backend's contract is already
+written down.
 
 ### One composition root
 
@@ -472,15 +487,15 @@ Stage 6 landed too, so this list is much shorter than it was.
   `CataloguePort` and `DatasetRetrievalPort`, plus a `BoardStorePort`. Every
   call site is already async and already handles six outcomes, so this is the
   smallest step of the six.
-- **Six of the 42 Visualization Types have no renderer** (D6), and three of
-  those — `event-log-view`, `threshold-indicator`, `alert-banner` — already have
-  a workbench renderer waiting to be ported.
+- **Six of the 42 Visualization Types have no renderer** (D6). Five are ordinary
+  work; only the choropleth is blocked, and on the atlas decision rather than on
+  anything in the model. `docs/DATA_SHAPES.md` states the reason per Type.
 
 ### 5.4 The divergence register
 
 Every place this implementation does not match the FRD is numbered, with the
 clause, the reason and how long it is meant to last:
-[`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) — **13 open, 4 resolved**.
+[`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) — **14 open, 4 resolved**.
 
 It is generated from `src/contract-docs/divergences.ts` by `bun run docs`, and
 `src/contract-docs/render.test.ts` fails if the committed copy drifts. A scanner
@@ -491,7 +506,7 @@ cannot stay listed, and one that gets introduced cannot stay unlisted.
 ## 6. Enforced invariants
 
 Not conventions. Each has a guard, and breaking one turns something red.
-**705 tests across 28 files.** Three of them guard the merge itself rather than
+**785 tests across 31 files.** Three of them guard the merge itself rather than
 the code: `taxonomy.test.ts` keeps the module's catalogue and the FRD manifest
 from drifting apart, `refinement.test.ts` keeps the per-Type and per-Family slot
 tables from disagreeing, and `render.test.ts` keeps the divergence register
@@ -517,7 +532,10 @@ honest in both directions.
 | A Control reaches by Dataset, never by widget list; unreached widgets are untouched | `data/controls.test.ts` |
 | Section membership, and the collapse reflow | `builder/sections.test.ts` |
 | A denied or empty retrieval records no access | `data/access-record.test.ts` |
-| Every Type's slots refine its Family's | `builder/refinement.test.ts` |
+| Every Type's slots refine its Family's, and each requires at least one slot of its own | `builder/refinement.test.ts` |
+| `built: true` means there is a branch in the render switch | `widgets/built.test.ts` |
+| One widget's crash does not take the board | `widgets/boundary.test.tsx` |
+| A threshold's direction decides the answer; unset is not healthy | `widgets/threshold.test.ts` |
 | Generated docs match the code; every cited divergence is registered | `contract-docs/render.test.ts` |
 
 `widgets/contract.test.ts` reads the prop interfaces **as text**. A passing
@@ -593,13 +611,15 @@ Every one of these cost real time.
   do — `Plot` falls back to a default size when there is no layout to measure.
 - **`PivotTable.tsx:61`** has a conditional `useMemo` — a real
   rules-of-hooks violation, pre-existing, not yet fixed.
-- **The workbench UI is still there.** Merge Plan §2 says it goes, and it has
-  three prerequisites the plan understated: three of `src/renderers/`'s
-  registrations have no module equivalent, `contract-docs` computes
-  `rendererCoverage()` from that registry, and four of its demonstrations —
-  chiefly the eligibility explorer — have no home in the module. See the plan's
-  Status section.
-- **One bundle, ~966 kB / 274 kB gzipped.** Fine for a demo, and the module is not
-  lazily loaded.
-- **Two token systems** (`--a-*` and `--analytics-*`) will need reconciling
-  whenever the two halves merge.
+- **`widget-runtime/renderer.ts` is a registry with no registrations.** It holds
+  FR-VZ-08's no-callables contract for a `RendererProps` type nothing in the
+  product uses — the module draws from its own switch. Kept because the
+  guarantee traces to a requirement, but a seam with nothing behind it is a fair
+  thing to question.
+- **The model still lives outside `src/analytics/`.** Merge Plan §2 wanted it
+  moved to `analytics/model/`; the move is cosmetic and has not happened.
+- **One bundle, ~867 kB / 249 kB gzipped.** Fine for a demo, and the module is
+  not lazily loaded. Deleting the workbench took 103 kB off it.
+- **`Dataset.suits` and the Family slot table both carry requirements a reader
+  cannot check** — D5 and D20. The second is Finding 17: a Family whose Data
+  Shape is a disjunction cannot state its requirement as slots at all.

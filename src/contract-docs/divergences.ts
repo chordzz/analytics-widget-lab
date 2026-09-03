@@ -262,6 +262,25 @@ export const DIVERGENCES: Divergence[] = [
       'would make two records of one fact, free to disagree the moment a Widget is dragged. Deriving ' +
       'it means dragging a Widget under a heading is how you move it there.',
   },
+  {
+    id: 'D20',
+    clause: 'FR-VZ-03, §4.2',
+    divergence:
+      'The Status Family requires none of its mapping slots, because its Data Shape is a disjunction.',
+    status: 'proposed-extension',
+    findings: [14, 17],
+    where: 'visualization/mapping-slots.ts, analytics/builder/refinement.test.ts',
+    reason:
+      '§4.2 gives Status two alternative shapes — "one Measure with a threshold, *or* one state ' +
+      'Dimension" — and the two need different slots: a threshold indicator takes a Measure and no ' +
+      'Dimension, a status tile takes a state Dimension. A per-Family slot table can only express a ' +
+      'conjunction, so requiring either slot asserts something the Family does not require and makes ' +
+      'the other route unrepresentable. Surfaced by porting the threshold route in §2: D3\'s ' +
+      'refinement guard rejected both new Types, correctly. The eligibility guarantee is not lost — ' +
+      'the disjunction is modelled properly in the Data Shape clause, which is what FR-VZ-05 ' +
+      'evaluates — and a counterpart guard now asserts every built Type still requires at least one ' +
+      'slot of its own, so "the Family requires nothing" cannot become "a Type may require nothing".',
+  },
 ]
 
 /** Entries that still diverge. */

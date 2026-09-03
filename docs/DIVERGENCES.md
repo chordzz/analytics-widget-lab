@@ -19,7 +19,7 @@ them. Where the two are related the entry says so.
 | Temporary | Conformance deferred, with a stage that ends it. |
 | Resolved | Was one of the above; no longer diverges. Kept for the record. |
 
-## Open — 13
+## Open — 14
 
 | # | Clause | Divergence | Status |
 | --- | --- | --- | --- |
@@ -36,6 +36,7 @@ them. Where the two are related the entry says so.
 | **D17** | `FR-VZ-04` | A board keys `WidgetSpec` rather than the model's `Widget`. | Deliberate deviation |
 | **D18** | `FR-VZ-02, §4.2` | `timeline-chart` does not satisfy its Family's Data Shape. | Deliberate deviation |
 | **D19** | `FR-CO-07` | A Section carries its starting row; membership is derived, not stored. | Deliberate deviation |
+| **D20** | `FR-VZ-03, §4.2` | The Status Family requires none of its mapping slots, because its Data Shape is a disjunction. | Proposed extension |
 
 ## Resolved — 4
 
@@ -158,6 +159,15 @@ The FRD classifies "Gantt / timeline chart" under Temporal Pattern, which requir
 **Where:** `domain/composition.ts, analytics/builder/sections.ts`  
 
 The same gap D4 closed for Placement: a Container required to organize Widgets *spatially* carried no position, so nothing said where one began. Storing `Placement.sectionId` as well would make two records of one fact, free to disagree the moment a Widget is dragged. Deriving it means dragging a Widget under a heading is how you move it there.
+
+### D20 — The Status Family requires none of its mapping slots, because its Data Shape is a disjunction.
+
+**Clause:** `FR-VZ-03, §4.2`  
+**Status:** Proposed extension  
+**Findings:** Finding 14, Finding 17  
+**Where:** `visualization/mapping-slots.ts, analytics/builder/refinement.test.ts`  
+
+§4.2 gives Status two alternative shapes — "one Measure with a threshold, *or* one state Dimension" — and the two need different slots: a threshold indicator takes a Measure and no Dimension, a status tile takes a state Dimension. A per-Family slot table can only express a conjunction, so requiring either slot asserts something the Family does not require and makes the other route unrepresentable. Surfaced by porting the threshold route in §2: D3's refinement guard rejected both new Types, correctly. The eligibility guarantee is not lost — the disjunction is modelled properly in the Data Shape clause, which is what FR-VZ-05 evaluates — and a counterpart guard now asserts every built Type still requires at least one slot of its own, so "the Family requires nothing" cannot become "a Type may require nothing".
 
 ---
 
