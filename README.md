@@ -44,6 +44,7 @@ fails if they drift, so they cannot go stale silently.
 | [`docs/DATA_SHAPES.md`](docs/DATA_SHAPES.md) | **Guidance** — what each Visualization Family requires. Not a publication gate. |
 | [`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) | **The divergence register** — every place this implementation does not match the FRD, with the clause, the reason, and how long it is meant to last. |
 | [`docs/WIDGET_DATA_CONTRACT.md`](docs/WIDGET_DATA_CONTRACT.md) | **For the backend team** — what each widget asks for, per Type: required Field roles, the `DatasetQuery` sent, the response shape. |
+| [`docs/WIDGET_DATA_CONTRACT.pdf`](docs/WIDGET_DATA_CONTRACT.pdf) | The same document, laid out for sending and printing. `python3 scripts/widget-contract-pdf.py` after `bun run docs`. |
 | [`docs/analytics-contract.json`](docs/analytics-contract.json) | Machine-readable form of both. |
 
 The division is deliberate: the backend enforces **completeness of declaration**, the frontend derives
