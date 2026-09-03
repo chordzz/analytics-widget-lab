@@ -9,6 +9,7 @@
  * Outputs:
  *   docs/PUBLICATION_CONTRACT.md  — what a Source System must declare (enforceable)
  *   docs/DATA_SHAPES.md           — what each Visualization Family needs (guidance)
+ *   docs/DIVERGENCES.md           — where we do not match the FRD, and why (Merge Plan §4)
  *   docs/analytics-contract.json  — both, machine-readable
  */
 
@@ -18,6 +19,7 @@ import {
   DOC_FILES,
   renderContractJson,
   renderDataShapes,
+  renderDivergences,
   renderPublicationContract,
 } from '../src/contract-docs/render'
 
@@ -26,6 +28,7 @@ mkdirSync(out, { recursive: true })
 
 writeFileSync(join(out, DOC_FILES.publicationContract), renderPublicationContract())
 writeFileSync(join(out, DOC_FILES.dataShapes), renderDataShapes())
+writeFileSync(join(out, DOC_FILES.divergences), renderDivergences())
 writeFileSync(join(out, DOC_FILES.contractJson), renderContractJson())
 
 console.log(`Wrote ${Object.values(DOC_FILES).map((f) => `docs/${f}`).join(', ')}`)

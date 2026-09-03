@@ -170,7 +170,7 @@ export type ContainerType = 'section' | 'collapsible-section'
 /**
  * FR-CO-07 — organizes Widgets spatially. Draws no data.
  *
- * `y` is Merge Plan **D17**, and it is the same gap D4 closed for `Placement`:
+ * `y` is Merge Plan **D19**, and it is the same gap D4 closed for `Placement`:
  * a Section is required to organize Widgets *spatially* and carried no position
  * at all, so nothing in the model said where one began or which Widgets fell
  * inside it.
@@ -235,7 +235,7 @@ export interface Placement {
   h: number
   /*
    * No `sectionId`. Membership is derived from `y` against the Sections'
-   * boundaries — see `Section.y` and D17. Storing it here as well would be two
+   * boundaries — see `Section.y` and D19. Storing it here as well would be two
    * records of one fact, free to disagree the moment a Widget is dragged.
    */
 }

@@ -6,6 +6,12 @@
  */
 
 import {
+  openDivergences,
+  resolvedDivergences,
+  type Divergence,
+  type DivergenceStatus,
+} from './divergences'
+import {
   AGGREGATIONS,
   CLASSIFICATIONS,
   FIELD_ROLES,
@@ -441,6 +447,93 @@ export const contractJson = {
   })),
 }
 
+const STATUS_LABEL: Record<DivergenceStatus, string> = {
+  'proposed-extension': 'Proposed extension',
+  'deliberate-deviation': 'Deliberate deviation',
+  temporary: 'Temporary',
+  resolved: 'Resolved',
+}
+
+/**
+ * The divergence register — Merge Plan §4.
+ *
+ * Generated so it cannot drift from the table the code cites. Open entries come
+ * first because they are the ones anyone reading this needs to act on; resolved
+ * ones are kept because the register is a record of decisions, and a decision
+ * that stops applying is still one that was taken.
+ */
+export const renderDivergences = (): string => {
+  const row = (entry: Divergence) =>
+    `| **${entry.id}** | \`${entry.clause}\` | ${entry.divergence} | ${STATUS_LABEL[entry.status]}${
+      entry.endedAt ? ` — ${entry.endedAt}` : ''
+    } |`
+
+  const detail = (entry: Divergence) =>
+    [
+      `### ${entry.id} — ${entry.divergence}`,
+      '',
+      `**Clause:** \`${entry.clause}\`  `,
+      `**Status:** ${STATUS_LABEL[entry.status]}${entry.endedAt ? ` (${entry.endedAt})` : ''}  `,
+      entry.findings?.length
+        ? `**Findings:** ${entry.findings.map((n) => `Finding ${n}`).join(', ')}  `
+        : null,
+      entry.where ? `**Where:** \`${entry.where}\`  ` : null,
+      '',
+      entry.reason,
+    ]
+      .filter((line) => line !== null)
+      .join('\n')
+
+  const open = openDivergences()
+  const resolved = resolvedDivergences()
+
+  return `# Analytics — Divergence Register
+
+Every place this implementation does not match the FRD, with the clause, the
+reason, and how long it is meant to last.
+
+**Generated from \`src/contract-docs/divergences.ts\` by \`bun run docs\`.** Do not
+edit this file. \`src/contract-docs/render.test.ts\` fails if it drifts, so a
+divergence that gets fixed cannot stay listed and one that gets introduced cannot
+stay unlisted.
+
+Distinct from the **Findings** in \`Analytics_Frontend_Plan.md\` §9: a Finding is a
+gap in the requirements, a Divergence is a place our implementation does not match
+them. Where the two are related the entry says so.
+
+| Status | Meaning |
+| --- | --- |
+| Proposed extension | We are asking the FRD to grow. |
+| Deliberate deviation | We think the FRD is wrong or under-specified and chose differently. |
+| Temporary | Conformance deferred, with a stage that ends it. |
+| Resolved | Was one of the above; no longer diverges. Kept for the record. |
+
+## Open — ${open.length}
+
+| # | Clause | Divergence | Status |
+| --- | --- | --- | --- |
+${open.map(row).join('\n')}
+
+## Resolved — ${resolved.length}
+
+| # | Clause | Divergence | Status |
+| --- | --- | --- | --- |
+${resolved.map(row).join('\n')}
+
+---
+
+## Open entries in detail
+
+${open.map(detail).join('\n\n')}
+
+---
+
+## Resolved entries
+
+${resolved.map(detail).join('\n\n')}
+`
+}
+
 export const renderContractJson = (): string =>
   JSON.stringify(contractJson, null, 2) + '\n'
 
@@ -448,5 +541,6 @@ export const renderContractJson = (): string =>
 export const DOC_FILES = {
   publicationContract: 'PUBLICATION_CONTRACT.md',
   dataShapes: 'DATA_SHAPES.md',
+  divergences: 'DIVERGENCES.md',
   contractJson: 'analytics-contract.json',
 } as const

@@ -316,7 +316,7 @@ function applyToBoard(board: Board, action: BoardsAction): Board {
      * FR-CO-07 — a Container organizes Widgets spatially and draws no data.
      *
      * A Section owns a starting row and nothing else; which Widgets fall inside
-     * it is derived from that (D17, `sections.ts`). So adding one cannot move a
+     * it is derived from that (D19, `sections.ts`). So adding one cannot move a
      * Widget and removing one cannot orphan any — the widgets stay exactly where
      * they are and simply fall under a different heading, or none.
      */
