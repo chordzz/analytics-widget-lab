@@ -19,8 +19,7 @@ import {
 import { publicationRules } from '../domain/publication-contract'
 import { visualizationFamilies } from '../visualization/families'
 import { visualizationTypes } from '../visualization/visualization-types'
-import { registerBuiltInRenderers } from '../renderers'
-import { registeredRendererIds } from '../widget-runtime/renderer'
+import { WIDGET_TYPES } from '../analytics/widgets/catalog'
 import { DIVERGENCES, openDivergences, resolvedDivergences } from './divergences'
 
 const ROOT = join(import.meta.dir, '..', '..')
@@ -76,8 +75,15 @@ describe('documents cover the contract completely', () => {
 })
 
 describe('build status in the documentation', () => {
-  registerBuiltInRenderers()
-  const built = new Set(registeredRendererIds())
+  /*
+   * The same source the docs read — the product module's catalogue.
+   *
+   * It was the workbench renderer registry, and asserting against a *different*
+   * source than the generator uses would only ever test that two lists happened
+   * to agree. What keeps `built` honest is `analytics/widgets/built.test.ts`,
+   * which fails if a type flagged built has no branch in the render switch.
+   */
+  const built = new Set(WIDGET_TYPES.filter((type) => type.built).map((type) => type.id))
   const shapes = renderDataShapes()
 
   test('every Visualization Type appears in the Types-by-Family index with a status', () => {

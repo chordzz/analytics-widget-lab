@@ -84,7 +84,7 @@
             "description": "Sortable and filterable rows with pagination, column configuration (visibility, width, pinning), row selection and expandable rows."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "pivot-table",
             "name": "Pivot table",
             "description": "Grouped rows and columns with aggregation."
@@ -218,13 +218,13 @@
         },
         "visualizationTypes": [
           {
-            "implemented": false,
+            "implemented": true,
             "id": "pie-chart",
             "name": "Pie chart",
             "description": "Shares of a whole as circular segments."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "donut-chart",
             "name": "Donut chart",
             "description": "Pie chart with a hollow centre, often carrying the total."
@@ -236,7 +236,7 @@
             "description": "Shares of a whole as proportions of a full-width bar."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "treemap",
             "name": "Treemap",
             "description": "Shares of a whole as nested rectangles sized by value."
@@ -267,13 +267,13 @@
         },
         "visualizationTypes": [
           {
-            "implemented": false,
+            "implemented": true,
             "id": "histogram",
             "name": "Histogram",
             "description": "Record counts bucketed by value range."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "box-plot",
             "name": "Box plot",
             "description": "Quartiles, median and outliers."
@@ -352,13 +352,13 @@
             "description": "Rank, score and movement indicator against the previous period."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "funnel",
             "name": "Funnel",
             "description": "Drop-off across sequential stages."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "sankey",
             "name": "Sankey",
             "description": "Flow volume between stages or categories."
@@ -401,7 +401,7 @@
             "description": "Regions shaded by a Measure."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "point-map",
             "name": "Point / pin map",
             "description": "Individual locations plotted as points."
@@ -499,19 +499,19 @@
         },
         "visualizationTypes": [
           {
-            "implemented": false,
+            "implemented": true,
             "id": "calendar-heatmap",
             "name": "Calendar heatmap",
             "description": "Contribution-grid style: one cell per day, shaded by a Measure."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "cohort-grid",
             "name": "Cohort / retention grid",
             "description": "Cohorts down, elapsed periods across."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "timeline-chart",
             "name": "Gantt / timeline chart",
             "description": "Spans positioned and sized along a time axis."

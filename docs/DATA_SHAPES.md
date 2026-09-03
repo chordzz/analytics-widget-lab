@@ -34,17 +34,17 @@ Evaluation yields one of three outcomes:
 
 | Family | Question answered | Required Data Shape | Decidable today | Types built |
 |---|---|---|---|---|
-| Tabular | What are the individual records? | One or more Dimensions and/or Measures | Yes | 1 of 3 |
+| Tabular | What are the individual records? | One or more Dimensions and/or Measures | Yes | 2 of 3 |
 | Trend | How has this changed over time? | One Time Dimension + one or more Measures | Yes | 4 of 4 |
 | Categorical Comparison | How do these categories compare? | One Dimension + one or more Measures | Yes | 4 of 4 |
-| Composition | What are the parts of this whole? | One Dimension + one Measure summing to a meaningful total | Partly | 0 of 4 |
-| Distribution | How are these values spread? | One Measure across many records | Partly | 0 of 3 |
+| Composition | What are the parts of this whole? | One Dimension + one Measure summing to a meaningful total | Partly | 3 of 4 |
+| Distribution | How are these values spread? | One Measure across many records | Partly | 2 of 3 |
 | Correlation | Do these move together? | Two or more Measures | Yes | 2 of 3 |
-| Ranking & Flow | What is the order, or where is the drop-off? | One Dimension + one Measure, or ordered stage data | Partly | 2 of 5 |
-| Geospatial | Where is this happening? | One location-typed Dimension + one Measure | Partly | 0 of 2 |
+| Ranking & Flow | What is the order, or where is the drop-off? | One Dimension + one Measure, or ordered stage data | Partly | 4 of 5 |
+| Geospatial | Where is this happening? | One location-typed Dimension + one Measure | Partly | 1 of 2 |
 | Radial | How does this compare against a target or across axes? | One or more Measures, optionally with a target | Yes | 2 of 2 |
 | Single Value | What is the number right now? | One Measure, optionally one Time Dimension for trend or comparison | Yes | 4 of 4 |
-| Temporal Pattern | What is the pattern across time periods or cohorts? | One Time Dimension + one Measure | Yes | 0 of 3 |
+| Temporal Pattern | What is the pattern across time periods or cohorts? | One Time Dimension + one Measure | Yes | 3 of 3 |
 | Chronological | What happened, in order? | Time-ordered records | Yes | 2 of 2 |
 | Status | Is this healthy? | One Measure with a threshold, or one state Dimension | Partly | 3 of 3 |
 
@@ -58,7 +58,7 @@ whether something can *draw* the result yet.
 | Family | Visualization Type | Renderer |
 |---|---|---|
 | Tabular | Data table | Built |
-|  | Pivot table | Not built |
+|  | Pivot table | Built |
 |  | Comparison table | Not built |
 | Trend | Line chart | Built |
 |  | Area chart | Built |
@@ -68,32 +68,32 @@ whether something can *draw* the result yet.
 |  | Bar chart (horizontal) | Built |
 |  | Grouped bar chart | Built |
 |  | Stacked bar chart | Built |
-| Composition | Pie chart | Not built |
-|  | Donut chart | Not built |
+| Composition | Pie chart | Built |
+|  | Donut chart | Built |
 |  | Stacked 100% bar | Not built |
-|  | Treemap | Not built |
-| Distribution | Histogram | Not built |
-|  | Box plot | Not built |
+|  | Treemap | Built |
+| Distribution | Histogram | Built |
+|  | Box plot | Built |
 |  | Violin plot | Not built |
 | Correlation | Scatter plot | Built |
 |  | Bubble chart | Built |
 |  | Heatmap matrix | Not built |
 | Ranking & Flow | Top-N / ranked list | Built |
 |  | Leaderboard | Built |
-|  | Funnel | Not built |
-|  | Sankey | Not built |
+|  | Funnel | Built |
+|  | Sankey | Built |
 |  | Bar chart race | Not built |
 | Geospatial | Choropleth map | Not built |
-|  | Point / pin map | Not built |
+|  | Point / pin map | Built |
 | Radial | Radar / spider chart | Built |
 |  | Gauge / speedometer | Built |
 | Single Value | Stat card | Built |
 |  | Sparkline card | Built |
 |  | Progress / goal tracker | Built |
 |  | Delta card | Built |
-| Temporal Pattern | Calendar heatmap | Not built |
-|  | Cohort / retention grid | Not built |
-|  | Gantt / timeline chart | Not built |
+| Temporal Pattern | Calendar heatmap | Built |
+|  | Cohort / retention grid | Built |
+|  | Gantt / timeline chart | Built |
 | Chronological | Activity feed / timeline | Built |
 |  | Log / event viewer | Built |
 | Status | Status badge / indicator | Built |
@@ -102,26 +102,14 @@ whether something can *draw* the result yet.
 
 ### Still to build
 
-- **Pivot table** *(Tabular)* — Not yet built. No blocker — straightforward when prioritized.
-- **Comparison table** *(Tabular)* — Not yet built. No blocker — straightforward when prioritized.
-- **Pie chart** *(Composition)* — The Family cannot be evaluated at all under the current publication model — additivity is undeclared (Finding 1). Building a renderer would produce something no Dataset is ever offered.
-- **Donut chart** *(Composition)* — The Family cannot be evaluated at all under the current publication model — additivity is undeclared (Finding 1). Building a renderer would produce something no Dataset is ever offered.
-- **Stacked 100% bar** *(Composition)* — The Family cannot be evaluated at all under the current publication model — additivity is undeclared (Finding 1). Building a renderer would produce something no Dataset is ever offered.
-- **Treemap** *(Composition)* — The Family cannot be evaluated at all under the current publication model — additivity is undeclared (Finding 1). Building a renderer would produce something no Dataset is ever offered.
-- **Histogram** *(Distribution)* — The Family cannot be evaluated at all — record volume is undeclared (Finding 1).
-- **Box plot** *(Distribution)* — The Family cannot be evaluated at all — record volume is undeclared (Finding 1).
-- **Violin plot** *(Distribution)* — The Family cannot be evaluated at all — record volume is undeclared (Finding 1).
-- **Heatmap matrix** *(Correlation)* — Not yet built. No blocker — straightforward when prioritized.
-- **Funnel** *(Ranking & Flow)* — Reachable only through the "ordered stage data" route, which the publication model cannot express (Finding 1).
-- **Sankey** *(Ranking & Flow)* — Reachable only through the "ordered stage data" route, which the publication model cannot express (Finding 1).
-- **Bar chart race** *(Ranking & Flow)* — Reachable only through the "ordered stage data" route, which the publication model cannot express (Finding 1).
-- **Choropleth map** *(Geospatial)* — The Family cannot be evaluated at all — there is no location-typed Field (Finding 1). Also the only Family needing a mapping library, which is a dependency decision in its own right.
-- **Point / pin map** *(Geospatial)* — The Family cannot be evaluated at all — there is no location-typed Field (Finding 1). Also the only Family needing a mapping library, which is a dependency decision in its own right.
-- **Calendar heatmap** *(Temporal Pattern)* — Evaluable, but the fixture Datasets are monthly. A calendar heatmap or cohort grid needs daily-grain data to show anything meaningful.
-- **Cohort / retention grid** *(Temporal Pattern)* — Evaluable, but the fixture Datasets are monthly. A calendar heatmap or cohort grid needs daily-grain data to show anything meaningful.
-- **Gantt / timeline chart** *(Temporal Pattern)* — Evaluable, but the fixture Datasets are monthly. A calendar heatmap or cohort grid needs daily-grain data to show anything meaningful.
+- **Comparison table** *(Tabular)* — Ordinary work. A table putting two periods or two segments side by side; the data path is the one `data-table` already uses.
+- **Stacked 100% bar** *(Composition)* — Ordinary work, and the smallest of the six — Composition's other three are built, and this is a stacked bar normalised to the total, which the existing bar chart could take as a variant.
+- **Violin plot** *(Distribution)* — The one remaining Type needing new maths: a kernel density estimate. The histogram and box plot are built, so the data path exists — the shape does not.
+- **Heatmap matrix** *(Correlation)* — Ordinary work. Two Dimensions and a Measure on a colour scale; the cohort grid is the same drawing with a different axis pair.
+- **Bar chart race** *(Ranking & Flow)* — The only Type whose point is *motion* — a ranking animated over time. That makes it a design and accessibility decision rather than an effort estimate, and it is the one place `prefers-reduced-motion` would have to change what is drawn rather than how fast.
+- **Choropleth map** *(Geospatial)* — Boundary geometry — roughly 100KB of TopoJSON for a usable world atlas, which every host would pay for whether or not it draws maps. A standing dependency decision nobody has taken; the point map covers the Family using centroids in the meantime.
 
-Taken together: 24 of 42 Types are built, spanning 9 of 13
+Taken together: 36 of 42 Types are built, spanning 13 of 13
 Families. The order to tackle the rest in follows from the reasons above —
 anything blocked on Finding 1 is waiting on a decision about the publication
 model, not on frontend effort.
@@ -141,8 +129,8 @@ Conditions checked:
 Visualization Types:
 
 - **Data table** — Sortable and filterable rows with pagination, column configuration (visibility, width, pinning), row selection and expandable rows.
-- **Pivot table** — Grouped rows and columns with aggregation. *(no renderer yet — Not yet built. No blocker — straightforward when prioritized.)*
-- **Comparison table** — Side-by-side entities across fixed metrics. *(no renderer yet — Not yet built. No blocker — straightforward when prioritized.)*
+- **Pivot table** — Grouped rows and columns with aggregation.
+- **Comparison table** — Side-by-side entities across fixed metrics. *(no renderer yet — Ordinary work. A table putting two periods or two segments side by side; the data path is the one `data-table` already uses.)*
 
 ### Trend
 
@@ -198,10 +186,10 @@ Conditions checked:
 
 Visualization Types:
 
-- **Pie chart** — Shares of a whole as circular segments. *(no renderer yet — The Family cannot be evaluated at all under the current publication model — additivity is undeclared (Finding 1). Building a renderer would produce something no Dataset is ever offered.)*
-- **Donut chart** — Pie chart with a hollow centre, often carrying the total. *(no renderer yet — The Family cannot be evaluated at all under the current publication model — additivity is undeclared (Finding 1). Building a renderer would produce something no Dataset is ever offered.)*
-- **Stacked 100% bar** — Shares of a whole as proportions of a full-width bar. *(no renderer yet — The Family cannot be evaluated at all under the current publication model — additivity is undeclared (Finding 1). Building a renderer would produce something no Dataset is ever offered.)*
-- **Treemap** — Shares of a whole as nested rectangles sized by value. *(no renderer yet — The Family cannot be evaluated at all under the current publication model — additivity is undeclared (Finding 1). Building a renderer would produce something no Dataset is ever offered.)*
+- **Pie chart** — Shares of a whole as circular segments.
+- **Donut chart** — Pie chart with a hollow centre, often carrying the total.
+- **Stacked 100% bar** — Shares of a whole as proportions of a full-width bar. *(no renderer yet — Ordinary work, and the smallest of the six — Composition's other three are built, and this is a stacked bar normalised to the total, which the existing bar chart could take as a variant.)*
+- **Treemap** — Shares of a whole as nested rectangles sized by value.
 
 ### Distribution
 
@@ -218,9 +206,9 @@ Conditions checked:
 
 Visualization Types:
 
-- **Histogram** — Record counts bucketed by value range. *(no renderer yet — The Family cannot be evaluated at all — record volume is undeclared (Finding 1).)*
-- **Box plot** — Quartiles, median and outliers. *(no renderer yet — The Family cannot be evaluated at all — record volume is undeclared (Finding 1).)*
-- **Violin plot** — Density of values across the range. *(no renderer yet — The Family cannot be evaluated at all — record volume is undeclared (Finding 1).)*
+- **Histogram** — Record counts bucketed by value range.
+- **Box plot** — Quartiles, median and outliers.
+- **Violin plot** — Density of values across the range. *(no renderer yet — The one remaining Type needing new maths: a kernel density estimate. The histogram and box plot are built, so the data path exists — the shape does not.)*
 
 ### Correlation
 
@@ -236,7 +224,7 @@ Visualization Types:
 
 - **Scatter plot** — One point per record against two Measures.
 - **Bubble chart** — Scatter plot with a third Measure encoded as point size.
-- **Heatmap matrix** — Pairwise Measure relationships encoded as colour intensity. *(no renderer yet — Not yet built. No blocker — straightforward when prioritized.)*
+- **Heatmap matrix** — Pairwise Measure relationships encoded as colour intensity. *(no renderer yet — Ordinary work. Two Dimensions and a Measure on a colour scale; the cohort grid is the same drawing with a different axis pair.)*
 
 ### Ranking & Flow
 
@@ -254,9 +242,9 @@ Visualization Types:
 
 - **Top-N / ranked list** — Categories ordered by a Measure, truncated to the top N.
 - **Leaderboard** — Rank, score and movement indicator against the previous period.
-- **Funnel** — Drop-off across sequential stages. *(no renderer yet — Reachable only through the "ordered stage data" route, which the publication model cannot express (Finding 1).)*
-- **Sankey** — Flow volume between stages or categories. *(no renderer yet — Reachable only through the "ordered stage data" route, which the publication model cannot express (Finding 1).)*
-- **Bar chart race** — Ranking animated across time periods. *(no renderer yet — Reachable only through the "ordered stage data" route, which the publication model cannot express (Finding 1).)*
+- **Funnel** — Drop-off across sequential stages.
+- **Sankey** — Flow volume between stages or categories.
+- **Bar chart race** — Ranking animated across time periods. *(no renderer yet — The only Type whose point is *motion* — a ranking animated over time. That makes it a design and accessibility decision rather than an effort estimate, and it is the one place `prefers-reduced-motion` would have to change what is drawn rather than how fast.)*
 
 ### Geospatial
 
@@ -273,8 +261,8 @@ Conditions checked:
 
 Visualization Types:
 
-- **Choropleth map** — Regions shaded by a Measure. *(no renderer yet — The Family cannot be evaluated at all — there is no location-typed Field (Finding 1). Also the only Family needing a mapping library, which is a dependency decision in its own right.)*
-- **Point / pin map** — Individual locations plotted as points. *(no renderer yet — The Family cannot be evaluated at all — there is no location-typed Field (Finding 1). Also the only Family needing a mapping library, which is a dependency decision in its own right.)*
+- **Choropleth map** — Regions shaded by a Measure. *(no renderer yet — Boundary geometry — roughly 100KB of TopoJSON for a usable world atlas, which every host would pay for whether or not it draws maps. A standing dependency decision nobody has taken; the point map covers the Family using centroids in the meantime.)*
+- **Point / pin map** — Individual locations plotted as points.
 
 ### Radial
 
@@ -323,9 +311,9 @@ Conditions checked:
 
 Visualization Types:
 
-- **Calendar heatmap** — Contribution-grid style: one cell per day, shaded by a Measure. *(no renderer yet — Evaluable, but the fixture Datasets are monthly. A calendar heatmap or cohort grid needs daily-grain data to show anything meaningful.)*
-- **Cohort / retention grid** — Cohorts down, elapsed periods across. *(no renderer yet — Evaluable, but the fixture Datasets are monthly. A calendar heatmap or cohort grid needs daily-grain data to show anything meaningful.)*
-- **Gantt / timeline chart** — Spans positioned and sized along a time axis. *(no renderer yet — Evaluable, but the fixture Datasets are monthly. A calendar heatmap or cohort grid needs daily-grain data to show anything meaningful.)*
+- **Calendar heatmap** — Contribution-grid style: one cell per day, shaded by a Measure.
+- **Cohort / retention grid** — Cohorts down, elapsed periods across.
+- **Gantt / timeline chart** — Spans positioned and sized along a time axis.
 
 ### Chronological
 

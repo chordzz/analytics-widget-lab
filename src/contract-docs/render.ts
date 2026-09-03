@@ -22,40 +22,64 @@ import { visualizationFamilies } from '../visualization/families'
 import { typesInFamily, visualizationTypes } from '../visualization/visualization-types'
 import { evaluateFamilies } from '../visualization/registry'
 import { catalogueFixtures } from '../catalogue/fixtures'
-import { registerBuiltInRenderers } from '../renderers'
-import { registeredRendererIds } from '../widget-runtime/renderer'
+import { WIDGET_TYPES } from '../analytics/widgets/catalog'
 import type { Satisfaction } from '../visualization/data-shape'
 
-// Build status is read from the renderer registry rather than listed by hand,
-// so the documentation cannot claim something is built that isn't.
-registerBuiltInRenderers()
-const BUILT = new Set(registeredRendererIds())
+/*
+ * Build status comes from the product module's catalogue.
+ *
+ * It used to come from the workbench's renderer registry, whose virtue was that
+ * registration is explicit — the documentation could not claim something was
+ * built that wasn't. Merge §2 deletes that registry, and `WidgetType.built` is a
+ * hand-set boolean, so the guarantee moved rather than disappearing:
+ * `analytics/widgets/built.test.ts` scans `Widget.tsx` and fails if a type
+ * flagged built has no branch in the render switch, or an unbuilt one does.
+ *
+ * The module catalogue is the right source now for a simpler reason too — it is
+ * what the product actually offers, and `widgets/taxonomy.test.ts` ties its ids
+ * to this manifest in both directions.
+ */
+const BUILT = new Set(WIDGET_TYPES.filter((type) => type.built).map((type) => type.id))
 const isBuilt = (typeId: string) => BUILT.has(typeId)
 
 /**
- * Why a Type is not built yet. Editorial rather than derivable, so it is stated
- * here — but a test asserts every unbuilt Type has one, so the list cannot rot
- * silently as Types are added.
+ * Why a Type is not built yet.
+ *
+ * Editorial rather than derivable, so it is stated here — but a test asserts
+ * every unbuilt Type has one, so the list cannot rot silently as Types are
+ * added.
+ *
+ * **These were per Family and wrong after merge §2.** They said things like
+ * "Composition cannot be evaluated at all — additivity is undeclared (Finding
+ * 1)", which was true of the *workbench fixtures* and is not true of the product
+ * module's thirteen datasets: those declare the proposed semantics, so all five
+ * of Finding 1's Families now resolve (38 indeterminate outcomes to 0). Keeping
+ * the old reasons would have told a reader that six Types were blocked on a
+ * publication-model decision when in fact five are ordinary work.
+ *
+ * Per Type now, because the remaining six are one per Family and each has its
+ * own reason.
  */
-const UNBUILT_REASON_BY_FAMILY: Record<string, string> = {
-  composition:
-    'The Family cannot be evaluated at all under the current publication model — additivity is undeclared (Finding 1). Building a renderer would produce something no Dataset is ever offered.',
-  distribution:
-    'The Family cannot be evaluated at all — record volume is undeclared (Finding 1).',
-  geospatial:
-    'The Family cannot be evaluated at all — there is no location-typed Field (Finding 1). Also the only Family needing a mapping library, which is a dependency decision in its own right.',
-  'temporal-pattern':
-    'Evaluable, but the fixture Datasets are monthly. A calendar heatmap or cohort grid needs daily-grain data to show anything meaningful.',
+const UNBUILT_REASON: Record<string, string> = {
+  'comparison-table':
+    'Ordinary work. A table putting two periods or two segments side by side; the data path is the one `data-table` already uses.',
+  'stacked-100-bar':
+    'Ordinary work, and the smallest of the six — Composition\'s other three are built, and this is a stacked bar normalised to the total, which the existing bar chart could take as a variant.',
+  'violin-plot':
+    'The one remaining Type needing new maths: a kernel density estimate. The histogram and box plot are built, so the data path exists — the shape does not.',
+  'heatmap-matrix':
+    'Ordinary work. Two Dimensions and a Measure on a colour scale; the cohort grid is the same drawing with a different axis pair.',
+  'bar-chart-race':
+    'The only Type whose point is *motion* — a ranking animated over time. That makes it a design and accessibility decision rather than an effort estimate, and it is the one place `prefers-reduced-motion` would have to change what is drawn rather than how fast.',
+  'choropleth-map':
+    'Boundary geometry — roughly 100KB of TopoJSON for a usable world atlas, which every host would pay for whether or not it draws maps. A standing dependency decision nobody has taken; the point map covers the Family using centroids in the meantime.',
 }
 
-/** Types reachable only via a Data Shape route the publication model cannot express. */
-const STAGE_ROUTE_TYPES = new Set(['funnel', 'sankey', 'bar-chart-race'])
-
-function unbuiltReason(typeId: string, familyId: string): string {
-  if (STAGE_ROUTE_TYPES.has(typeId)) {
-    return 'Reachable only through the "ordered stage data" route, which the publication model cannot express (Finding 1).'
-  }
-  return UNBUILT_REASON_BY_FAMILY[familyId] ?? 'Not yet built. No blocker — straightforward when prioritized.'
+function unbuiltReason(typeId: string, _familyId: string): string {
+  return (
+    UNBUILT_REASON[typeId] ??
+    'Not yet built, and no reason recorded — which is itself the finding. Add one here.'
+  )
 }
 
 export const rendererCoverage = () => {
