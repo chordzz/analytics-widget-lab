@@ -41,6 +41,7 @@ import {
 import 'react-grid-layout/css/styles.css'
 
 import { Widget } from '../widgets/Widget'
+import { WidgetBoundary } from '../widgets/WidgetBoundary'
 import { COLUMNS, MARGIN_X, MARGIN_Y, MAX_H, MIN_H, MIN_W, ROW_HEIGHT, clampH, clampW } from './grid'
 import type { LayoutEntry, PlacedWidget } from './boards'
 import type { Section } from '../../domain/composition'
@@ -392,19 +393,30 @@ export function GridBoard({
               }
               onKeyDown={(event) => onKeyDown(event, entry.i)}
             >
-              <Widget
-                spec={spec}
-                contribution={contributionFor?.(spec)}
-                actions={
-                  editable
-                    ? [
-                        { label: 'Edit', onSelect: () => onEdit?.(spec) },
-                        { label: 'Duplicate', onSelect: () => onDuplicate?.(spec.id) },
-                        { label: 'Remove', onSelect: () => onRemove?.(spec.id), destructive: true },
-                      ]
-                    : undefined
-                }
-              />
+              {/*
+                One boundary per cell, not one per board. A boundary around the
+                grid would contain the crash and lose every other widget with
+                it, which is the failure FR-DA-10 is about.
+              */}
+              <WidgetBoundary widgetId={spec.id} title={spec.title}>
+                <Widget
+                  spec={spec}
+                  contribution={contributionFor?.(spec)}
+                  actions={
+                    editable
+                      ? [
+                          { label: 'Edit', onSelect: () => onEdit?.(spec) },
+                          { label: 'Duplicate', onSelect: () => onDuplicate?.(spec.id) },
+                          {
+                            label: 'Remove',
+                            onSelect: () => onRemove?.(spec.id),
+                            destructive: true,
+                          },
+                        ]
+                      : undefined
+                  }
+                />
+              </WidgetBoundary>
             </div>
           )
         })}

@@ -1,47 +1,31 @@
 import { describe, expect, test } from 'bun:test'
 import { getRenderer, registeredRendererIds, registerRenderer } from './renderer'
-import { registerBuiltInRenderers } from '../renderers'
-import { visualizationTypes } from '../visualization/visualization-types'
 
-registerBuiltInRenderers()
+/*
+ * Merge §2 deleted `src/renderers/` and the four tests that lived here about its
+ * registrations — how many Families they covered, that each named a real Type,
+ * that registering twice was idempotent. All four described the built-in set,
+ * and there is no built-in set any more: the product module draws from its own
+ * switch in `analytics/widgets/Widget.tsx`, and "which Types can be drawn" is
+ * answered by its catalogue.
+ *
+ * What is left is the registry's *contract*, which is the part that traces to a
+ * requirement rather than to a phase of work.
+ */
 
 describe('renderer registry', () => {
-  test('every registered renderer names a real Visualization Type', () => {
-    const known = new Set(visualizationTypes.map((t) => t.id))
-    for (const id of registeredRendererIds()) {
-      expect(known.has(id)).toBe(true)
-    }
+  test('an unregistered Type resolves to undefined rather than throwing', () => {
+    // The runtime has to report a missing renderer plainly. Nothing is
+    // registered by default now, so any id demonstrates it.
+    expect(getRenderer('violin-plot')).toBeUndefined()
   })
 
-  test('renderers cover nine Families spanning distinct Data Shapes', () => {
-    const covered = new Set(
-      registeredRendererIds().map(
-        (id) => visualizationTypes.find((t) => t.id === id)!.familyId,
-      ),
-    )
-    expect([...covered].sort()).toEqual([
-      'categorical-comparison',
-      'chronological',
-      'correlation',
-      'radial',
-      'ranking-and-flow',
-      'single-value',
-      'status',
-      'tabular',
-      'trend',
-    ])
-  })
-
-  test('a classified Type without a renderer resolves to undefined rather than throwing', () => {
-    // Treemap is classified (FR-VZ-01) but not yet built. The runtime must
-    // report that plainly instead of failing.
-    expect(getRenderer('treemap')).toBeUndefined()
-  })
-
-  test('registration is idempotent across repeated calls', () => {
-    const before = registeredRendererIds().length
-    registerBuiltInRenderers()
-    expect(registeredRendererIds()).toHaveLength(before)
+  test('a registered renderer comes back', () => {
+    // The counterpart, so the test above cannot pass because the registry is
+    // simply broken.
+    registerRenderer({ visualizationTypeId: 'fixture-type', render: () => null })
+    expect(getRenderer('fixture-type')).toBeDefined()
+    expect(registeredRendererIds()).toContain('fixture-type')
   })
 })
 

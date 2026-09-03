@@ -22,12 +22,21 @@ import { offeredVisualizationTypes } from '../visualization/registry'
 import { visualizationFamilies } from '../visualization/families'
 import { slotsForFamily } from '../visualization/mapping-slots'
 import { catalogueFixtures, peniremitSettlements } from '../catalogue/fixtures'
-import { registerBuiltInRenderers } from '../renderers'
-import { registeredRendererIds } from '../widget-runtime/renderer'
+import { WIDGET_TYPES } from '../analytics/widgets/catalog'
 import type { ViewerIdentity } from '../retrieval/port'
 import type { Widget } from '../domain/widget'
 
-registerBuiltInRenderers()
+/*
+ * Which Visualization Types can be drawn.
+ *
+ * Was the workbench renderer registry, which merge §2 deleted along with the
+ * renderers it registered. The product module's catalogue is the answer now, and
+ * `analytics/widgets/built.test.ts` is what keeps its `built` flag from being a
+ * claim — it fails if a type flagged built has no branch in the render switch.
+ */
+const drawableIds = new Set(
+  WIDGET_TYPES.filter((type) => type.built).map((type) => type.id),
+)
 
 const opsLead: ViewerIdentity = {
   id: 'ops-lead',
@@ -141,7 +150,7 @@ describe('D2 — binding', () => {
 
   test('a default mapping is proposed and is immediately valid', () => {
     for (const type of offeredVisualizationTypes(peniremitSettlements)) {
-      if (!registeredRendererIds().includes(type.id)) continue
+      if (![...drawableIds].includes(type.id)) continue
       const mapping = defaultMapping(peniremitSettlements, type.id)
       expect({ type: type.id, problems: validateMapping(mapping, type.id) }).toEqual({
         type: type.id,

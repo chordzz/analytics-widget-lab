@@ -8,13 +8,22 @@ import { malformedSubmission, peniremitActiveUsers, pendingSubmissions } from '.
 import { FakeAuthorization } from '../access/fake-authorization'
 import { catalogueFixtures, iamActiveUsers, payrollDisbursements } from '../catalogue/fixtures'
 import { validatePublication } from '../domain/publication-contract'
-import { registerBuiltInRenderers } from '../renderers'
-import { registeredRendererIds } from '../widget-runtime/renderer'
+import { WIDGET_TYPES } from '../analytics/widgets/catalog'
 import { getVisualizationType, visualizationTypes } from '../visualization/visualization-types'
 import { visualizationFamilies } from '../visualization/families'
 import type { ViewerIdentity } from '../retrieval/port'
 
-registerBuiltInRenderers()
+/*
+ * Which Visualization Types can be drawn.
+ *
+ * Was the workbench renderer registry, which merge §2 deleted along with the
+ * renderers it registered. The product module's catalogue is the answer now, and
+ * `analytics/widgets/built.test.ts` is what keeps its `built` flag from being a
+ * claim — it fails if a type flagged built has no branch in the render switch.
+ */
+const drawableIds = new Set(
+  WIDGET_TYPES.filter((type) => type.built).map((type) => type.id),
+)
 
 const admin: ViewerIdentity = { id: 'analytics-admin', displayName: 'Analytics administrator' }
 const author: ViewerIdentity = { id: 'ops-lead', displayName: 'Operations lead' }
@@ -154,30 +163,48 @@ describe('FR-GV-01 — reviewing the complete Catalogue', () => {
 // --- renderer coverage -----------------------------------------------------
 
 describe('renderer coverage', () => {
-  test('every registered renderer maps to a classified Visualization Type', () => {
-    for (const id of registeredRendererIds()) {
-      expect(getVisualizationType(id)).toBeDefined()
-    }
+  /*
+   * The module builds one Type the FRD does not classify — `status-list`, the
+   * proposed 43rd (D7). It is excluded here rather than filtered silently: this
+   * block is about the relationship between classification and rendering, and a
+   * deliberate proposal is not a hole in that relationship.
+   */
+  const classified = [...drawableIds].filter((id) => getVisualizationType(id) !== undefined)
+
+  test('every drawable Type maps to a classified Visualization Type, bar the proposed one', () => {
+    const unclassified = [...drawableIds].filter((id) => getVisualizationType(id) === undefined)
+    expect(unclassified).toEqual(['status-list'])
   })
 
-  test('nine of the thirteen Families can now be drawn', () => {
-    const covered = new Set(
-      registeredRendererIds().map((id) => getVisualizationType(id)!.familyId),
-    )
-    expect(covered.size).toBe(9)
+  test('all thirteen Families can now be drawn', () => {
+    /*
+     * Was nine of thirteen, when this counted the workbench's renderers.
+     * Composition, Distribution, Geospatial and Temporal Pattern were the four
+     * missing, and the recorded reason was Finding 1 — the publication model
+     * could not express additivity, record volume or location. The module's
+     * datasets declare all three, so those Families are drawable and the gap
+     * moved from Families to six individual Types.
+     */
+    const covered = new Set(classified.map((id) => getVisualizationType(id)!.familyId))
+    expect(covered.size).toBe(visualizationFamilies.length)
   })
 
-  test('the four unbuilt Families are unbuilt for recorded reasons', () => {
-    const covered = new Set(
-      registeredRendererIds().map((id) => getVisualizationType(id)!.familyId),
-    )
-    const uncovered = visualizationFamilies.filter((f) => !covered.has(f.id)).map((f) => f.id)
+  test('the remaining gap is Types, and each has a recorded reason', () => {
+    // The Family-level assertion above is now trivially satisfiable, so the
+    // property it used to carry lives here: what is unbuilt is enumerable, and
+    // `contract-docs/render.test.ts` asserts every entry has a stated reason.
+    const drawable = new Set(classified)
+    const unbuilt = visualizationTypes.filter((type) => !drawable.has(type.id)).map((t) => t.id)
 
-    // Composition, Distribution and Geospatial cannot be evaluated at all under
-    // the current publication model (Finding 1); Temporal Pattern needs
-    // daily-grain data the monthly fixtures do not carry.
-    expect(uncovered.sort()).toEqual(
-      ['composition', 'distribution', 'geospatial', 'temporal-pattern'].sort(),
+    expect(unbuilt.sort()).toEqual(
+      [
+        'bar-chart-race',
+        'choropleth-map',
+        'comparison-table',
+        'heatmap-matrix',
+        'stacked-100-bar',
+        'violin-plot',
+      ].sort(),
     )
   })
 
@@ -185,6 +212,6 @@ describe('renderer coverage', () => {
     // All 42 Types are classified whether or not anything can draw them —
     // FR-VZ-01/02 are satisfied independently of renderer work.
     expect(visualizationTypes).toHaveLength(42)
-    expect(registeredRendererIds().length).toBeLessThan(visualizationTypes.length)
+    expect([...drawableIds].length).toBeLessThan(visualizationTypes.length)
   })
 })

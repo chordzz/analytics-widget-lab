@@ -19,10 +19,8 @@ import {
 import { defaultMapping } from '../authoring/mapping'
 import { executeQuery } from '../retrieval/aggregate'
 import { fixtureRows } from '../catalogue/fixture-rows'
-import { registerBuiltInRenderers } from '../renderers'
 import type { Widget } from '../domain/widget'
 
-registerBuiltInRenderers()
 
 const widgetOn = (dataset: typeof peniremitSettlements, typeId: string): Widget => ({
   id: `${dataset.id}-${typeId}`,
