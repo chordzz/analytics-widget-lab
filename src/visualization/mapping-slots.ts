@@ -81,7 +81,18 @@ export const mappingSlotsByFamily: Record<string, MappingSlot[]> = {
   // Chronological lists events rather than aggregating them, so it takes
   // columns like Tabular, plus the Time Dimension it is ordered by.
   chronological: [timeAxis(1), columns],
-  status: [measures(1, 1)],
+  /*
+   * Two routes, as §4.2 describes and Finding 1 names: a threshold on a Measure,
+   * or a Dimension whose values *are* states ("healthy", "degraded").
+   *
+   * This modelled only the first, which made every state-Dimension Status
+   * Widget fail the refinement check in `refinement.test.ts` — the module builds
+   * both routes and the Family table admitted one. So the Dimension is required
+   * and the Measure optional: a state Dimension alone is a valid Status Widget,
+   * a Measure alone needs a threshold to compare against, and `MappingSlotId`
+   * has nowhere to put a threshold (D1 again).
+   */
+  status: [category(1, 1), measures(0, 1)],
 }
 
 export function slotsForFamily(familyId: string): MappingSlot[] {

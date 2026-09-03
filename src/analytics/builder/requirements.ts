@@ -213,7 +213,17 @@ const SLOTS: Record<string, Slot[]> = {
     slot('value', 'Measure', 'Cell shade.', MEASURE),
   ],
   'cohort-grid': [
-    slot('x', 'Cohorts', 'One row each.', CATEGORY),
+    /*
+     * A cohort is a *period* — the month or week a group of users joined — so
+     * this takes a Time Dimension and not the wider CATEGORY it used to.
+     *
+     * Widening it here silently widened eligibility: the type was offered for
+     * `transactions`, `sales-by-country` and `traffic-flow`, none of which are
+     * cohort data, because any Dimension could fill the axis. Caught by
+     * `refinement.test.ts` — Temporal Pattern requires a Time Dimension, and a
+     * slot that would also accept a plain Dimension does not satisfy that.
+     */
+    slot('x', 'Cohorts', 'One row per cohort period.', TIME),
     slot('secondary', 'Elapsed period', 'One column each.', CATEGORY),
     slot('value', 'Measure', 'Cell shade.', MEASURE),
   ],
@@ -238,6 +248,51 @@ const SLOTS: Record<string, Slot[]> = {
     slot('lng', 'Longitude', 'Degrees, −180 to 180.', MEASURE, 1, 1, true),
     slot('value', 'Measure', 'Point area.', MEASURE),
   ],
+}
+
+/**
+ * D3 — how a Type's slots are checked against its Family's.
+ *
+ * FR-VZ-03 declares mapping slots **per Family**, and `mapping-slots.ts` does
+ * exactly that; the module declares them **per Type**, because `funnel` and
+ * `sankey` share a Family and are not the same mapping while `line-chart` and
+ * `area-chart` are. Both are right about different things, and the resolution is
+ * two layers of one table rather than two tables — which only holds if something
+ * checks the layers agree. `refinement.test.ts` is that check.
+ *
+ * A Type slot **contributes** to a Family slot when every role it accepts is a
+ * role the Family slot accepts. That is refinement, stated:
+ *
+ *   - narrowing contributes — a Family slot taking any Field is satisfied by a
+ *     Type slot taking a Dimension
+ *   - **widening does not** — a Family slot requiring a Time Dimension is *not*
+ *     satisfied by a Type slot that would also accept a plain Dimension, because
+ *     an Author can then fill it with one and the Family's requirement is gone
+ *
+ * The second case is the whole point, and it is why this compares accepted roles
+ * rather than slot ids. An id-based map cannot see it: `value` holds a Measure in
+ * a donut chart and a Dimension in an activity feed, so what a slot *is* named
+ * says nothing about which requirement it answers.
+ */
+export const contributesTo = (
+  typeSlot: Pick<Slot, 'accepts'>,
+  familySlot: { accepts: readonly FieldRole[] },
+): boolean => typeSlot.accepts.every((role) => familySlot.accepts.includes(role))
+
+/**
+ * How much of a Family slot's requirement a Type demands.
+ *
+ * Summed over every contributing slot, because two module slots can answer one
+ * Family slot: a bubble chart's `value` and `series` are both Measures, and a
+ * Family asking for two is satisfied by one of each.
+ */
+export function demandFor(
+  typeId: string,
+  familySlot: { accepts: readonly FieldRole[] },
+): number {
+  return slotsFor(typeId)
+    .filter((entry) => contributesTo(entry, familySlot))
+    .reduce((total, entry) => total + entry.min, 0)
 }
 
 export const slotsFor = (typeId: string): Slot[] => SLOTS[typeId] ?? []
