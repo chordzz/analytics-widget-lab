@@ -216,7 +216,7 @@ describe('D3 and publication', () => {
       {
         ...dashboard,
         widgets: { [widget.id]: widget },
-        placements: [{ widgetId: widget.id, span: 12, order: 0 }],
+        placements: [{ widgetId: widget.id, x: 0, y: 0, w: 12, h: 8 }],
       },
       opsLead,
     )

@@ -191,13 +191,30 @@ export type CompositionElement = Control | Section
 /** The grid a Dashboard lays Widgets out on. */
 export const DASHBOARD_COLUMNS = 12
 
-/** FR-CO-02 — position and size, both changeable by the Author. */
+/**
+ * FR-CO-02 — position and size, both changeable by the Author.
+ *
+ * This was a `span` and an `order`: a column count and an ordinal. That gives an
+ * Author size and *sequence*, and it does not give position — two Widgets cannot
+ * sit side by side with a gap beneath one of them, and nothing can be placed.
+ * "Position and size, both changeable" reads as two dimensions, and the free
+ * `{x, y, w, h}` below is the stronger reading of the same clause.
+ *
+ * Merge Plan D4, and the one place the merge propagates *upward*: the product
+ * module had already moved to this model and proved it (see `builder/grid.ts`),
+ * so the model adopts it rather than the module reverting. Reducing it back is a
+ * sort by `(y, x)` with `span = w` if that judgement is ever reversed.
+ */
 export interface Placement {
   widgetId: string
+  /** Leftmost column, 0..DASHBOARD_COLUMNS - w. */
+  x: number
+  /** Row, from the top. A Dashboard grows downwards and has no floor. */
+  y: number
   /** Columns spanned, 1..DASHBOARD_COLUMNS. */
-  span: number
-  /** Ascending within a section. */
-  order: number
+  w: number
+  /** Rows spanned. */
+  h: number
   /** Which Section holds this Widget. Undefined means the Dashboard root. */
   sectionId?: string
 }

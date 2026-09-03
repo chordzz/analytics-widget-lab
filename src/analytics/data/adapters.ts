@@ -32,6 +32,8 @@ import type {
   ViewerIdentity,
 } from '../../retrieval/port'
 import type { Dataset } from '../../domain/dataset'
+import type { AuthorizationPort, OrgScopeRef } from '../../access/port'
+import type { DashboardScope, ShareGrant } from '../../domain/dashboard'
 import type { DatasetQuery } from '../../domain/query'
 import { datasets, datasetById, rowsFor } from './datasets'
 
@@ -160,5 +162,99 @@ export class FixtureRetrieval implements DatasetRetrievalPort {
 export const LOCAL_VIEWER: ViewerIdentity = {
   id: 'local',
   displayName: 'You',
-  organizationalScopeIds: [],
+  organizationalScopeIds: ['operations'],
+}
+
+/**
+ * Other people, so sharing is reachable.
+ *
+ * Not decoration. A directory containing only the Viewer makes the Share Grant
+ * control impossible to reach in the running module — there is nobody to grant
+ * to — and a surface nobody can open is a surface nobody designs or notices is
+ * broken. Same reasoning as the retrieval scenarios: every state the
+ * requirements insist on has to be producible by using the app.
+ *
+ * They resolve through `resolveRecipient` like any other identity, so FR-DA-08
+ * (a Grant naming someone outside the Scope has no effect) is demonstrable
+ * rather than argued: Priya is outside `operations`.
+ */
+export const DEMO_DIRECTORY: ViewerIdentity[] = [
+  LOCAL_VIEWER,
+  { id: 'ada', displayName: 'Ada Lovelace', organizationalScopeIds: ['operations'] },
+  { id: 'grace', displayName: 'Grace Hopper', organizationalScopeIds: ['operations'] },
+  { id: 'priya', displayName: 'Priya Raman', organizationalScopeIds: ['finance'] },
+]
+
+/**
+ * Authorization, for a module running as one local identity.
+ *
+ * Honest rather than permissive: the *shape* is real — every question is asked
+ * of this port and answered per call — and the answers reflect a single-viewer
+ * world. When a host supplies a real `AuthorizationPort`, the Scope and Grant
+ * behaviour that already works here starts meaning something without a single
+ * call site changing.
+ *
+ * `mayConsumeDataset` returns true for everything, and that is the one to look
+ * at first when wiring a backend: FR-DA-09 and FR-DP-12 both go through it.
+ */
+export class LocalAuthorization implements AuthorizationPort {
+  private readonly people: ViewerIdentity[]
+  private readonly groups: OrgScopeRef[]
+
+  constructor(
+    people: ViewerIdentity[] = DEMO_DIRECTORY,
+    groups: OrgScopeRef[] = [
+      { scopeId: 'operations', label: 'Operations' },
+      { scopeId: 'finance', label: 'Finance' },
+    ],
+  ) {
+    this.people = people
+    this.groups = groups
+  }
+
+  async mayConsumeDataset(_datasetId: string, _viewer: ViewerIdentity): Promise<boolean> {
+    return true
+  }
+
+  async satisfiesScope(scope: DashboardScope, viewer: ViewerIdentity): Promise<boolean> {
+    switch (scope.kind) {
+      case 'organization-wide':
+        return true
+      case 'organizational-scope':
+        return (viewer.organizationalScopeIds ?? []).includes(scope.scopeId)
+      case 'personal':
+        /*
+         * Personal is the Author's alone, and `canViewDashboard` returns true for
+         * the Author before it reaches here. So this is only ever asked about
+         * somebody else, and the answer is no.
+         */
+        return false
+    }
+  }
+
+  async resolveRecipient(grant: ShareGrant): Promise<ViewerIdentity[]> {
+    // An unresolvable recipient returns empty rather than throwing: FR-DA-08
+    // needs the Author told that a Grant has no effect, which is a fact about
+    // the Grant and not a failure of the system.
+    if (grant.recipientKind === 'group') {
+      return this.people.filter((identity) =>
+        (identity.organizationalScopeIds ?? []).includes(grant.recipientId),
+      )
+    }
+
+    const found = this.people.find((identity) => identity.id === grant.recipientId)
+    return found ? [found] : []
+  }
+
+  async mayAdministerCatalogue(_viewer: ViewerIdentity): Promise<boolean> {
+    // Finding 12 — the Analytics Administrator user class does not exist in IAM,
+    // so nothing can truthfully answer yes yet.
+    return false
+  }
+
+  async directory(): Promise<{ individuals: ViewerIdentity[]; groups: OrgScopeRef[] }> {
+    // What the sharing UI offers. Everyone but the Author themselves — granting
+    // yourself access to your own board is a control that can only be a no-op.
+    return { individuals: this.people, groups: this.groups }
+  }
 }

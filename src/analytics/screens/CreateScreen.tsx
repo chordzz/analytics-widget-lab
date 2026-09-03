@@ -11,10 +11,11 @@
 
 import { useEffect, useState } from 'react'
 import { GridBoard } from '../builder/GridBoard'
+import { SharePanel } from '../builder/SharePanel'
 import { WidgetComposer, type ComposerDraft } from '../builder/WidgetComposer'
 import { useBoards } from '../builder/useBoards'
 import { useComposeIntent } from '../builder/useComposeIntent'
-import type { PlacedWidget } from '../builder/boards'
+import { placedWidgets, widgetCountOf, type PlacedWidget } from '../builder/boards'
 import type { ScreenId } from '../shell/nav'
 
 export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
@@ -126,7 +127,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
 
         <div className="a-board-head__actions">
           <span className="a-muted">
-            {editing.widgets.length} {editing.widgets.length === 1 ? 'widget' : 'widgets'} ·{' '}
+            {widgetCountOf(editing)} {widgetCountOf(editing) === 1 ? 'widget' : 'widgets'} ·{' '}
             {editing.status === 'published' ? 'Published' : 'Draft'}
           </span>
           <button type="button" className="a-button" onClick={() => setComposing('new')}>
@@ -136,7 +137,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
             <button
               type="button"
               className="a-button a-button--primary"
-              disabled={editing.widgets.length === 0}
+              disabled={widgetCountOf(editing) === 0}
               onClick={() => {
                 boards.publishBoard(editing.id)
                 onNavigate('dashboards')
@@ -156,8 +157,10 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
         </div>
       </div>
 
+      <SharePanel board={editing} />
+
       <GridBoard
-        widgets={editing.widgets}
+        widgets={placedWidgets(editing)}
         editable
         onLayoutChange={(placements) => boards.applyLayout(editing.id, placements)}
         onEdit={(widget) => setComposing(widget)}

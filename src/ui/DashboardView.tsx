@@ -111,7 +111,7 @@ function DashboardPanel({
   const widgets = useMemo(
     () =>
       [...dashboard.placements]
-        .sort((a, b) => a.order - b.order)
+        .sort((a, b) => a.y - b.y || a.x - b.x)
         .map((placement) => ({ placement, widget: dashboard.widgets[placement.widgetId] }))
         .filter((entry) => entry.widget !== undefined),
     [dashboard],
@@ -143,19 +143,19 @@ function DashboardPanel({
     onChange({
       ...dashboard,
       placements: dashboard.placements.map((p) =>
-        p.widgetId === widgetId ? { ...p, span: clampSpan(span) } : p,
+        p.widgetId === widgetId ? { ...p, w: clampSpan(span) } : p,
       ),
     })
 
   const move = (widgetId: string, delta: number) => {
-    const sorted = [...dashboard.placements].sort((a, b) => a.order - b.order)
-    const index = sorted.findIndex((p) => p.widgetId === widgetId)
-    const target = index + delta
-    if (index < 0 || target < 0 || target >= sorted.length) return
-    ;[sorted[index], sorted[target]] = [sorted[target], sorted[index]]
+    // Reading order is (y, x) now, so "move" is a row change. The product
+    // module's board does this properly with drag and collision; this harness
+    // only needs the order to be changeable at all.
     onChange({
       ...dashboard,
-      placements: sorted.map((placement, order) => ({ ...placement, order })),
+      placements: dashboard.placements.map((p) =>
+        p.widgetId === widgetId ? { ...p, y: Math.max(0, p.y + delta * p.h) } : p,
+      ),
     })
   }
 
@@ -288,7 +288,7 @@ function DashboardPanel({
           return (
             <div
               key={placement.widgetId}
-              style={{ gridColumn: `span ${placement.span} / span ${placement.span}` }}
+              style={{ gridColumn: `span ${placement.w} / span ${placement.w}` }}
               className="min-w-0 space-y-1"
             >
               <div className="h-64">
@@ -317,13 +317,13 @@ function DashboardPanel({
                   <span className="flex items-center gap-1">
                     <TinyButton onClick={() => move(placement.widgetId, -1)}>←</TinyButton>
                     <TinyButton onClick={() => move(placement.widgetId, 1)}>→</TinyButton>
-                    <TinyButton onClick={() => setSpan(placement.widgetId, placement.span - 3)}>
+                    <TinyButton onClick={() => setSpan(placement.widgetId, placement.w - 3)}>
                       −
                     </TinyButton>
                     <span className="text-xs text-[var(--analytics-text-muted)] tabular-nums">
-                      {placement.span}/{DASHBOARD_COLUMNS}
+                      {placement.w}/{DASHBOARD_COLUMNS}
                     </span>
-                    <TinyButton onClick={() => setSpan(placement.widgetId, placement.span + 3)}>
+                    <TinyButton onClick={() => setSpan(placement.widgetId, placement.w + 3)}>
                       +
                     </TinyButton>
                   </span>

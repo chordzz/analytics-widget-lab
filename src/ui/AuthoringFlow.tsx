@@ -129,7 +129,15 @@ export function AuthoringFlow({ onPublished }: { onPublished: () => void }) {
           ? dashboard.placements
           : [
               ...dashboard.placements,
-              { widgetId: widget.id, span: 6, order: dashboard.placements.length },
+              // Below everything so far. The product module's builder does better —
+              // see `firstFit` — but this harness only needs a valid placement.
+              {
+                widgetId: widget.id,
+                x: 0,
+                y: dashboard.placements.reduce((low, p) => Math.max(low, p.y + p.h), 0),
+                w: 6,
+                h: 8,
+              },
             ],
       },
       viewer,

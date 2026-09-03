@@ -27,8 +27,34 @@ import type { WidgetSpec } from '../widgets/Widget'
  * Height comes from the type rather than being authored at all — a KPI row is
  * short and a table is tall, and that is the catalogue's opinion to hold.
  */
-const place = (widgets: (WidgetSpec & { w: number })[]): PlacedWidget[] =>
-  flowLayout(widgets.map((widget) => ({ ...widget, h: rowsForPx(heightForType(widget.typeId)) })))
+/**
+ * Authored as widths in reading order; split into the two halves a Dashboard
+ * actually stores.
+ *
+ * The seed stays a flat readable list because that is what makes it reviewable —
+ * a keyed record and a parallel placement array would be correct and unreadable.
+ * `flowLayout` derives the positions, exactly as it does for a migrated board.
+ */
+const place = (
+  widgets: (WidgetSpec & { w: number })[],
+): Pick<Board, 'widgets' | 'placements'> => {
+  const flowed: PlacedWidget[] = flowLayout(
+    widgets.map((widget) => ({ ...widget, h: rowsForPx(heightForType(widget.typeId)) })),
+  )
+
+  return {
+    widgets: Object.fromEntries(
+      flowed.map(({ x, y, w, h, ...spec }) => {
+        void x, y, w, h
+        return [spec.id, spec as WidgetSpec]
+      }),
+    ),
+    placements: flowed.map(({ id, x, y, w, h }) => ({ widgetId: id, x, y, w, h })),
+  }
+}
+
+/** Every seeded board belongs to whoever is running the module. */
+const SEED_AUTHOR = 'local'
 
 export const revenueOverview: Board = {
   id: 'revenue-overview',
@@ -36,7 +62,10 @@ export const revenueOverview: Board = {
   description: 'Trading performance across regions and products.',
   status: 'published',
   updated: '2026-08-06',
-  widgets: place([
+  authorId: SEED_AUTHOR,
+  scope: { kind: 'organization-wide' },
+  shareGrants: [],
+  ...place([
     {
       id: 'w-revenue-total',
       typeId: 'stat-card',
@@ -135,7 +164,10 @@ export const onboardingFunnel: Board = {
   description: 'Signup conversion and drop-off.',
   status: 'draft',
   updated: '2026-08-07',
-  widgets: place([
+  authorId: SEED_AUTHOR,
+  scope: { kind: 'organization-wide' },
+  shareGrants: [],
+  ...place([
     {
       id: 'w-signups',
       typeId: 'stat-card',

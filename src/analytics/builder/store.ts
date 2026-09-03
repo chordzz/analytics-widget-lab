@@ -28,7 +28,7 @@ import { loadState, saveState, type BoardsState } from './boards'
 
 export interface BoardStorePort {
   /** The saved session, or the seed when there is none. */
-  load(seed: BoardsState['boards']): Promise<BoardsState>
+  load(seed: BoardsState['boards'], authorId: string): Promise<BoardsState>
   save(state: BoardsState): Promise<void>
   /** Identity comes from whoever persists the record. */
   mintId(prefix: string): string
@@ -55,9 +55,9 @@ export class LocalBoardStore implements BoardStorePort {
     if (this.latencyMs > 0) await new Promise((resolve) => setTimeout(resolve, this.latencyMs))
   }
 
-  async load(seed: BoardsState['boards']): Promise<BoardsState> {
+  async load(seed: BoardsState['boards'], authorId: string): Promise<BoardsState> {
     await this.wait()
-    return loadState(seed)
+    return loadState(seed, authorId)
   }
 
   async save(state: BoardsState): Promise<void> {

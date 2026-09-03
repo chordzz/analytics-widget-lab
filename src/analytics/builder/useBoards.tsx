@@ -24,14 +24,16 @@ import {
   boardsReducer,
   boardById,
   draftBoards,
-  publishedBoards,
   type Board,
   type BoardsAction,
   type BoardsState,
   type LayoutEntry,
 } from './boards'
+import { visibleDashboards } from '../../access/dashboard-access'
+import { useAnalyticsData } from '../data/AnalyticsData'
 import { seedBoards } from './seed'
 import { LocalBoardStore, type BoardStorePort } from './store'
+import type { DashboardScope } from './boards'
 import type { WidgetSpec } from '../widgets/Widget'
 
 /**
@@ -49,7 +51,17 @@ interface BoardsContextValue {
   /** True until the store has answered. Nothing below it is meaningful yet. */
   loading: boolean
   dispatch: (action: BoardsAction) => void
+  /** Every board in the store, whether or not this Viewer may see it. */
   boards: Board[]
+  /**
+   * FR-DA-02 — FR-DA-07. What this Viewer may actually see.
+   *
+   * Asynchronous, because authorization is a port and a Grant may name a group
+   * that has to be resolved. Until it answers this is empty rather than
+   * everything: showing boards first and hiding them a moment later is a
+   * disclosure, however brief.
+   */
+  visible: Board[]
   drafts: Board[]
   published: Board[]
   editing: Board | undefined
@@ -62,6 +74,11 @@ interface BoardsContextValue {
   deleteBoard: (id: string) => void
   publishBoard: (id: string) => void
   unpublishBoard: (id: string) => void
+  /** FR-DA-01 — every Dashboard has a Scope, and it is the Author's to set. */
+  setScope: (id: string, scope: DashboardScope) => void
+  /** FR-DA-06 — refines who within the Scope sees it. Never reaches beyond. */
+  addGrant: (id: string, recipient: { kind: 'individual' | 'group'; id: string; label: string }) => void
+  removeGrant: (id: string, grantId: string) => void
   /**
    * Adds a widget. `size` is what the composer chose; anything it leaves out
    * comes from the widget type, and the board decides where it goes.
@@ -85,6 +102,7 @@ export function BoardsProvider({
   /** Supplied by a host with a real store. Omit to persist locally. */
   store?: BoardStorePort
 }) {
+  const { viewer, authorization } = useAnalyticsData()
   const backing = useMemo(() => store ?? new LocalBoardStore(), [store])
 
   /*
@@ -101,7 +119,7 @@ export function BoardsProvider({
   useEffect(() => {
     let live = true
     backing
-      .load(seedBoards)
+      .load(seedBoards, viewer.id)
       .then((loaded) => {
         if (!live) return
         dispatch({ type: 'replace-all', boards: loaded.boards })
@@ -113,7 +131,7 @@ export function BoardsProvider({
     return () => {
       live = false
     }
-  }, [backing])
+  }, [backing, viewer.id])
 
   /*
    * Persist after the load, never during it, and never on the first render.
@@ -122,6 +140,25 @@ export function BoardsProvider({
    * mounts, which erases the saved session before the load that would have
    * restored it has even resolved.
    */
+  /*
+   * Visibility is recomputed whenever the boards or the Viewer change.
+   *
+   * It cannot be a selector: `canViewDashboard` asks the authorization port,
+   * which is asynchronous because resolving a group Grant is a lookup. Holding
+   * the answer in state is what lets the screens stay synchronous.
+   */
+  const [visible, setVisible] = useState<Board[]>([])
+
+  useEffect(() => {
+    let live = true
+    visibleDashboards(state.boards, viewer, authorization)
+      .then((allowed) => live && setVisible(allowed))
+      .catch(() => live && setVisible([]))
+    return () => {
+      live = false
+    }
+  }, [state.boards, viewer, authorization])
+
   const settled = useRef(false)
 
   useEffect(() => {
@@ -138,27 +175,45 @@ export function BoardsProvider({
   const value = useMemo<BoardsContextValue>(() => {
     const at = backing.now()
     const newId = (prefix: string) => backing.mintId(prefix)
+    const authorId = viewer.id
 
     return {
       state,
       loading,
       dispatch,
       boards: state.boards,
-      drafts: draftBoards(state),
-      published: publishedBoards(state),
+      visible,
+      // Drafts are the Author's own by definition (FR-CO-04), so this list is
+      // already scoped by `authorId` rather than by the visibility pass.
+      drafts: draftBoards(state).filter((board) => board.authorId === viewer.id),
+      published: visible.filter((board) => board.status === 'published'),
       editing: boardById(state, state.editingId),
 
       createBoard: (name) => {
         const id = newId('board')
-        dispatch({ type: 'create-board', id, name, at })
+        dispatch({ type: 'create-board', id, name, authorId, at })
         return id
       },
       openBoard: (id) => dispatch({ type: 'open-board', id }),
-      ensureEditing: () => dispatch({ type: 'ensure-editing', id: newId('board'), at }),
+      ensureEditing: () => dispatch({ type: 'ensure-editing', id: newId('board'), authorId, at }),
       renameBoard: (id, name) => dispatch({ type: 'rename-board', id, name, at }),
       deleteBoard: (id) => dispatch({ type: 'delete-board', id }),
       publishBoard: (id) => dispatch({ type: 'set-status', id, status: 'published', at }),
       unpublishBoard: (id) => dispatch({ type: 'set-status', id, status: 'draft', at }),
+      setScope: (id, scope) => dispatch({ type: 'set-scope', id, scope, at }),
+      addGrant: (id, recipient) =>
+        dispatch({
+          type: 'add-grant',
+          id,
+          grant: {
+            id: newId('grant'),
+            recipientKind: recipient.kind,
+            recipientId: recipient.id,
+            recipientLabel: recipient.label,
+          },
+          at,
+        }),
+      removeGrant: (id, grantId) => dispatch({ type: 'remove-grant', id, grantId, at }),
 
       addWidget: (boardId, widget, size) =>
         dispatch({
@@ -179,7 +234,7 @@ export function BoardsProvider({
       applyLayout: (boardId, placements) =>
         dispatch({ type: 'apply-layout', boardId, placements, at }),
     }
-  }, [state, loading, backing])
+  }, [state, loading, backing, viewer.id, visible])
 
   return <BoardsContext.Provider value={value}>{children}</BoardsContext.Provider>
 }

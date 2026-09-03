@@ -24,13 +24,19 @@ function stubStorage() {
   })
 }
 
+const AUTHOR = 'local'
+
 const board = (id: string): Board => ({
   id,
   name: id,
   description: '',
+  authorId: AUTHOR,
+  scope: { kind: 'personal' },
+  shareGrants: [],
   status: 'draft',
   updated: '2026-01-01',
-  widgets: [],
+  widgets: {},
+  placements: [],
 })
 
 const state = (id: string): BoardsState => ({ boards: [board(id)], editingId: id })
@@ -40,14 +46,14 @@ describe('the store answers, rather than returning', () => {
 
   test('an empty store falls back to the seed', async () => {
     const store = new LocalBoardStore()
-    const loaded = await store.load([board('seeded')])
+    const loaded = await store.load([board('seeded')], AUTHOR)
     expect(loaded.boards.map((entry) => entry.id)).toEqual(['seeded'])
   })
 
   test('a saved session round-trips', async () => {
     const store = new LocalBoardStore()
     await store.save(state('saved'))
-    const loaded = await store.load([board('seeded')])
+    const loaded = await store.load([board('seeded')], AUTHOR)
     expect(loaded.boards.map((entry) => entry.id)).toEqual(['saved'])
     expect(loaded.editingId).toBe('saved')
   })
@@ -63,7 +69,7 @@ describe('the store answers, rather than returning', () => {
     const store = new LocalBoardStore(25)
     await store.save(state('saved'))
 
-    const loading = store.load([board('seeded')])
+    const loading = store.load([board('seeded')], AUTHOR)
     expect(await loading).toMatchObject({ editingId: 'saved' })
   })
 })

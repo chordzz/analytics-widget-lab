@@ -15,6 +15,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   boardsReducer,
   draftBoards,
+  placedWidgets,
   loadState,
   publishedBoards,
   saveState,
@@ -26,6 +27,8 @@ import { MAX_H, MAX_W, MIN_H, MIN_W, collides, flowLayout, rowsForPx } from './g
 import { RENAMED_TYPES, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
 import type { WidgetSpec } from '../widgets/Widget'
+
+const AUTHOR = 'local'
 
 const AT = '2026-08-12'
 
@@ -42,38 +45,66 @@ const widget = (id: string, w = 4, h = 4): PlacedWidget => ({ ...spec(id), x: 0,
 /** Placed left to right, so the default board has no two widgets in one cell. */
 const placed = (...ids: string[]): PlacedWidget[] => flowLayout(ids.map((id) => widget(id)))
 
-const board = (overrides: Partial<Board> = {}): Board => ({
-  id: 'b1',
-  name: 'Board one',
-  description: '',
-  status: 'draft',
-  updated: '2026-01-01',
-  widgets: placed('a', 'b', 'c'),
-  ...overrides,
+/**
+ * Boards are authored here as a flat list of placed widgets and stored as the
+ * two halves a Dashboard keeps them in — a keyed record and a placement list.
+ * Every test below reads through `widgetOn` and `ids`, which join them back, so
+ * what a test asserts is what a person sees rather than how it is filed.
+ */
+const split = (widgets: PlacedWidget[]): Pick<Board, 'widgets' | 'placements'> => ({
+  widgets: Object.fromEntries(
+    widgets.map(({ x, y, w, h, ...rest }) => {
+      void x, y, w, h
+      return [rest.id, rest as WidgetSpec]
+    }),
+  ),
+  placements: widgets.map(({ id, x, y, w, h }) => ({ widgetId: id, x, y, w, h })),
 })
 
+const board = (
+  overrides: Partial<Board> & { placed?: PlacedWidget[] } = {},
+): Board => {
+  const { placed: given, ...rest } = overrides
+  return {
+    id: 'b1',
+    name: 'Board one',
+    description: '',
+    authorId: AUTHOR,
+    scope: { kind: 'personal' },
+    shareGrants: [],
+    status: 'draft',
+    updated: '2026-01-01',
+    ...split(given ?? placed('a', 'b', 'c')),
+    ...rest,
+  }
+}
+
+const boardOf = (state: BoardsState, boardId = 'b1'): Board =>
+  state.boards.find((entry) => entry.id === boardId)!
+
 const widgetOn = (state: BoardsState, id: string, boardId = 'b1'): PlacedWidget =>
-  state.boards.find((entry) => entry.id === boardId)!.widgets.find((entry) => entry.id === id)!
+  placedWidgets(boardOf(state, boardId)).find((entry) => entry.id === id)!
 
 const stateWith = (...boards: Board[]): BoardsState => ({ boards, editingId: null })
 
 const ids = (state: BoardsState, boardId = 'b1') =>
-  state.boards.find((entry) => entry.id === boardId)!.widgets.map((entry) => entry.id)
+  placedWidgets(boardOf(state, boardId)).map((entry) => entry.id)
 
 describe('boards', () => {
   test('a new board is a draft, empty, and opened for editing', () => {
-    const next = boardsReducer(stateWith(), { type: 'create-board', id: 'new', at: AT })
-    expect(next.boards[0]).toMatchObject({ id: 'new', status: 'draft', widgets: [] })
+    const next = boardsReducer(stateWith(), { type: 'create-board', id: 'new', authorId: AUTHOR, at: AT })
+    expect(next.boards[0]).toMatchObject({ id: 'new', status: 'draft', placements: [] })
+    expect(placedWidgets(next.boards[0])).toEqual([])
     expect(next.editingId).toBe('new')
   })
 
   test('a new board goes to the top of the list', () => {
-    const next = boardsReducer(stateWith(board()), { type: 'create-board', id: 'new', at: AT })
+    const next = boardsReducer(stateWith(board()), { type: 'create-board', id: 'new', authorId: AUTHOR, at: AT })
     expect(next.boards.map((entry) => entry.id)).toEqual(['new', 'b1'])
   })
 
   test('an unnamed board still has a name', () => {
-    const next = boardsReducer(stateWith(), { type: 'create-board', id: 'new', name: '  ', at: AT })
+    const next = boardsReducer(stateWith(), { type: 'create-board', id: 'new', name: '  ', authorId: AUTHOR, at: AT })
     expect(next.boards[0].name).toBe('Untitled dashboard')
   })
 
@@ -114,7 +145,7 @@ describe('boards', () => {
 
 describe('ensure-editing', () => {
   const ensure = (state: BoardsState) =>
-    boardsReducer(state, { type: 'ensure-editing', id: 'made', at: AT })
+    boardsReducer(state, { type: 'ensure-editing', id: 'made', authorId: AUTHOR, at: AT })
 
   test('makes a board when there is nothing to adopt', () => {
     const next = ensure(stateWith(board({ id: 'full' })))
@@ -126,13 +157,13 @@ describe('ensure-editing', () => {
     // React's development double-invoke calls the arrival effect twice against
     // the same state. This is the guard that makes that harmless.
     const once = ensure(stateWith())
-    const twice = boardsReducer(once, { type: 'ensure-editing', id: 'another', at: AT })
+    const twice = boardsReducer(once, { type: 'ensure-editing', id: 'another', authorId: AUTHOR, at: AT })
     expect(twice.boards.length).toBe(1)
     expect(twice.editingId).toBe('made')
   })
 
   test('adopts an existing blank draft rather than adding one', () => {
-    const blank = board({ id: 'blank', widgets: [] })
+    const blank = board({ id: 'blank', placed: [] })
     const next = ensure(stateWith(board({ id: 'full' }), blank))
     expect(next.editingId).toBe('blank')
     expect(next.boards.length).toBe(2)
@@ -144,7 +175,7 @@ describe('ensure-editing', () => {
   })
 
   test('never adopts a published board, even an empty one', () => {
-    const next = ensure(stateWith(board({ id: 'live', status: 'published', widgets: [] })))
+    const next = ensure(stateWith(board({ id: 'live', status: 'published', placed: [] })))
     expect(next.editingId).toBe('made')
   })
 
@@ -200,7 +231,7 @@ describe('widgets on a board', () => {
   })
 
   test('a widget only changes on its own board', () => {
-    const other = board({ id: 'b2', widgets: placed('a') })
+    const other = board({ id: 'b2', placed: placed('a') })
     const next = boardsReducer(stateWith(board(), other), {
       type: 'remove-widget',
       boardId: 'b2',
@@ -216,7 +247,7 @@ describe('placing a new widget', () => {
   test('it lands in the first gap, not below the board', () => {
     // The reducer's job is to reach for `firstFit`; where the gap is is
     // `grid.test.ts`'s problem.
-    const next = boardsReducer(stateWith(board({ widgets: [widget('a', 8)] })), {
+    const next = boardsReducer(stateWith(board({ placed: [widget('a', 8)] })), {
       type: 'add-widget',
       boardId: 'b1',
       widget: spec('d'),
@@ -228,7 +259,7 @@ describe('placing a new widget', () => {
 
   test('a width the composer did not choose comes from the widget type', () => {
     // `stat-card` asks for 3 columns and 132px, which is 4 rows.
-    const next = boardsReducer(stateWith(board({ widgets: [] })), {
+    const next = boardsReducer(stateWith(board({ placed: [] })), {
       type: 'add-widget',
       boardId: 'b1',
       widget: spec('d'),
@@ -238,7 +269,7 @@ describe('placing a new widget', () => {
   })
 
   test('a size outside the grid is clamped on the way in', () => {
-    const next = boardsReducer(stateWith(board({ widgets: [] })), {
+    const next = boardsReducer(stateWith(board({ placed: [] })), {
       type: 'add-widget',
       boardId: 'b1',
       widget: spec('d'),
@@ -266,7 +297,7 @@ describe('placing a new widget', () => {
 describe('resizing', () => {
   const resized = (size: { w?: number; h?: number }, widgets = placed('a', 'b', 'c')) =>
     widgetOn(
-      boardsReducer(stateWith(board({ widgets })), {
+      boardsReducer(stateWith(board({ placed: widgets })), {
         type: 'resize-widget',
         boardId: 'b1',
         widgetId: 'a',
@@ -349,7 +380,7 @@ describe('applying a whole layout', () => {
      * persist effect watching this state would write on every render.
      */
     const before = stateWith(board())
-    const unchanged = before.boards[0].widgets.map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))
+    const unchanged = placedWidgets(before.boards[0]).map(({ id, x, y, w, h }) => ({ id, x, y, w, h }))
     const next = boardsReducer(before, {
       type: 'apply-layout',
       boardId: 'b1',
@@ -382,7 +413,7 @@ function stubStorage() {
 }
 
 describe('persistence', () => {
-  const KEY = 'analytics.boards.v3'
+  const KEY = 'analytics.boards.v4'
   const seed = [board({ id: 'seeded' })]
 
   beforeEach(stubStorage)
@@ -403,7 +434,7 @@ describe('persistence', () => {
     // The load path normalises every board it reads. A valid placement must come
     // back exactly as it went in, or opening a board would nudge it.
     const put = { ...widget('a'), x: 5, y: 9, w: 6, h: 11 }
-    saveState({ boards: [board({ id: 'saved', widgets: [put] })], editingId: null })
+    saveState({ boards: [board({ id: 'saved', placed: [put] })], editingId: null })
     expect(widgetOn(loadState(seed), 'a', 'saved')).toMatchObject({ x: 5, y: 9, w: 6, h: 11 })
   })
 
@@ -441,7 +472,7 @@ describe('persistence', () => {
  */
 describe('migration from v1', () => {
   const LEGACY_KEY = 'analytics.boards.v1'
-  const KEY = 'analytics.boards.v3'
+  const KEY = 'analytics.boards.v4'
   const seed = [board({ id: 'seeded' })]
 
   /** Exactly the old shape: spans, an order, and no x or y anywhere. */
@@ -501,7 +532,7 @@ describe('migration from v1', () => {
     const state = migrate(
       [3, 3, 3, 3, 8, 4, 5, 3, 4, 12].map((span, index) => ({ ...spec(`w${index}`), span })),
     )
-    const widgets = state.boards[0].widgets
+    const widgets = placedWidgets(state.boards[0])
     for (const [i, item] of widgets.entries()) {
       for (const other of widgets.slice(i + 1)) expect(collides(item, other)).toBe(false)
     }
@@ -546,7 +577,7 @@ describe('migration from v1', () => {
         boards: [
           board({
             id: 'holed',
-            widgets: [
+            placed: [
               { ...widget('a'), x: 9, y: 4 },
               { ...widget('b'), y: undefined as unknown as number },
             ],
@@ -574,7 +605,7 @@ describe('migration from v1', () => {
  */
 describe('migration from v2', () => {
   const V2_KEY = 'analytics.boards.v2'
-  const KEY = 'analytics.boards.v3'
+  const KEY = 'analytics.boards.v4'
   const seed = [board({ id: 'seeded' })]
 
   /** A v2 board: positioned already, but speaking the module's old vocabulary. */
@@ -616,7 +647,7 @@ describe('migration from v2', () => {
       ),
     )
 
-    const got = state.boards[0].widgets.map((entry) => entry.typeId)
+    const got = placedWidgets(state.boards[0]).map((entry) => entry.typeId)
     expect(got).toEqual(Object.values(RENAMED_TYPES))
     // The point of the exercise: all of them resolve to a real widget type.
     for (const typeId of got) expect(widgetType(typeId)).toBeDefined()
@@ -701,5 +732,265 @@ describe('migration from v2', () => {
     saveState({ boards: [board({ id: 'x' })], editingId: null })
     expect(localStorage.getItem(KEY)).not.toBeNull()
     expect(localStorage.getItem(V2_KEY)).toBeNull()
+  })
+})
+
+/**
+ * Scope and Share Grants — FR-DA-01 to FR-DA-07.
+ *
+ * Merge Plan Stage 6.2. The access *rules* are `access/dashboard-access.ts` and
+ * have their own tests; these are about the board carrying the right thing, and
+ * about the two decisions that are easy to get backwards.
+ */
+describe('scope', () => {
+  test('a new board is Personal', () => {
+    // FR-DA-02. A new board is empty and half-thought-through; defaulting it to
+    // anything wider makes sharing the thing you have to remember to switch off.
+    const next = boardsReducer(stateWith(), {
+      type: 'create-board',
+      id: 'new',
+      authorId: AUTHOR,
+      at: AT,
+    })
+    expect(next.boards[0].scope).toEqual({ kind: 'personal' })
+  })
+
+  test('a new board records who wrote it', () => {
+    const next = boardsReducer(stateWith(), {
+      type: 'create-board',
+      id: 'new',
+      authorId: 'someone-else',
+      at: AT,
+    })
+    expect(next.boards[0].authorId).toBe('someone-else')
+  })
+
+  test('setting a Scope does not publish, and publishing does not set a Scope', () => {
+    /*
+     * Finding 9, which the FRD never states and whose wrong reading is the more
+     * intuitive one. Publishing means "I have finished reviewing", not "everyone
+     * may see it" — fold them together and a board published at Personal Scope
+     * silently breaks FR-DA-02.
+     */
+    const scoped = boardsReducer(stateWith(board()), {
+      type: 'set-scope',
+      id: 'b1',
+      scope: { kind: 'organization-wide' },
+      at: AT,
+    })
+    expect(scoped.boards[0].status).toBe('draft')
+    expect(scoped.boards[0].scope).toEqual({ kind: 'organization-wide' })
+
+    const published = boardsReducer(scoped, {
+      type: 'set-status',
+      id: 'b1',
+      status: 'published',
+      at: AT,
+    })
+    expect(published.boards[0].scope).toEqual({ kind: 'organization-wide' })
+  })
+
+  test('an organizational Scope keeps the label it was given', () => {
+    // The id is IAM's; the label is what a person reads. Storing only the id
+    // would mean the sharing UI could not name the scope without a lookup.
+    const next = boardsReducer(stateWith(board()), {
+      type: 'set-scope',
+      id: 'b1',
+      scope: { kind: 'organizational-scope', scopeId: 'ops', label: 'Operations' },
+      at: AT,
+    })
+    expect(next.boards[0].scope).toEqual({
+      kind: 'organizational-scope',
+      scopeId: 'ops',
+      label: 'Operations',
+    })
+  })
+})
+
+describe('share grants', () => {
+  const grant = (recipientId: string, id = `g-${recipientId}`) => ({
+    id,
+    recipientKind: 'individual' as const,
+    recipientId,
+    recipientLabel: recipientId,
+  })
+
+  test('a grant is added to the board', () => {
+    const next = boardsReducer(stateWith(board()), {
+      type: 'add-grant',
+      id: 'b1',
+      grant: grant('ada'),
+      at: AT,
+    })
+    expect(next.boards[0].shareGrants.map((entry) => entry.recipientId)).toEqual(['ada'])
+  })
+
+  test('granting the same recipient twice changes nothing', () => {
+    // Two grants naming one person is not twice the access; it is a list with a
+    // duplicate in it, and the sharing UI would show them the same name twice.
+    const once = boardsReducer(stateWith(board()), {
+      type: 'add-grant',
+      id: 'b1',
+      grant: grant('ada'),
+      at: AT,
+    })
+    const twice = boardsReducer(once, {
+      type: 'add-grant',
+      id: 'b1',
+      grant: grant('ada', 'g-other'),
+      at: AT,
+    })
+    expect(twice.boards[0].shareGrants).toHaveLength(1)
+    expect(twice.boards[0]).toBe(once.boards[0])
+  })
+
+  test('removing the last grant restores the whole Scope', () => {
+    /*
+     * FR-DA-07 — a Grant *refines* who within the Scope sees the board, it never
+     * extends beyond it. So no grants means everyone in Scope, not nobody, and
+     * removing the last one has to return to that rather than to an empty set.
+     * This is the assertion; `canViewDashboard` is where the rule lives.
+     */
+    const granted = boardsReducer(stateWith(board({ scope: { kind: 'organization-wide' } })), {
+      type: 'add-grant',
+      id: 'b1',
+      grant: grant('ada'),
+      at: AT,
+    })
+    const removed = boardsReducer(granted, {
+      type: 'remove-grant',
+      id: 'b1',
+      grantId: 'g-ada',
+      at: AT,
+    })
+
+    expect(removed.boards[0].shareGrants).toEqual([])
+    expect(removed.boards[0].scope).toEqual({ kind: 'organization-wide' })
+  })
+})
+
+/**
+ * Migrating v3 — widgets stop being embedded.
+ *
+ * Finding 4, and D10 ends here. A v3 board held its widgets in an array; a
+ * Dashboard holds a widget record and a placement list, because a Widget saved
+ * to the Widget Library has identity independent of any one Dashboard.
+ */
+describe('migration from v3', () => {
+  const V3_KEY = 'analytics.boards.v3'
+  const KEY = 'analytics.boards.v4'
+  const seed = [board({ id: 'seeded' })]
+
+  const v3 = (widgets: unknown[]) => ({
+    boards: [
+      {
+        id: 'old',
+        name: 'Old board',
+        description: '',
+        status: 'published',
+        updated: '2026-01-01',
+        widgets,
+      },
+    ],
+    editingId: 'old',
+  })
+
+  const migrate = (widgets: unknown[]) => {
+    localStorage.setItem(V3_KEY, JSON.stringify(v3(widgets)))
+    return loadState(seed, AUTHOR)
+  }
+
+  beforeEach(stubStorage)
+
+  test('an embedded array becomes a record and a placement list', () => {
+    const state = migrate([widget('a', 4, 7), { ...widget('b', 8, 7), x: 4 }])
+    const migrated = state.boards.find((entry) => entry.id === 'old')!
+
+    expect(Object.keys(migrated.widgets).sort()).toEqual(['a', 'b'])
+    expect(migrated.placements.map((entry) => entry.widgetId).sort()).toEqual(['a', 'b'])
+    // And the widget records carry no placement any more.
+    expect('x' in migrated.widgets.a).toBe(false)
+  })
+
+  test('the board still looks like the board you left', () => {
+    const state = migrate([widget('a', 4, 7), { ...widget('b', 8, 7), x: 4 }])
+    expect(widgetOn(state, 'a', 'old')).toMatchObject({ x: 0, y: 0, w: 4, h: 7 })
+    expect(widgetOn(state, 'b', 'old')).toMatchObject({ x: 4, y: 0, w: 8, h: 7 })
+  })
+
+  test('a migrated board belongs to whoever migrated it', () => {
+    // Not a guess: these come out of this browser's own storage, so the only
+    // person who has ever had them is the one reading them now.
+    const state = migrate([widget('a')])
+    expect(state.boards.find((entry) => entry.id === 'old')!.authorId).toBe(AUTHOR)
+  })
+
+  test('a migrated board is Personal, never wider', () => {
+    /*
+     * The decision that matters. Before Scopes existed everyone saw everything,
+     * so organization-wide would "preserve behaviour" — by asserting something
+     * the migration cannot know. A migration must never widen visibility, and
+     * Personal costs the migrating Author nothing, because an Author always sees
+     * their own boards whatever the Scope says.
+     */
+    const state = migrate([widget('a')])
+    expect(state.boards.find((entry) => entry.id === 'old')!.scope).toEqual({ kind: 'personal' })
+  })
+
+  test('a v3 board that already had a Scope keeps it', () => {
+    localStorage.setItem(
+      V3_KEY,
+      JSON.stringify({
+        boards: [
+          {
+            ...v3([widget('a')]).boards[0],
+            scope: { kind: 'organization-wide' },
+            authorId: 'ada',
+          },
+        ],
+        editingId: null,
+      }),
+    )
+    const state = loadState(seed, AUTHOR)
+    const migrated = state.boards.find((entry) => entry.id === 'old')!
+    expect(migrated.scope).toEqual({ kind: 'organization-wide' })
+    expect(migrated.authorId).toBe('ada')
+  })
+
+  test('the v3 key is left alone rather than cleared', () => {
+    const raw = JSON.stringify(v3([widget('a')]))
+    localStorage.setItem(V3_KEY, raw)
+    loadState(seed, AUTHOR)
+    expect(localStorage.getItem(V3_KEY)).toBe(raw)
+  })
+
+  test('saving writes v4', () => {
+    saveState({ boards: [board({ id: 'x' })], editingId: null })
+    expect(localStorage.getItem(KEY)).not.toBeNull()
+    expect(localStorage.getItem(V3_KEY)).toBeNull()
+  })
+
+  test('a placement pointing at a widget that is gone drops out', () => {
+    // Storage can be edited, and a dangling reference is the failure mode a
+    // referenced model introduces. It renders as nothing rather than as an
+    // error card for a widget nobody can name.
+    localStorage.setItem(
+      KEY,
+      JSON.stringify({
+        boards: [
+          {
+            ...board({ id: 'dangling', placed: [widget('a')] }),
+            placements: [
+              { widgetId: 'a', x: 0, y: 0, w: 4, h: 4 },
+              { widgetId: 'ghost', x: 4, y: 0, w: 4, h: 4 },
+            ],
+          },
+        ],
+        editingId: null,
+      }),
+    )
+
+    const state = loadState(seed, AUTHOR)
+    expect(ids(state, 'dangling')).toEqual(['a'])
   })
 })

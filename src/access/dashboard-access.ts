@@ -91,8 +91,18 @@ export async function evaluateGrant(
   return { grantId: grant.id, effective: true, reach }
 }
 
+/**
+ * The parts of a Dashboard that decide who may see it.
+ *
+ * Narrower than `Dashboard` on purpose. Access turns on four fields, and asking
+ * for the whole record would couple these rules to the Widgets and Placements
+ * they have no opinion about — which is what stopped the product module reusing
+ * them, since its board keys `WidgetSpec` rather than `Widget` (D17).
+ */
+export type AccessSubject = Pick<Dashboard, 'authorId' | 'status' | 'scope' | 'shareGrants'>
+
 export async function evaluateGrants(
-  dashboard: Dashboard,
+  dashboard: AccessSubject,
   authorization: AuthorizationPort,
 ): Promise<GrantVerdict[]> {
   return Promise.all(
@@ -102,7 +112,7 @@ export async function evaluateGrants(
 
 /** FR-DA-05 — reaching a Dashboard at any Scope requires an authenticated identity. */
 export async function canViewDashboard(
-  dashboard: Dashboard,
+  dashboard: AccessSubject,
   viewer: ViewerIdentity,
   authorization: AuthorizationPort,
 ): Promise<boolean> {
@@ -127,11 +137,11 @@ export async function canViewDashboard(
   return named.some(Boolean)
 }
 
-export async function visibleDashboards(
-  dashboards: Dashboard[],
+export async function visibleDashboards<T extends AccessSubject>(
+  dashboards: T[],
   viewer: ViewerIdentity,
   authorization: AuthorizationPort,
-): Promise<Dashboard[]> {
+): Promise<T[]> {
   const decisions = await Promise.all(
     dashboards.map((dashboard) => canViewDashboard(dashboard, viewer, authorization)),
   )

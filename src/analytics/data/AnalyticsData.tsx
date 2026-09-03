@@ -23,9 +23,16 @@ import {
 } from 'react'
 import type { CataloguePort, DatasetSummary } from '../../catalogue/port'
 import type { DatasetRetrievalPort, ViewerIdentity } from '../../retrieval/port'
+import type { AuthorizationPort } from '../../access/port'
 import { resolveFailure, resolveRenderState, type WidgetRenderState } from '../../retrieval/render-state'
 import type { Dataset } from '../../domain/dataset'
-import { FixtureCatalogue, FixtureRetrieval, LOCAL_VIEWER, type Scenario } from './adapters'
+import {
+  FixtureCatalogue,
+  FixtureRetrieval,
+  LOCAL_VIEWER,
+  LocalAuthorization,
+  type Scenario,
+} from './adapters'
 import { queryFor, type ViewerChoices } from './query'
 import type { WidgetSpec } from '../widgets/Widget'
 import type { Row } from './types'
@@ -33,6 +40,8 @@ import type { Row } from './types'
 interface AnalyticsDataValue {
   catalogue: CataloguePort
   retrieval: DatasetRetrievalPort
+  /** FR-DA-02 — FR-DA-08. Who may see which board, and who a Grant names. */
+  authorization: AuthorizationPort
   viewer: ViewerIdentity
 }
 
@@ -43,6 +52,7 @@ export interface AnalyticsDataProviderProps {
   /** Supplied by a host with real adapters. Omit to run on the fixtures. */
   catalogue?: CataloguePort
   retrieval?: DatasetRetrievalPort
+  authorization?: AuthorizationPort
   viewer?: ViewerIdentity
   /** Fixture-only: force an outcome per Dataset, so every state is reachable. */
   scenarios?: Record<string, Scenario>
@@ -54,6 +64,7 @@ export function AnalyticsDataProvider({
   children,
   catalogue,
   retrieval,
+  authorization,
   viewer = LOCAL_VIEWER,
   scenarios,
   latencyMs = 0,
@@ -63,8 +74,9 @@ export function AnalyticsDataProvider({
       viewer,
       catalogue: catalogue ?? new FixtureCatalogue({ scenarios, latencyMs }),
       retrieval: retrieval ?? new FixtureRetrieval({ scenarios, latencyMs }),
+      authorization: authorization ?? new LocalAuthorization(),
     }),
-    [catalogue, retrieval, viewer, scenarios, latencyMs],
+    [catalogue, retrieval, authorization, viewer, scenarios, latencyMs],
   )
 
   return <AnalyticsDataContext.Provider value={value}>{children}</AnalyticsDataContext.Provider>

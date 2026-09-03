@@ -486,3 +486,46 @@
   color: var(--a-text);
   cursor: pointer;
 }
+
+/* --- who can see this board (FR-DA-01 to FR-DA-07) ----------------------- */
+.a-share {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-2);
+  padding: var(--a-space-3) var(--a-space-4);
+  margin-bottom: var(--a-space-4);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+}
+
+.a-share__row {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-3);
+  flex-wrap: wrap;
+}
+
+/*
+ * The summary, not the control, is the thing to read. Scope and publishing are
+ * separate gates and neither says what the combination means, so this line is
+ * the only place an Author can see the actual answer.
+ */
+.a-share__summary {
+  margin: 0;
+  font-size: var(--a-text-sm);
+  color: var(--a-text);
+}
+
+.a-share__grants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-space-2) var(--a-space-4);
+  padding-top: var(--a-space-2);
+  border-top: 1px solid var(--a-border);
+}
+
+.a-share__grants .a-field__help {
+  flex: 1 1 100%;
+  margin: 0;
+}

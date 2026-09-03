@@ -11,6 +11,7 @@
 
 import { useState } from 'react'
 import { GridBoard } from '../builder/GridBoard'
+import { placedWidgets, widgetCountOf } from '../builder/boards'
 import { useBoards } from '../builder/useBoards'
 import type { ScreenId } from '../shell/nav'
 
@@ -67,7 +68,7 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
       <div className="a-board-head a-board-head--compact">
         <p className="a-muted">
           {active.description ? `${active.description} · ` : ''}
-          {active.widgets.length} {active.widgets.length === 1 ? 'widget' : 'widgets'} · updated{' '}
+          {widgetCountOf(active)} {widgetCountOf(active) === 1 ? 'widget' : 'widgets'} · updated{' '}
           {active.updated}
         </p>
         <button
@@ -88,7 +89,7 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
         would make the builder untrustworthy.
       */}
       <GridBoard
-        widgets={active.widgets}
+        widgets={placedWidgets(active)}
         empty={
           <div className="a-empty">
             <h3>{active.name} is empty</h3>
