@@ -22,7 +22,12 @@ import { visualizationFamilies } from '../visualization/families'
 import { typesInFamily, visualizationTypes } from '../visualization/visualization-types'
 import { evaluateFamilies } from '../visualization/registry'
 import { catalogueFixtures } from '../catalogue/fixtures'
-import { WIDGET_TYPES } from '../analytics/widgets/catalog'
+import { FAMILIES, WIDGET_TYPES } from '../analytics/widgets/catalog'
+import { SAMPLES } from '../analytics/widgets/samples'
+import { slotsFor } from '../analytics/builder/requirements'
+import { queryFor, rowsForWidget } from '../analytics/data/query'
+import { requireDataset } from '../analytics/data/datasets'
+import type { DatasetQuery } from '../domain/query'
 import type { Satisfaction } from '../visualization/data-shape'
 
 /*
@@ -562,9 +567,293 @@ export const renderContractJson = (): string =>
   JSON.stringify(contractJson, null, 2) + '\n'
 
 /** Filenames the generator writes, shared with the drift test. */
+// -- 4. Widget data contract -------------------------------------------------
+
+/**
+ * What each widget asks a Source System for.
+ *
+ * Written for the backend team, and generated rather than hand-kept for the
+ * usual reason: every figure below is read out of the code that actually builds
+ * the query, so it cannot drift from what the frontend really sends.
+ *
+ * The interesting column is `request`. It is derived by running `queryFor` over
+ * each Type's sample binding, which is the same function the running application
+ * uses — so if a widget asks for records rather than an aggregate, that shows up
+ * here as a fact rather than as a claim.
+ */
+
+interface WidgetContractRow {
+  typeId: string
+  label: string
+  family: string
+  /** The roles a Field must have to fill each slot, in the widget's own words. */
+  needs: string
+  /** What `queryFor` emits for the sample binding. */
+  request: string
+  /** How the request is shaped: one row, grouped rows, or records. */
+  grain: 'single aggregate' | 'grouped aggregate' | 'records'
+  /** Rows the fixture returns — an indication of volume, not a limit. */
+  rows: number
+}
+
+const ROLE_SHORT: Record<string, string> = {
+  dimension: 'Dimension',
+  'time-dimension': 'Time Dimension',
+  measure: 'Measure',
+}
+
+const describeSlot = (slot: {
+  label: string
+  accepts: readonly string[]
+  min: number
+  max: number
+  geo?: boolean
+}): string => {
+  const roles = slot.accepts.map((role) => ROLE_SHORT[role] ?? role).join(' or ')
+  const geo = slot.geo ? ', geographic' : ''
+
+  /*
+   * Read as a quantity a person would say. `0 × Measure (optional)` is
+   * technically the min but says nothing useful; "up to 1" does.
+   */
+  const count =
+    slot.min === 0
+      ? `up to ${slot.max === 99 ? 'n' : String(slot.max)}`
+      : slot.max > slot.min
+        ? `${String(slot.min)}–${slot.max === 99 ? 'n' : String(slot.max)}`
+        : String(slot.min)
+
+  return `**${slot.label}** — ${count} × ${roles}${geo}`
+}
+
+const widgetContractRows = (): WidgetContractRow[] =>
+  WIDGET_TYPES.filter((type) => type.built)
+    .map((type) => {
+      const sample = SAMPLES[type.id]
+      const spec = { id: 'doc', typeId: type.id, ...sample }
+      const dataset = requireDataset(sample.datasetId)
+      const query = queryFor(spec, dataset)
+      const rows = rowsForWidget(spec, dataset)
+
+      const grain: WidgetContractRow['grain'] = query.measures
+        ? query.dimensions
+          ? 'grouped aggregate'
+          : 'single aggregate'
+        : 'records'
+
+      return {
+        typeId: type.id,
+        label: type.label,
+        family: type.family,
+        needs: slotsFor(type.id).map(describeSlot).join('<br>') || '—',
+        request: requestSummary(query),
+        grain,
+        rows: rows.length,
+      }
+    })
+
+/** A `DatasetQuery` as one readable cell. */
+function requestSummary(query: DatasetQuery): string {
+  const parts: string[] = []
+  if (query.dimensions?.length) parts.push(`group by \`${query.dimensions.join('`, `')}\``)
+  if (query.measures?.length) {
+    parts.push(
+      query.measures.map((m) => `\`${m.aggregation}(${m.field})\``).join(', '),
+    )
+  }
+  if (query.timeRange) parts.push(`range on \`${query.timeRange.field}\``)
+  if (query.sort?.length) {
+    parts.push(
+      `order by ${query.sort.map((s) => `\`${s.field}\` ${s.direction === 'ascending' ? '↑' : '↓'}`).join(', ')}`,
+    )
+  }
+  if (query.limit !== undefined) parts.push(`limit ${String(query.limit)}`)
+  return parts.length > 0 ? parts.join('; ') : 'no aggregation — all records'
+}
+
+export const renderWidgetDataContract = (): string => {
+  const rows = widgetContractRows()
+  const byGrain = (grain: string) => rows.filter((r) => r.grain === grain)
+  const families = Array.from(new Set(rows.map((r) => r.family)))
+
+  return `# Analytics — Widget Data Contract
+
+${GENERATED('src/contract-docs/render.ts')}
+For the team building the Source Systems. It answers one question per widget:
+**what will the frontend ask you for, and what shape must the answer be?**
+
+Every row is read out of the code that builds the query — the same \`queryFor\`
+the running application calls — so nothing here is an intention.
+
+Read [\`PUBLICATION_CONTRACT.md\`](PUBLICATION_CONTRACT.md) first for what a
+Dataset must *declare*. This document is about what gets *asked* afterwards.
+
+---
+
+## 1. The request
+
+One shape, for every widget:
+
+\`\`\`ts
+interface DatasetQuery {
+  /** Group by these Dimensions. Omitted or empty means a single aggregate row. */
+  dimensions?: string[]
+  measures?: { field: string; aggregation: Aggregation }[]
+  timeRange?: { field: string; from?: string; to?: string; granularity?: TimeGranularity }
+  /** Keyed by Field key. Only Fields the Dataset declared \`filterable\`. */
+  filters?: Record<string, string | number>
+  sort?: { field: string; direction: 'ascending' | 'descending' }[]
+  limit?: number
+}
+
+type Aggregation = 'sum' | 'average' | 'count' | 'minimum' | 'maximum' | 'distinct-count'
+type TimeGranularity = 'day' | 'week' | 'month' | 'quarter' | 'year'
+\`\`\`
+
+**Aggregation is asked for, never applied afterwards.** A widget requests
+"sum of revenue by region" and expects grouped, aggregated rows. It must not
+receive raw records and reduce them, for two reasons: it would let each widget
+decide what "sum" means, and it would ship records a Viewer may not be entitled
+to see.
+
+An \`aggregation\` we send is always one the Dataset declared for that Measure.
+If we ask for something undeclared, that is our bug — reject it.
+
+---
+
+## 2. The response
+
+Four outcomes, and they must be distinguishable. This is the single easiest part
+of the contract to get wrong, because nothing in the requirements says it about
+the API — only about the display.
+
+\`\`\`ts
+type RetrievalOutcome =
+  | { kind: 'rows'; rows: DatasetRow[]; totalCount: number }
+  | { kind: 'empty' }      // authorized, and the Dataset has nothing to say
+  | { kind: 'denied' }     // not authorized for this Dataset
+  | { kind: 'withdrawn' }  // the Dataset is gone
+
+type DatasetRow = Record<string, string | number | null>
+\`\`\`
+
+A response of \`[]\` cannot carry this: empty, denied and withdrawn all look
+identical, and the frontend would have to guess. It renders each of the four
+differently — a denial says access was denied rather than showing zero, because
+showing zero teaches a Viewer the figure *is* zero.
+
+**A genuine failure is an error, not an outcome** — the absence of an answer
+rather than one of the answers.
+
+\`kind: 'rows'\` with an empty \`rows\` array is treated as a **contract breach**
+and surfaced as a failure, not as \`empty\`. Send \`{ kind: 'empty' }\`.
+
+### Row shape
+
+Flat objects, keyed by Field \`key\`. An aggregated Measure comes back under its
+own field name — ask for \`sum(revenue)\` and the key is \`revenue\`, not
+\`revenue_sum\`. Values are \`string\`, \`number\` or \`null\`; dates are ISO
+strings (\`2026-08-07\`, or \`2026-08\` at month grain).
+
+---
+
+## 3. Aggregation grain — the thing to settle with us
+
+Of the ${String(rows.length)} built widget types, **${String(byGrain('single aggregate').length)} currently send an aggregated
+query and ${String(byGrain('records').length)} ask for records.**
+
+That is not a recommendation, it is a report — and it needs a conversation
+before it meets a real database.
+
+The reason is our fixtures: most are already stored at the grain the chart draws.
+\`sales-by-region\` is one row per region, so a bar chart over it asks for records
+and gets exactly the six bars it wants. Against a raw table the same widget would
+pull every transaction and group in the browser, which is both slow and the thing
+§2 of the publication contract forbids.
+
+**What this means for you:**
+
+- The ${String(byGrain('single aggregate').length)} single-aggregate types are correct as they stand and safe against any volume.
+- For the rest, tell us where your data's grain sits. If a Dataset is already
+  aggregated to the grain we draw, records are fine and the \`rows\` count in
+  §4 is what to expect. If it is raw, we need to send \`dimensions\` +
+  \`measures\` and we will fix the query — the mapping already carries the
+  information, so it is our change, not yours.
+- The row counts in §4 are what our *fixtures* return. Treat them as the volume
+  a widget can usefully draw, not as a limit you should enforce: a calendar
+  heatmap wants 365 points and a stat card wants 1.
+
+This is tracked on our side as divergences **D13** and **D14** in
+[\`DIVERGENCES.md\`](DIVERGENCES.md).
+
+---
+
+## 4. Every widget, and what it asks for
+
+\`needs\` is what a Dataset must offer for the widget to be *offered* at all —
+the Field roles, and how many of each. A widget whose required slots cannot be
+filled is never shown to an Author, so a Dataset missing a Time Dimension simply
+does not produce trend charts.
+
+${families
+  .map((family) => {
+    const inFamily = rows.filter((r) => r.family === family)
+    const label = FAMILIES.find((entry) => entry.id === family)?.label ?? family
+    return `### ${label} — \`${family}\`
+
+| Type | Needs | Request today | Grain | Fixture rows |
+|---|---|---|---|---|
+${inFamily
+  .map(
+    (r) =>
+      `| \`${r.typeId}\`<br>${r.label} | ${r.needs} | ${r.request} | ${r.grain} | ${String(r.rows)} |`,
+  )
+  .join('\n')}`
+  })
+  .join('\n\n')}
+
+---
+
+## 5. Field roles, for reference
+
+Three roles, and the distinction is load-bearing rather than cosmetic:
+
+| Role | What it is | Notes |
+|---|---|---|
+| \`dimension\` | Identifies or categorizes a record | |
+| \`time-dimension\` | A Dimension whose values are points in time | Counts as a Dimension wherever one is required |
+| \`measure\` | Can be meaningfully aggregated | Must declare which \`aggregations\` are meaningful |
+
+Two things a Dataset declares that change what we can offer:
+
+- **\`filterable\` gates every filter.** A Viewer-facing filter or a Dashboard
+  Control can only act on a Field you marked filterable. We enforce this twice —
+  the picker will not offer it, and the query builder drops it — so an unmarked
+  Field is unreachable by design.
+- **\`semantic\` unlocks four Families.** Role says what a Field *is* and cannot
+  say what it is *for*. A point map needs to know which Measure is a latitude;
+  without it, a ranked list will happily rank countries by how far north they
+  are. See \`PUBLICATION_CONTRACT.md\` for the values.
+
+---
+
+## 6. What we will not ask you for
+
+- **Writes.** Every widget is read-only, enforced by the props carrying no
+  callback — there is nothing a widget *could* call to mutate.
+- **Joins.** A widget draws from exactly one Dataset. If two Datasets need
+  relating, that is a Dataset the Source System publishes, not a query we send.
+- **Formatting.** Send numbers as numbers. \`format\` on a Field tells us how to
+  render them.
+- **Anything a Viewer may not see.** Authorization is resolved per Dataset per
+  call, on your side. We ask; we do not carry a rule about who may read what.
+`
+}
+
 export const DOC_FILES = {
   publicationContract: 'PUBLICATION_CONTRACT.md',
   dataShapes: 'DATA_SHAPES.md',
   divergences: 'DIVERGENCES.md',
+  widgetData: 'WIDGET_DATA_CONTRACT.md',
   contractJson: 'analytics-contract.json',
 } as const

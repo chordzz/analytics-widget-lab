@@ -11,6 +11,7 @@ Companion documents, all still current:
 | [`src/analytics/README.md`](src/analytics/README.md) | The product module's own tour — layers, create flow, theming. |
 | [`docs/PUBLICATION_CONTRACT.md`](docs/PUBLICATION_CONTRACT.md) | **Enforceable.** What a Source System must declare. The backend validates against this. |
 | [`docs/DATA_SHAPES.md`](docs/DATA_SHAPES.md) | **Guidance.** What each Visualization Family needs. Not a publication gate. |
+| [`docs/WIDGET_DATA_CONTRACT.md`](docs/WIDGET_DATA_CONTRACT.md) | **For the backend team.** What each of the 37 widgets asks a Source System for — slots, the query it sends, the response shape. Generated. |
 | [`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) | **Every departure from the FRD**, numbered, with the clause and the reason. Generated; 14 open, 4 resolved. |
 | [`README.md`](README.md) | Phase-by-phase record of the requirements work. Historical narrative, not orientation. |
 | [`../Analytics_Merge_Plan.md`](../Analytics_Merge_Plan.md) | **The plan for ending the two-application split** — sequenced stages, the divergence register, and the taxonomy reconciliation. Read it with §1 and §5 below. |

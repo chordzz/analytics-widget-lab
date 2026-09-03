@@ -21,6 +21,7 @@ import {
   renderDataShapes,
   renderDivergences,
   renderPublicationContract,
+  renderWidgetDataContract,
 } from '../src/contract-docs/render'
 
 const out = join(import.meta.dir, '..', 'docs')
@@ -29,6 +30,7 @@ mkdirSync(out, { recursive: true })
 writeFileSync(join(out, DOC_FILES.publicationContract), renderPublicationContract())
 writeFileSync(join(out, DOC_FILES.dataShapes), renderDataShapes())
 writeFileSync(join(out, DOC_FILES.divergences), renderDivergences())
+writeFileSync(join(out, DOC_FILES.widgetData), renderWidgetDataContract())
 writeFileSync(join(out, DOC_FILES.contractJson), renderContractJson())
 
 console.log(`Wrote ${Object.values(DOC_FILES).map((f) => `docs/${f}`).join(', ')}`)

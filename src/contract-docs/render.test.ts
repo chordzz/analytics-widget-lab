@@ -15,11 +15,15 @@ import {
   renderContractJson,
   renderDataShapes,
   renderPublicationContract,
+  renderWidgetDataContract,
 } from './render'
 import { publicationRules } from '../domain/publication-contract'
 import { visualizationFamilies } from '../visualization/families'
 import { visualizationTypes } from '../visualization/visualization-types'
 import { WIDGET_TYPES } from '../analytics/widgets/catalog'
+import { SAMPLES } from '../analytics/widgets/samples'
+import { queryFor } from '../analytics/data/query'
+import { requireDataset } from '../analytics/data/datasets'
 import { DIVERGENCES, openDivergences, resolvedDivergences } from './divergences'
 
 const ROOT = join(import.meta.dir, '..', '..')
@@ -41,6 +45,10 @@ describe('generated documents are current', () => {
 
   test('analytics-contract.json matches the code', () => {
     expect(onDisk(DOC_FILES.contractJson)).toBe(renderContractJson())
+  })
+
+  test('the widget data contract on disk matches the code', () => {
+    expect(onDisk(DOC_FILES.widgetData)).toBe(renderWidgetDataContract())
   })
 })
 
@@ -211,5 +219,68 @@ describe('the divergence register is complete', () => {
     for (const entry of openDivergences()) {
       expect(entry.status).not.toBe('resolved')
     }
+  })
+})
+
+/**
+ * The widget data contract is written for the backend team, so the failures
+ * that matter are the ones that would send them building the wrong thing.
+ */
+describe('widget data contract', () => {
+  const doc = renderWidgetDataContract()
+  const built = WIDGET_TYPES.filter((type) => type.built)
+
+  test('every built Type appears', () => {
+    // A widget missing from this document is a widget the backend does not know
+    // it has to serve.
+    for (const type of built) {
+      expect(doc).toContain(`\`${type.id}\``)
+    }
+  })
+
+  test('no unbuilt Type appears', () => {
+    // The other direction. Telling them to support a Type we cannot draw wastes
+    // their time and ours.
+    for (const type of WIDGET_TYPES.filter((t) => !t.built)) {
+      expect(doc).not.toContain(`\`${type.id}\``)
+    }
+  })
+
+  test('every Type states what it needs', () => {
+    // The `needs` column is the whole point for a Publisher deciding what to
+    // declare. An em dash there means `slotsFor` returned nothing.
+    const rowsWithNoNeeds = built.filter((type) => doc.includes(`\`${type.id}\`<br>${type.label} | —`))
+    expect(rowsWithNoNeeds.map((t) => t.id)).toEqual([])
+  })
+
+  test('the four retrieval outcomes are all named', () => {
+    // The easiest part of the contract to get wrong, because nothing in the FRD
+    // says it about the API — only about the display.
+    for (const outcome of ['rows', 'empty', 'denied', 'withdrawn']) {
+      expect(doc).toContain(`'${outcome}'`)
+    }
+  })
+
+  test('it reports the aggregation split rather than claiming a target', () => {
+    /*
+     * The number is derived, and it is currently unflattering — 3 of 37 send an
+     * aggregated query. If this document ever states a round number by hand,
+     * it has stopped being a report.
+     */
+    const aggregated = built.filter((type) => {
+      const sample = SAMPLES[type.id]
+      const spec = { id: 'doc', typeId: type.id, ...sample }
+      return queryFor(spec, requireDataset(sample.datasetId)).measures !== undefined
+    })
+
+    expect(doc).toContain(`**${aggregated.length} currently send an aggregated`)
+    expect(doc).toContain(`${built.length - aggregated.length} ask for records`)
+  })
+
+  test('it says what we will never ask for', () => {
+    // Writes, joins and formatting. Each has cost someone a sprint somewhere.
+    expect(doc).toContain('Writes.')
+    expect(doc).toContain('Joins.')
+    expect(doc).toContain('read-only')
   })
 })
