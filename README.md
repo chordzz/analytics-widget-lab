@@ -2,6 +2,11 @@
 
 Sandbox for building the Analytics frontend ahead of the real repository, so the data structures and configurations are settled before the migration lands. Plan: [`../Analytics_Frontend_Plan.md`](../Analytics_Frontend_Plan.md). Requirements: the Analytics FRD.
 
+> **New here? Read [`ENGINEERING.md`](ENGINEERING.md) first.** This file is the
+> phase-by-phase record of the requirements work. `ENGINEERING.md` is the
+> orientation: how the repository is arranged, why it contains two applications,
+> and what wiring a backend actually involves.
+
 Standalone Vite + React + TypeScript + Tailwind 4. Not a consumer of `@SMCDAO/ui` — styling goes through CSS custom properties in `src/index.css` so the whole surface can be re-skinned against the real design system later.
 
 ## Commands
@@ -9,12 +14,12 @@ Standalone Vite + React + TypeScript + Tailwind 4. Not a consumer of `@SMCDAO/ui
 ```bash
 bun install
 bun dev              # the eligibility explorer
-bun test             # 100 tests
+bun test             # 437 tests
 bun run typecheck
 bun run docs         # regenerate the contract documentation
 ```
 
-`bun run build`'s bundling step currently fails in this environment on a Node/Bun `node:util.styleText` mismatch (Vite 8 + rolldown against Node v16) — unrelated to the code. `bun run typecheck` and `bun test` are the reliable gates; `bun dev` runs fine.
+`bun run build` needs Node 20.19+ or 22.12+ (Vite 8's `engines`). On the Node v16 default it dies on a `node:util.styleText` mismatch, which is the environment and not the code. Either of these works: `bunx --bun vite build`, or `nvm use 22.23.0 && bun run build`. `bun test` and `bun run typecheck` run on Bun and are unaffected.
 
 ## Status — Phase 1 complete
 
