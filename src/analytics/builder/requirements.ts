@@ -23,8 +23,14 @@
 
 import { WIDGET_TYPES, widgetType } from '../widgets/catalog'
 import type { WidgetType } from '../widgets/catalog'
-import { isCoordinate, isGeographic, type Dataset, type Field, type FieldRole } from '../data/types'
-import { rowCountOf, rowsFor } from '../data/datasets'
+import {
+  fieldOf,
+  isCoordinate,
+  isGeographic,
+  type Dataset,
+  type Field,
+  type FieldRole,
+} from '../data/types'
 import type { WidgetMapping } from '../widgets/Widget'
 
 export type SlotId = keyof WidgetMapping
@@ -293,12 +299,16 @@ export const suitsType = (dataset: Dataset, typeId: string): boolean =>
 
 // --- automatic mapping ------------------------------------------------------
 
-/** Distinct values of a field. Cheap enough at these row counts. */
-function distinctCount(dataset: Dataset, key: string): number {
-  const seen = new Set<unknown>()
-  for (const row of rowsFor(dataset.id)) seen.add(row[key])
-  return seen.size
-}
+/**
+ * Distinct values of a Field, as declared rather than counted.
+ *
+ * This used to scan the records. It cannot any more, and should not have: an
+ * Author's tool deciding which chart to *offer* would be performing a retrieval
+ * to do it, which is the thing FR-DP-11 exists to prevent. The count is
+ * published metadata now — Finding 16.
+ */
+const distinctCount = (dataset: Dataset, key: string): number =>
+  fieldOf(dataset, key)?.distinctCount ?? 0
 
 /**
  * Beyond this many rows, a near-unique dimension is an identifier.
@@ -338,7 +348,7 @@ function groupingScore(dataset: Dataset, field: Field): number {
   if (field.role === 'measure') return isCoordinate(field) ? -1 : 0
 
   const distinct = distinctCount(dataset, field.key)
-  const rows = rowCountOf(dataset.id) || 1
+  const rows = dataset.recordCount ?? 1
 
   if (distinct < 2) return 0
   if (rows > IDENTIFIER_ROWS && distinct > rows * 0.5) return 0

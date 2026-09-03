@@ -112,6 +112,17 @@ export type { WidgetSpec, WidgetMapping } from './widgets/Widget'
 export { FAMILIES, WIDGET_TYPES, widgetType, typesInFamily, coverage } from './widgets/catalog'
 export type { AnalyticsTheme } from './theme/tokens'
 export { seriesColor, statusColor, token } from './theme/tokens'
-export { datasets, datasetById } from './data/datasets'
-export type { Dataset, Field, Row } from './data/types'
+/*
+ * The data surface a host gets.
+ *
+ * This used to export the fixture library itself — `datasets` and
+ * `datasetById` — which was honest while the module owned its own mock data and
+ * is wrong now that it owns a boundary instead. A host with a real Catalogue
+ * passes its adapters to `AnalyticsDataProvider`; a host without one gets the
+ * fixtures by default and never has to know.
+ */
+export { AnalyticsDataProvider, useCatalogue, useDataset, useDatasets } from './data/AnalyticsData'
+export type { AnalyticsDataProviderProps } from './data/AnalyticsData'
+export { FixtureCatalogue, FixtureRetrieval } from './data/adapters'
+export type { Dataset, Field, Row, ValueFormat } from './data/types'
 export type { ScreenId } from './shell/nav'

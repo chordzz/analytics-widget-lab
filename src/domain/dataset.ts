@@ -100,6 +100,18 @@ interface FieldBase {
   semantic?: FieldSemantic
   /** D12 — how the values read. See ValueFormat. */
   format?: ValueFormat
+  /**
+   * PROPOSED — Finding 16. How many distinct values this Field holds.
+   *
+   * Needed to tell a category from an identifier without reading the records.
+   * A Dataset with a near-unique Dimension is either a list of countries or a
+   * table of transaction ids, and the choice of grouping axis turns on which:
+   * putting an id on an axis draws two thousand marks. Deriving it requires a
+   * scan, so an Author's tool either receives it as metadata or performs a
+   * retrieval merely to *offer* a chart — which FR-DP-11 is precisely trying to
+   * avoid.
+   */
+  distinctCount?: number
 }
 
 /** A Field whose values identify or categorize records. */
@@ -139,6 +151,15 @@ export interface Dataset {
    * many records"; record volume is not expressible in the published model.
    */
   recordVolume?: 'few' | 'many'
+  /**
+   * PROPOSED — Finding 16. How many records the Dataset holds.
+   *
+   * Strictly more useful than `recordVolume` and subsumes it: "many" is a
+   * threshold over this number, and a threshold nobody can see is a threshold
+   * nobody can agree with. Same motivation — a Catalogue that cannot say how
+   * big a Dataset is forces a retrieval to find out.
+   */
+  recordCount?: number
   /**
    * D5 — Visualization Types this Dataset is *meant* for, by id.
    *

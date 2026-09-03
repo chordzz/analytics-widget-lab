@@ -20,10 +20,11 @@ import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactElement } from 'react'
 
-import { Widget } from './Widget'
+import { WidgetView } from './Widget'
 import { SAMPLES } from './samples'
 import { WIDGET_TYPES } from './catalog'
 import { datasets, requireDataset, rowsFor } from '../data/datasets'
+import { rowsForWidget } from '../data/query'
 import type { Field, Row } from '../data/types'
 import * as P from './primitives'
 
@@ -48,7 +49,14 @@ describe('every built widget type', () => {
     for (const type of builtTypes) {
       const markup = render(
         type.id,
-        <Widget spec={{ id: 'test', typeId: type.id, ...SAMPLES[type.id] }} />,
+        <WidgetView
+          spec={{ id: 'test', typeId: type.id, ...SAMPLES[type.id] }}
+          dataset={requireDataset(SAMPLES[type.id].datasetId)}
+          rows={rowsForWidget(
+            { id: 'test', typeId: type.id, ...SAMPLES[type.id] },
+            requireDataset(SAMPLES[type.id].datasetId),
+          )}
+        />,
       )
       expect(markup.length).toBeGreaterThan(0)
     }
@@ -60,7 +68,14 @@ describe('every built widget type', () => {
     for (const type of builtTypes) {
       const markup = render(
         type.id,
-        <Widget spec={{ id: 'test', typeId: type.id, ...SAMPLES[type.id] }} />,
+        <WidgetView
+          spec={{ id: 'test', typeId: type.id, ...SAMPLES[type.id] }}
+          dataset={requireDataset(SAMPLES[type.id].datasetId)}
+          rows={rowsForWidget(
+            { id: 'test', typeId: type.id, ...SAMPLES[type.id] },
+            requireDataset(SAMPLES[type.id].datasetId),
+          )}
+        />,
       )
       expect({ type: type.id, broken: markup.includes('No widget type') }).toEqual({
         type: type.id,
@@ -79,7 +94,12 @@ describe('every built widget type', () => {
       const described = requireDataset(sample.datasetId)
       const markup = render(
         `${type.id} (empty)`,
-        <Widget spec={{ id: 'test', typeId: type.id, ...sample }} state="empty" />,
+        <WidgetView
+          spec={{ id: 'test', typeId: type.id, ...sample }}
+          dataset={described}
+          rows={[]}
+          state="empty"
+        />,
       )
       expect(markup).toContain('No data')
       expect(described.fields.length).toBeGreaterThan(0)
@@ -92,7 +112,11 @@ describe('every built widget type', () => {
       for (const state of ['loading', 'denied', 'withdrawn', 'failed'] as const) {
         const markup = render(
           `${type.id} (${state})`,
-          <Widget spec={{ id: 'test', typeId: type.id, ...sample }} state={state} />,
+          <WidgetView
+            spec={{ id: 'test', typeId: type.id, ...sample }}
+            dataset={requireDataset(sample.datasetId)}
+            state={state}
+          />,
         )
         expect(markup.length).toBeGreaterThan(0)
       }

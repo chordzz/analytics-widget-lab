@@ -18,11 +18,11 @@
  * approve is what gets placed.
  */
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Widget, type WidgetMapping, type WidgetSpec } from '../widgets/Widget'
 import { FAMILIES, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
-import { datasets, datasetById } from '../data/datasets'
+import { useDatasets } from '../data/AnalyticsData'
 import { FieldMapper, fieldSummary } from './FieldMapper'
 import {
   autoMap,
@@ -65,11 +65,14 @@ export function WidgetComposer({
   onCommit: (draft: ComposerDraft) => void
   onCancel: () => void
 }) {
+  const { datasets } = useDatasets()
+  const byId = (id: string) => datasets.find((entry) => entry.id === id)
+
   const [datasetId, setDatasetId] = useState(initial?.datasetId ?? startWith?.datasetId ?? '')
   const [typeId, setTypeId] = useState(initial?.typeId ?? '')
   const [mapping, setMapping] = useState<WidgetMapping>(initial?.mapping ?? {})
   const [title, setTitle] = useState(
-    initial?.title ?? (startWith ? (datasetById(startWith.datasetId)?.name ?? '') : ''),
+    initial?.title ?? '',
   )
   /*
    * Whether the title is the person's or ours.
@@ -81,10 +84,25 @@ export function WidgetComposer({
    * title silently keeps naming data the widget no longer uses.
    */
   const [titled, setTitled] = useState(Boolean(initial?.title))
+
+  /*
+   * Seed the title from the handed-off source once the Catalogue has answered.
+   *
+   * It used to be read synchronously in `useState`, which a port cannot do. The
+   * guard is `titled` rather than "is the title empty": someone who clears the
+   * field on purpose should not have it filled back in when a describe lands.
+   */
+  useEffect(() => {
+    if (titled || !startWith) return
+    const named = byId(startWith.datasetId)?.name
+    if (named) setTitle(named)
+    // `byId` closes over `datasets`, which is the dependency that matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasets, startWith, titled])
   const [span, setSpan] = useState(initial?.span ?? 0)
   const [query, setQuery] = useState('')
 
-  const dataset = datasetId ? datasetById(datasetId) : undefined
+  const dataset = datasetId ? byId(datasetId) : undefined
   const type = typeId ? widgetType(typeId) : undefined
 
   /*
@@ -94,7 +112,7 @@ export function WidgetComposer({
    * cleared rather than left in place broken.
    */
   const chooseDataset = (nextId: string) => {
-    const next = datasetById(nextId)
+    const next = byId(nextId)
     setDatasetId(nextId)
     if (!next) return
 

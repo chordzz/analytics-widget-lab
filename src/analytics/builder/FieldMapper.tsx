@@ -12,7 +12,6 @@
  */
 
 import { candidatesFor, slotsFor, type Slot } from './requirements'
-import { rowCountOf } from '../data/datasets'
 import type { Dataset, Field } from '../data/types'
 import type { WidgetMapping } from '../widgets/Widget'
 
@@ -214,5 +213,5 @@ export function fieldSummary(dataset: Dataset): string {
     count('time-dimension') > 0 && `${count('time-dimension')} time`,
   ].filter(Boolean)
 
-  return `${plural(rowCountOf(dataset.id), 'row')} · ${parts.join(', ')}`
+  return `${plural(dataset.recordCount ?? 0, 'row')} · ${parts.join(', ')}`
 }

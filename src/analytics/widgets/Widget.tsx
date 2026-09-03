@@ -9,8 +9,7 @@
 
 import { WidgetCard, type WidgetAction, type WidgetState } from './WidgetCard'
 import { widgetType } from './catalog'
-import { datasetById } from '../data/datasets'
-import { rowsForWidget } from '../data/query'
+import { useDataset, useWidgetRows } from '../data/AnalyticsData'
 import { fieldOf } from '../data/types'
 import {
   ActivityFeed,
@@ -36,7 +35,7 @@ import {
   Treemap,
   TrendChart,
 } from './primitives'
-import type { Row } from '../data/types'
+import type { Dataset, Row } from '../data/types'
 import type { StatusTone } from '../theme/tokens'
 
 /** Which fields of the bound dataset play which part. */
@@ -92,20 +91,44 @@ export interface WidgetProps {
   height?: number
 }
 
-export function Widget({ spec, state, actions, selected, onSelect, height }: WidgetProps) {
-  const type = widgetType(spec.typeId)
-  const dataset = datasetById(spec.datasetId)
+export interface WidgetViewProps extends WidgetProps {
+  /** The bound Dataset's description. Null while unknown or withdrawn. */
+  dataset: Dataset | null
+  rows?: readonly Row[]
+  errorMessage?: string
+}
 
-  // A spec pointing at a missing type or dataset is a wiring bug, not a data
-  // state — say so plainly rather than rendering an empty chart.
-  if (!type || !dataset) {
+/**
+ * A widget, drawn from rows that are already in hand.
+ *
+ * Pure: no fetching, no effects, no context. That is what makes it renderable on
+ * a server, in a test, and inside a host that already has the rows — and it is
+ * the same split the workbench draws between `WidgetHost` and `WidgetFrame`.
+ * `Widget` below is the thin asynchronous wrapper.
+ */
+export function WidgetView({
+  spec,
+  dataset,
+  rows = [],
+  state = 'ready',
+  actions,
+  selected,
+  onSelect,
+  height,
+  errorMessage,
+}: WidgetViewProps) {
+  const type = widgetType(spec.typeId)
+
+  // A spec pointing at a missing type is a wiring bug, not a data state — say so
+  // plainly rather than rendering an empty chart. A missing *dataset* is not the
+  // same thing any more: it can mean withdrawn, or denied, or simply not
+  // arrived, so that judgement belongs to whoever resolved the state.
+  if (!type) {
     return (
       <WidgetCard
         title={spec.title ?? spec.typeId}
         state="failed"
-        errorMessage={
-          !type ? `No widget type '${spec.typeId}'.` : `No dataset '${spec.datasetId}'.`
-        }
+        errorMessage={`No widget type '${spec.typeId}'.`}
       />
     )
   }
@@ -121,16 +144,6 @@ export function Widget({ spec, state, actions, selected, onSelect, height }: Wid
     )
   }
 
-  /*
-   * Rows are fetched separately from the description now, which is the shape a
-   * backend imposes. Still synchronous — Stage 5 puts a port here — but the
-   * *inference* below is already on borrowed time: Stage 3 replaces it with a
-   * state the response carries. A row count cannot tell "authorized, nothing to
-   * say" from "not authorized" from "the Dataset is gone", and rendering the
-   * last two as `empty` teaches a Viewer the figure is zero.
-   */
-  const rows = rowsForWidget(spec, dataset)
-  const resolved: WidgetState = state ?? (rows.length === 0 ? 'empty' : 'ready')
   const bare = type.family === 'single-value' || type.id === 'status-indicator'
   // Lists and tables read as text, so they keep the wider inset. Plots give
   // the padding back to the plot.
@@ -142,7 +155,8 @@ export function Widget({ spec, state, actions, selected, onSelect, height }: Wid
     <WidgetCard
       title={spec.title ?? type.label}
       subtitle={spec.subtitle}
-      state={resolved}
+      state={state}
+      errorMessage={errorMessage}
       actions={actions}
       selected={selected}
       onSelect={onSelect}
@@ -150,8 +164,62 @@ export function Widget({ spec, state, actions, selected, onSelect, height }: Wid
       textLed={textLed}
       style={height ? { height } : undefined}
     >
-      {renderBody(spec, type.id, rows, dataset)}
+      {state === 'ready' && dataset ? renderBody(spec, type.id, rows, dataset) : null}
     </WidgetCard>
+  )
+}
+
+/**
+ * A widget that fetches its own rows.
+ *
+ * One retrieval per widget, with its own state, which is FR-DA-10 made
+ * structural: a denial, a failure or a slow response on one card leaves every
+ * other card on the board working. Sharing a request across a board would make
+ * that impossible to honour.
+ *
+ * `state` overrides everything, which is how the Gallery shows all six
+ * treatments without needing a Source System that can produce them on demand.
+ */
+export function Widget({ spec, state: override, actions, selected, onSelect, height }: WidgetProps) {
+  const { dataset, loading: describing } = useDataset(spec.datasetId)
+  const retrieved = useWidgetRows(spec, dataset)
+
+  if (override) {
+    return (
+      <WidgetView
+        spec={spec}
+        dataset={dataset}
+        rows={retrieved.status === 'ready' ? retrieved.rows : []}
+        state={override}
+        actions={actions}
+        selected={selected}
+        onSelect={onSelect}
+        height={height}
+      />
+    )
+  }
+
+  // The Catalogue answering "no such Dataset" is a withdrawal from a Viewer's
+  // side: it was bound once, so it existed once. Reading it as a failure would
+  // say the system is broken when the system is working.
+  const state: WidgetState = describing
+    ? 'loading'
+    : !dataset
+      ? 'withdrawn'
+      : retrieved.status
+
+  return (
+    <WidgetView
+      spec={spec}
+      dataset={dataset}
+      rows={retrieved.status === 'ready' ? retrieved.rows : []}
+      state={state}
+      errorMessage={retrieved.status === 'failed' ? retrieved.message : undefined}
+      actions={actions}
+      selected={selected}
+      onSelect={onSelect}
+      height={height}
+    />
   )
 }
 
@@ -159,7 +227,7 @@ function renderBody(
   spec: WidgetSpec,
   typeId: string,
   rows: readonly Row[],
-  dataset: NonNullable<ReturnType<typeof datasetById>>,
+  dataset: Dataset,
 ) {
   const { mapping, options = {} } = spec
 

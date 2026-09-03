@@ -75,10 +75,15 @@ const aggregationsFor = (format: ValueFormat | undefined): Aggregation[] =>
     ? ['average', 'minimum', 'maximum']
     : ['sum', 'average', 'minimum', 'maximum', 'count']
 
-function publishField(draft: DraftField): Field {
+function publishField(draft: DraftField, rows: Row[]): Field {
+  const distinct = new Set(rows.map((row) => row[draft.key])).size
+
   const base = {
     key: draft.key,
     label: draft.label,
+    // Finding 16 — so an Author's tool can tell a category from an identifier
+    // without retrieving records to find out.
+    distinctCount: distinct,
     // You filter on what a record *is* and sort by any of it. A Measure is a
     // poor filter — nobody asks for "revenue equals 41,208".
     filterable: draft.filterable ?? draft.role !== 'measure',
@@ -111,7 +116,9 @@ function publish(draft: Draft): { dataset: Dataset; rows: Row[] } {
       sourceSystem: source,
       classification: classification ?? 'internal',
       exposesPersonalData: exposesPersonalData ?? false,
-      fields: fields.map(publishField),
+      recordCount: rows.length,
+      recordVolume: rows.length >= 50 ? 'many' : 'few',
+      fields: fields.map((field) => publishField(field, rows)),
     },
   }
 }
