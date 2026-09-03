@@ -46,10 +46,14 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
   // store decides whether that means adopting a blank draft or making one — see
   // `ensure-editing`, which is idempotent precisely because this effect is not.
   useEffect(() => {
-    if (!editing) boards.ensureEditing()
+    // Not while the store is still answering. Creating a board because the load
+    // has not resolved yet leaves a blank draft behind on every single visit,
+    // and the one you were actually editing arrives a moment later beside it.
+    if (!boards.loading && !editing) boards.ensureEditing()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing])
+  }, [editing, boards.loading])
 
+  if (boards.loading) return <p className="a-muted">Loading your boards…</p>
   if (!editing) return null
 
   const isEditing = (value: typeof composing): value is PlacedWidget =>

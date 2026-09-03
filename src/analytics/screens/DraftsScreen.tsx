@@ -16,6 +16,8 @@ import type { ScreenId } from '../shell/nav'
 export function DraftsScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const boards = useBoards()
 
+  if (boards.loading) return <p className="a-muted">Loading your boards…</p>
+
   if (boards.drafts.length === 0) {
     return (
       <div className="a-empty">

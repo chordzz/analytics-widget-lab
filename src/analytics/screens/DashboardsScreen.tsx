@@ -25,6 +25,10 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
     boards.published[0] ??
     boards.boards[0]
 
+  // An empty state shown while the store is still answering reads as "you have
+  // nothing", which is a different and more alarming claim than "not yet".
+  if (boards.loading) return <p className="a-muted">Loading your boards…</p>
+
   if (!active) {
     return (
       <div className="a-empty">

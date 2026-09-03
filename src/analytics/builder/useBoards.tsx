@@ -10,30 +10,44 @@
  * clock is injectable in tests.
  */
 
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import {
   boardsReducer,
   boardById,
   draftBoards,
-  loadState,
   publishedBoards,
-  saveState,
   type Board,
   type BoardsAction,
   type BoardsState,
   type LayoutEntry,
 } from './boards'
 import { seedBoards } from './seed'
+import { LocalBoardStore, type BoardStorePort } from './store'
 import type { WidgetSpec } from '../widgets/Widget'
 
-const today = () => new Date().toISOString().slice(0, 10)
-
-/** Unique enough for a client-side board; no server is issuing these. */
-const newId = (prefix: string) =>
-  `${prefix}-${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`
+/**
+ * How long to sit on changes before writing them.
+ *
+ * `GridBoard` already commits once per gesture rather than once per frame; this
+ * is the same idea one layer out. Against localStorage it barely matters, and
+ * against a network it is the difference between one request per drag and one
+ * per keystroke in the rename field.
+ */
+const WRITE_DEBOUNCE_MS = 400
 
 interface BoardsContextValue {
   state: BoardsState
+  /** True until the store has answered. Nothing below it is meaningful yet. */
+  loading: boolean
   dispatch: (action: BoardsAction) => void
   boards: Board[]
   drafts: Board[]
@@ -63,18 +77,71 @@ interface BoardsContextValue {
 
 const BoardsContext = createContext<BoardsContextValue | null>(null)
 
-export function BoardsProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(boardsReducer, null, () => loadState(seedBoards))
+export function BoardsProvider({
+  children,
+  store,
+}: {
+  children: ReactNode
+  /** Supplied by a host with a real store. Omit to persist locally. */
+  store?: BoardStorePort
+}) {
+  const backing = useMemo(() => store ?? new LocalBoardStore(), [store])
+
+  /*
+   * An empty board list is the honest starting point, not the seed.
+   *
+   * Seeding here and replacing on load would show a board that is not yours for
+   * a frame, and — worse — the persist effect below would race the load and
+   * write the seed over your saved session. `loading` is what callers render
+   * against instead.
+   */
+  const [state, dispatch] = useReducer(boardsReducer, { boards: [], editingId: null })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    saveState(state)
-  }, [state])
+    let live = true
+    backing
+      .load(seedBoards)
+      .then((loaded) => {
+        if (!live) return
+        dispatch({ type: 'replace-all', boards: loaded.boards })
+        if (loaded.editingId) dispatch({ type: 'open-board', id: loaded.editingId })
+        setLoading(false)
+      })
+      .catch(() => live && setLoading(false))
+
+    return () => {
+      live = false
+    }
+  }, [backing])
+
+  /*
+   * Persist after the load, never during it, and never on the first render.
+   *
+   * Without the guard the empty initial state is written the moment the provider
+   * mounts, which erases the saved session before the load that would have
+   * restored it has even resolved.
+   */
+  const settled = useRef(false)
+
+  useEffect(() => {
+    if (loading) return
+    if (!settled.current) {
+      settled.current = true
+      return
+    }
+
+    const timer = setTimeout(() => void backing.save(state), WRITE_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [backing, state, loading])
 
   const value = useMemo<BoardsContextValue>(() => {
-    const at = today()
+    const at = backing.now()
+    const newId = (prefix: string) => backing.mintId(prefix)
 
     return {
       state,
+      loading,
       dispatch,
       boards: state.boards,
       drafts: draftBoards(state),
@@ -112,7 +179,7 @@ export function BoardsProvider({ children }: { children: ReactNode }) {
       applyLayout: (boardId, placements) =>
         dispatch({ type: 'apply-layout', boardId, placements, at }),
     }
-  }, [state])
+  }, [state, loading, backing])
 
   return <BoardsContext.Provider value={value}>{children}</BoardsContext.Provider>
 }
