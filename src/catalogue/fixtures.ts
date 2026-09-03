@@ -162,7 +162,7 @@ export const corridorCoverage: Dataset = {
       role: 'dimension',
       filterable: true,
       sortable: true,
-      semantic: 'geographic-location',
+      semantic: 'geographic-area',
     },
     {
       key: 'corridor',

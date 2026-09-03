@@ -156,7 +156,7 @@ describe('autoMap', () => {
         const keys = Array.isArray(value) ? value : value ? [value] : []
         for (const key of keys) {
           const field = dataset.fields.find((candidate) => candidate.key === key)!
-          expect(entry.accepts).toContain(field.kind)
+          expect(entry.accepts).toContain(field.role)
         }
       }
     }

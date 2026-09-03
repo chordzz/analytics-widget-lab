@@ -267,9 +267,9 @@ Visualization Types:
 Conditions checked:
 
 - at least one Measure
-- a location-typed Dimension
-  - **Cannot be determined today.** §4.2 requires a "location-typed Dimension". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type.
-  - Would be resolved by: proposed Field semantic 'geographic-location'
+- a Field naming a place, or a latitude and longitude pair
+  - **Cannot be determined today.** §4.2 requires a "location-typed Dimension". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type. It also cannot say that two Measures are a coordinate pair rather than two figures.
+  - Would be resolved by: proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude'
 
 Visualization Types:
 
@@ -382,7 +382,7 @@ Declared shape: 1 Dimension(s), 1 Time Dimension(s), 1 Measure(s)
 | Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
 | Correlation | No | Missing: at least 2 Measures |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantic 'geographic-location' |
+| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | Yes | — |
@@ -403,7 +403,7 @@ Declared shape: 1 Dimension(s), 1 Time Dimension(s), 2 Measure(s)
 | Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
 | Correlation | Yes | — |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantic 'geographic-location' |
+| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | Yes | — |
@@ -424,7 +424,7 @@ Declared shape: 1 Dimension(s), 1 Time Dimension(s), 1 Measure(s)
 | Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
 | Correlation | No | Missing: at least 2 Measures |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantic 'geographic-location' |
+| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | Yes | — |
@@ -445,7 +445,7 @@ Declared shape: 2 Dimension(s), 0 Time Dimension(s), 1 Measure(s)
 | Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
 | Correlation | No | Missing: at least 2 Measures |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantic 'geographic-location' |
+| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | No | Missing: at least one Time Dimension |

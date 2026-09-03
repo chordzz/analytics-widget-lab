@@ -12,6 +12,7 @@
  */
 
 import { candidatesFor, slotsFor, type Slot } from './requirements'
+import { rowCountOf } from '../data/datasets'
 import type { Dataset, Field } from '../data/types'
 import type { WidgetMapping } from '../widgets/Widget'
 
@@ -200,7 +201,7 @@ function MultiSlot({
 
 /** Fields a dataset offers, for the dataset picker's summary line. */
 export function fieldSummary(dataset: Dataset): string {
-  const count = (kind: Field['kind']) => dataset.fields.filter((field) => field.kind === kind).length
+  const count = (role: Field['role']) => dataset.fields.filter((field) => field.role === role).length
 
   const plural = (n: number, one: string, many = `${one}s`) =>
     n === 1 ? `1 ${one}` : `${n.toLocaleString()} ${many}`
@@ -210,8 +211,8 @@ export function fieldSummary(dataset: Dataset): string {
     count('dimension') > 0 && plural(count('dimension'), 'dimension'),
     // "1 time" and "2 time" both read fine; "times" would read as a count of
     // occurrences rather than of fields.
-    count('time') > 0 && `${count('time')} time`,
+    count('time-dimension') > 0 && `${count('time-dimension')} time`,
   ].filter(Boolean)
 
-  return `${plural(dataset.rows.length, 'row')} · ${parts.join(', ')}`
+  return `${plural(rowCountOf(dataset.id), 'row')} · ${parts.join(', ')}`
 }

@@ -9,7 +9,7 @@
 
 import { WidgetCard, type WidgetAction, type WidgetState } from './WidgetCard'
 import { widgetType } from './catalog'
-import { datasetById } from '../data/datasets'
+import { datasetById, rowsFor } from '../data/datasets'
 import { fieldOf } from '../data/types'
 import {
   ActivityFeed,
@@ -120,7 +120,16 @@ export function Widget({ spec, state, actions, selected, onSelect, height }: Wid
     )
   }
 
-  const resolved: WidgetState = state ?? (dataset.rows.length === 0 ? 'empty' : 'ready')
+  /*
+   * Rows are fetched separately from the description now, which is the shape a
+   * backend imposes. Still synchronous — Stage 5 puts a port here — but the
+   * *inference* below is already on borrowed time: Stage 3 replaces it with a
+   * state the response carries. A row count cannot tell "authorized, nothing to
+   * say" from "not authorized" from "the Dataset is gone", and rendering the
+   * last two as `empty` teaches a Viewer the figure is zero.
+   */
+  const rows = rowsFor(dataset.id)
+  const resolved: WidgetState = state ?? (rows.length === 0 ? 'empty' : 'ready')
   const bare = type.family === 'single-value' || type.id === 'status-indicator'
   // Lists and tables read as text, so they keep the wider inset. Plots give
   // the padding back to the plot.
@@ -140,7 +149,7 @@ export function Widget({ spec, state, actions, selected, onSelect, height }: Wid
       textLed={textLed}
       style={height ? { height } : undefined}
     >
-      {renderBody(spec, type.id, dataset.rows, dataset)}
+      {renderBody(spec, type.id, rows, dataset)}
     </WidgetCard>
   )
 }

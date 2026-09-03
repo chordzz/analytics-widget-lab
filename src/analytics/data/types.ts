@@ -1,64 +1,70 @@
 /**
- * The module's data shape.
+ * The module's view of the publication model.
  *
- * Deliberately lighter than the FRD's publication model. This module exists to
- * design widgets, so a dataset needs to say just enough for a widget to draw it
- * and for a picker to offer sensible fields. Governance, aggregations and
- * authorization live on the other track.
+ * This file used to *define* a Dataset — a lighter one, with `kind` where the
+ * FRD says `role` and nothing at all about who published it or who may see it.
+ * That was the right call while the module was a parallel track whose job was
+ * designing widgets. It is the wrong call now: two definitions of Dataset is how
+ * the two tracks came apart, and the FRD's is the one that traces to a
+ * requirement.
  *
- * The vocabulary is kept aligned with the FRD — Dataset, Dimension, Measure,
- * Time Dimension — so the two converge cleanly later.
+ * So the model comes from `domain/dataset.ts` and this file is what the module
+ * needs on top of it:
+ *
+ *   - `Row`, because a widget draws rows and the model deliberately does not
+ *     carry any. Metadata and records are answered by different ports.
+ *   - Role helpers, so a caller says `measures(dataset)` rather than filtering
+ *     on a discriminant every time.
+ *
+ * Merge Plan Stage 2. The extensions the module needed — `format`, the
+ * geographic semantics, `suits` — went *into* the model as numbered divergences
+ * rather than staying here as a second opinion about what a Field is.
  */
 
-export type FieldKind = 'dimension' | 'time' | 'measure'
+import type { DatasetRow } from '../../domain/query'
+import type { Dataset, Field, FieldRole } from '../../domain/dataset'
 
-/** How a value should read. Drives axis ticks, tooltips and table cells alike. */
-export type ValueFormat = 'number' | 'currency' | 'percent' | 'compact' | 'duration' | 'text'
+export type {
+  Aggregation,
+  DataClassification,
+  Dataset,
+  Dimension,
+  Field,
+  FieldRole,
+  FieldSemantic,
+  Measure,
+  TimeDimension,
+  ValueFormat,
+} from '../../domain/dataset'
 
-export interface Field {
-  key: string
-  label: string
-  kind: FieldKind
-  format?: ValueFormat
-  /**
-   * Marks a field as geographic.
-   *
-   * `country`/`region` name a place; `lat`/`lng` locate one. The coordinate
-   * roles matter as much as the naming ones: latitude is a Measure by kind, so
-   * without the marker it is offered as the measure to rank countries by, and a
-   * ranked list happily sorts them by how far north they are.
-   */
-  geo?: 'country' | 'region' | 'lat' | 'lng'
-}
+export { isCoordinate, isGeographic } from '../../domain/dataset'
 
-export type Row = Record<string, string | number | null>
+/**
+ * One record.
+ *
+ * The same type the retrieval port returns, aliased rather than redeclared —
+ * the primitives take rows from wherever the host got them, and a second
+ * definition would let the two drift into disagreeing about whether a cell may
+ * be null.
+ */
+export type Row = DatasetRow
 
-export interface Dataset {
-  id: string
-  name: string
-  description: string
-  /** Which system published it. Shown in the picker for orientation. */
-  source: string
-  fields: Field[]
-  rows: Row[]
-  /**
-   * Widget types this dataset is *meant* for, by id.
-   *
-   * Field kinds say what a dataset can technically feed; they cannot say what
-   * it means. Any table with a dimension and a measure satisfies a funnel, but
-   * only one of them describes ordered stages. That is semantics, and the only
-   * honest source for it is the person who wrote the dataset — so they declare
-   * it, and the builder offers it first. Purely a hint: nothing is excluded.
-   */
-  suits?: string[]
-}
+export const fieldsOfRole = (dataset: Dataset, role: FieldRole): Field[] =>
+  dataset.fields.filter((field) => field.role === role)
 
-export const fieldsOfKind = (dataset: Dataset, kind: FieldKind): Field[] =>
-  dataset.fields.filter((field) => field.kind === kind)
+export const measures = (dataset: Dataset) => fieldsOfRole(dataset, 'measure')
+export const dimensions = (dataset: Dataset) => fieldsOfRole(dataset, 'dimension')
+export const timeFields = (dataset: Dataset) => fieldsOfRole(dataset, 'time-dimension')
 
-export const measures = (dataset: Dataset) => fieldsOfKind(dataset, 'measure')
-export const dimensions = (dataset: Dataset) => fieldsOfKind(dataset, 'dimension')
-export const timeFields = (dataset: Dataset) => fieldsOfKind(dataset, 'time')
+/**
+ * Dimensions, including Time Dimensions.
+ *
+ * Per the FRD's Definitions table a Time Dimension *is* a Dimension, so it
+ * counts wherever a Dimension is required. Slots that need a non-temporal one
+ * say so explicitly.
+ */
+export const allDimensions = (dataset: Dataset): Field[] =>
+  dataset.fields.filter((field) => field.role !== 'measure')
 
 export const fieldOf = (dataset: Dataset, key: string): Field | undefined =>
   dataset.fields.find((field) => field.key === key)

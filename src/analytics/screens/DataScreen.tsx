@@ -11,7 +11,7 @@
  */
 
 import { useState } from 'react'
-import { datasets } from '../data/datasets'
+import { datasets, rowCountOf, rowsFor } from '../data/datasets'
 import { DataTable } from '../widgets/primitives'
 import { WidgetCard } from '../widgets/WidgetCard'
 import { typesFor } from '../builder/requirements'
@@ -33,16 +33,16 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
         const open = openId === dataset.id
         const buildable = typesFor(dataset).length
         const counts = {
-          time: dataset.fields.filter((f) => f.kind === 'time').length,
-          dimensions: dataset.fields.filter((f) => f.kind === 'dimension').length,
-          measures: dataset.fields.filter((f) => f.kind === 'measure').length,
+          time: dataset.fields.filter((f) => f.role === 'time-dimension').length,
+          dimensions: dataset.fields.filter((f) => f.role === 'dimension').length,
+          measures: dataset.fields.filter((f) => f.role === 'measure').length,
         }
 
         return (
           <WidgetCard
             key={dataset.id}
             title={dataset.name}
-            subtitle={`${dataset.source} · ${dataset.rows.length.toLocaleString()} rows`}
+            subtitle={`${dataset.sourceSystem} · ${rowCountOf(dataset.id).toLocaleString()} rows`}
             actions={[
               {
                 label: open ? 'Hide sample' : 'Show sample',
@@ -91,7 +91,7 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
                   >
                     {field.label}
                     <span style={{ color: 'var(--a-text-muted)' }}>
-                      {field.kind === 'time' ? 'time' : field.kind === 'measure' ? 'measure' : 'dimension'}
+                      {field.role === 'time-dimension' ? 'time' : field.role === 'measure' ? 'measure' : 'dimension'}
                     </span>
                   </span>
                 ))}
@@ -111,7 +111,7 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
 
               {open && (
                 <div style={{ marginTop: 'var(--a-space-4)', maxHeight: 280 }}>
-                  <DataTable data={dataset.rows} columns={dataset.fields} limit={20} />
+                  <DataTable data={rowsFor(dataset.id)} columns={dataset.fields} limit={20} />
                 </div>
               )}
             </div>

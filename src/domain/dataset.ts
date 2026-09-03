@@ -34,10 +34,59 @@ export type DataClassification = 'public' | 'internal' | 'confidential' | 'restr
  * UI instead of being quietly papered over.
  */
 export type FieldSemantic =
-  | 'geographic-location' // unblocks Geospatial
+  /**
+   * Names a place — a country, a region. Unblocks Geospatial's choropleth
+   * route.
+   */
+  | 'geographic-area'
+  /**
+   * Locates one. Latitude and longitude are **separate** semantics rather than
+   * one `geographic-point`, because a point map needs both and has to know
+   * which is which.
+   *
+   * Finding 15 (Merge Plan §5) is why these three replaced the single
+   * `geographic-location` this type first carried. Two failures made the coarse
+   * version untenable, and both are in this repository's history:
+   *
+   *   - Geospatial's clause read `semantic === 'geographic-location' && role
+   *     !== 'measure'`. Latitude is a Measure by role, so the clause excluded
+   *     precisely the Fields a point map needs, and no Dataset could ever
+   *     satisfy it that way.
+   *   - Without the latitude/longitude distinction a ranked list will rank
+   *     countries by how far north they are, and a point map will accept a
+   *     table of regional sales and plot revenue as a latitude.
+   */
+  | 'geographic-latitude'
+  | 'geographic-longitude'
   | 'additive-total' // unblocks Composition
   | 'state' // unblocks Status via its state-Dimension route
   | 'stage' // unblocks Ranking & Flow via its ordered-stage route
+
+/** Every semantic that says a Field is geographic. */
+export const GEOGRAPHIC_SEMANTICS = [
+  'geographic-area',
+  'geographic-latitude',
+  'geographic-longitude',
+] as const
+
+export const isGeographic = (field: { semantic?: FieldSemantic }): boolean =>
+  field.semantic !== undefined &&
+  (GEOGRAPHIC_SEMANTICS as readonly string[]).includes(field.semantic)
+
+/** A Field holding a coordinate, as opposed to one naming a place. */
+export const isCoordinate = (field: { semantic?: FieldSemantic }): boolean =>
+  field.semantic === 'geographic-latitude' || field.semantic === 'geographic-longitude'
+
+/**
+ * How a Field's values should read.
+ *
+ * D12 — not part of the FRD's published model. It sits here rather than on the
+ * Widget because it is a property of the data and not of any one picture of it:
+ * revenue is a currency in every chart that draws it, and asking each Author to
+ * re-declare that per Widget is how two Widgets over one Field end up disagreeing
+ * about whether it is money. The publisher is the only party that knows.
+ */
+export type ValueFormat = 'number' | 'currency' | 'percent' | 'compact' | 'duration' | 'text'
 
 interface FieldBase {
   key: string
@@ -49,6 +98,8 @@ interface FieldBase {
   sortable: boolean
   /** PROPOSED — see FieldSemantic. */
   semantic?: FieldSemantic
+  /** D12 — how the values read. See ValueFormat. */
+  format?: ValueFormat
 }
 
 /** A Field whose values identify or categorize records. */
@@ -88,6 +139,19 @@ export interface Dataset {
    * many records"; record volume is not expressible in the published model.
    */
   recordVolume?: 'few' | 'many'
+  /**
+   * D5 — Visualization Types this Dataset is *meant* for, by id.
+   *
+   * A hint, never a filter. The invariant that a Dataset is bound to no
+   * Visualization Type still holds: nothing is excluded by this, and every Type
+   * whose Family the Dataset satisfies stays on offer. It reorders the picker so
+   * the publisher's intent shows first.
+   *
+   * It exists because role is not meaning. Any table with a Dimension and a
+   * Measure satisfies a funnel; one of them is *about* funnels, and the only
+   * party who knows which is the publisher.
+   */
+  suits?: string[]
 }
 
 /**
@@ -111,4 +175,8 @@ export function measuresOf(dataset: Dataset): Measure[] {
 
 export function fieldsWithSemantic(dataset: Dataset, semantic: FieldSemantic): Field[] {
   return dataset.fields.filter((f) => f.semantic === semantic)
+}
+
+export function geographicFields(dataset: Dataset): Field[] {
+  return dataset.fields.filter(isGeographic)
 }

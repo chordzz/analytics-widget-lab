@@ -384,11 +384,11 @@
               "undecidable": null
             },
             {
-              "describe": "a location-typed Dimension",
+              "describe": "a Field naming a place, or a latitude and longitude pair",
               "decidableFromPublishedModel": false,
               "undecidable": {
-                "requirement": "§4.2 requires a \"location-typed Dimension\". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type.",
-                "resolvedBy": "proposed Field semantic 'geographic-location'"
+                "requirement": "§4.2 requires a \"location-typed Dimension\". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type. It also cannot say that two Measures are a coordinate pair rather than two figures.",
+                "resolvedBy": "proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude'"
               }
             }
           ]
@@ -609,8 +609,8 @@
     {
       "familyId": "geospatial",
       "familyName": "Geospatial",
-      "requirement": "§4.2 requires a \"location-typed Dimension\". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type.",
-      "resolvedBy": "proposed Field semantic 'geographic-location'"
+      "requirement": "§4.2 requires a \"location-typed Dimension\". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type. It also cannot say that two Measures are a coordinate pair rather than two figures.",
+      "resolvedBy": "proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude'"
     },
     {
       "familyId": "status",

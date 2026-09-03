@@ -83,7 +83,7 @@ export function DataTable({
         <thead>
           <tr>
             {columns.map((column) => {
-              const numeric = column.kind === 'measure'
+              const numeric = column.role === 'measure'
               const active = sort?.key === column.key
 
               return (
@@ -135,7 +135,7 @@ export function DataTable({
           {rows.map((row, index) => (
             <tr key={index}>
               {columns.map((column) => {
-                const numeric = column.kind === 'measure'
+                const numeric = column.role === 'measure'
                 return (
                   <td
                     key={column.key}

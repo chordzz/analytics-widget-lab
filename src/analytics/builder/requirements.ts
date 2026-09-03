@@ -23,7 +23,8 @@
 
 import { WIDGET_TYPES, widgetType } from '../widgets/catalog'
 import type { WidgetType } from '../widgets/catalog'
-import type { Dataset, Field, FieldKind } from '../data/types'
+import { isCoordinate, isGeographic, type Dataset, type Field, type FieldRole } from '../data/types'
+import { rowCountOf, rowsFor } from '../data/datasets'
 import type { WidgetMapping } from '../widgets/Widget'
 
 export type SlotId = keyof WidgetMapping
@@ -33,7 +34,7 @@ export interface Slot {
   label: string
   /** Shown under the control. Says what the choice does, not what it is. */
   help: string
-  accepts: readonly FieldKind[]
+  accepts: readonly FieldRole[]
   /** Fewest fields that make the widget valid. 0 means optional. */
   min: number
   /** Most it will use. Above 1 the slot is an ordered list. */
@@ -51,16 +52,16 @@ export interface Slot {
 
 const MEASURE = ['measure'] as const
 const DIMENSION = ['dimension'] as const
-const TIME = ['time'] as const
+const TIME = ['time-dimension'] as const
 /** An axis that reads either as a category or as a period. */
-const CATEGORY = ['dimension', 'time'] as const
-const ANY = ['dimension', 'time', 'measure'] as const
+const CATEGORY = ['dimension', 'time-dimension'] as const
+const ANY = ['dimension', 'time-dimension', 'measure'] as const
 
 const slot = (
   id: SlotId,
   label: string,
   help: string,
-  accepts: readonly FieldKind[],
+  accepts: readonly FieldRole[],
   min = 1,
   max = 1,
   geo = false,
@@ -241,7 +242,7 @@ export const requiredSlots = (typeId: string): Slot[] =>
 /** Fields of a dataset that could go in a slot. */
 export const candidatesFor = (dataset: Dataset, entry: Slot): Field[] =>
   dataset.fields.filter(
-    (field) => entry.accepts.includes(field.kind) && (!entry.geo || Boolean(field.geo)),
+    (field) => entry.accepts.includes(field.role) && (!entry.geo || isGeographic(field)),
   )
 
 /** Whether a dataset has enough of the right fields for every required slot. */
@@ -295,7 +296,7 @@ export const suitsType = (dataset: Dataset, typeId: string): boolean =>
 /** Distinct values of a field. Cheap enough at these row counts. */
 function distinctCount(dataset: Dataset, key: string): number {
   const seen = new Set<unknown>()
-  for (const row of dataset.rows) seen.add(row[key])
+  for (const row of rowsFor(dataset.id)) seen.add(row[key])
   return seen.size
 }
 
@@ -319,21 +320,25 @@ const IDENTIFIER_ROWS = 50
  * separates a category from an identifier, but only in a long table; see
  * `IDENTIFIER_ROWS`.
  */
-/**
+/*
  * Coordinates are locations, not quantities.
  *
- * Latitude is a Measure by kind, and in `sales-by-country` it is the first one
+ * Latitude is a Measure by role, and in `sales-by-country` it is the first one
  * declared — so a ranked list of countries picks it up and sorts them by how far
- * north they are. Nothing about the kind system prevents that; the geo marker
- * does. Still selectable by hand, just never the automatic answer.
+ * north they are. Nothing about the role system prevents that; the Field's
+ * geographic semantic does. Still selectable by hand, just never the automatic
+ * answer.
+ *
+ * `isCoordinate` now comes from the model rather than being decided again here.
+ * It was a local predicate over the module's own `geo` flag; the same question is
+ * asked by the Geospatial Data Shape, and two answers to it could disagree.
  */
-const isCoordinate = (field: Field): boolean => field.geo === 'lat' || field.geo === 'lng'
 
 function groupingScore(dataset: Dataset, field: Field): number {
-  if (field.kind === 'measure') return isCoordinate(field) ? -1 : 0
+  if (field.role === 'measure') return isCoordinate(field) ? -1 : 0
 
   const distinct = distinctCount(dataset, field.key)
-  const rows = dataset.rows.length || 1
+  const rows = rowCountOf(dataset.id) || 1
 
   if (distinct < 2) return 0
   if (rows > IDENTIFIER_ROWS && distinct > rows * 0.5) return 0
