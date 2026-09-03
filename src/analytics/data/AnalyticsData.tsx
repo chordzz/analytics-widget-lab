@@ -26,6 +26,8 @@ import type { DatasetRetrievalPort, ViewerIdentity } from '../../retrieval/port'
 import type { AuthorizationPort } from '../../access/port'
 import { resolveFailure, resolveRenderState, type WidgetRenderState } from '../../retrieval/render-state'
 import type { Dataset } from '../../domain/dataset'
+import { InMemoryAccessRecorder } from '../../access/fake-access-recorder'
+import type { AccessRecorderPort } from '../../access/port'
 import {
   FixtureCatalogue,
   FixtureRetrieval,
@@ -44,6 +46,8 @@ interface AnalyticsDataValue {
   /** FR-DA-02 — FR-DA-08. Who may see which board, and who a Grant names. */
   authorization: AuthorizationPort
   viewer: ViewerIdentity
+  /** FR-DA-14 — the access record, for a surface that shows it. */
+  recorder: AccessRecorderPort
 }
 
 const AnalyticsDataContext = createContext<AnalyticsDataValue | null>(null)
@@ -59,6 +63,8 @@ export interface AnalyticsDataProviderProps {
   scenarios?: Record<string, Scenario>
   /** Fixture-only latency, so the loading state is designed rather than glimpsed. */
   latencyMs?: number
+  /** FR-DA-14 — where retrievals of personal-data Datasets are recorded. */
+  accessRecorder?: AccessRecorderPort
 }
 
 export function AnalyticsDataProvider({
@@ -69,15 +75,29 @@ export function AnalyticsDataProvider({
   viewer = LOCAL_VIEWER,
   scenarios,
   latencyMs = 0,
+  accessRecorder,
 }: AnalyticsDataProviderProps) {
+  /*
+   * Held across renders rather than rebuilt with the rest.
+   *
+   * An access record that is replaced when the provider re-renders is not a
+   * record — FR-DA-14's whole value is that the entries outlive the session
+   * that made them, and an append-only log behind a `useMemo` would silently
+   * reset whenever `scenarios` changed.
+   */
+  const [recorder] = useState<AccessRecorderPort>(
+    () => accessRecorder ?? new InMemoryAccessRecorder(),
+  )
+
   const value = useMemo<AnalyticsDataValue>(
     () => ({
       viewer,
+      recorder,
       catalogue: catalogue ?? new FixtureCatalogue({ scenarios, latencyMs }),
-      retrieval: retrieval ?? new FixtureRetrieval({ scenarios, latencyMs }),
+      retrieval: retrieval ?? new FixtureRetrieval({ scenarios, latencyMs }, recorder),
       authorization: authorization ?? new LocalAuthorization(),
     }),
-    [catalogue, retrieval, authorization, viewer, scenarios, latencyMs],
+    [catalogue, retrieval, authorization, viewer, scenarios, latencyMs, recorder],
   )
 
   return <AnalyticsDataContext.Provider value={value}>{children}</AnalyticsDataContext.Provider>

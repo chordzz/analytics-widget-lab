@@ -32,7 +32,7 @@ import type {
   ViewerIdentity,
 } from '../../retrieval/port'
 import type { Dataset } from '../../domain/dataset'
-import type { AuthorizationPort, OrgScopeRef } from '../../access/port'
+import type { AccessRecorderPort, AuthorizationPort, OrgScopeRef } from '../../access/port'
 import type { DashboardScope, ShareGrant } from '../../domain/dashboard'
 import type { DatasetQuery } from '../../domain/query'
 import { datasets, datasetById, rowsFor } from './datasets'
@@ -91,15 +91,17 @@ export class FixtureCatalogue implements CataloguePort {
 
 export class FixtureRetrieval implements DatasetRetrievalPort {
   private readonly options: FixtureOptions
+  private readonly recorder?: AccessRecorderPort
 
-  constructor(options: FixtureOptions = {}) {
+  constructor(options: FixtureOptions = {}, recorder?: AccessRecorderPort) {
     this.options = options
+    this.recorder = recorder
   }
 
   async retrieve(
     datasetId: string,
     query: DatasetQuery,
-    _viewer: ViewerIdentity,
+    viewer: ViewerIdentity,
   ): Promise<RetrievalOutcome> {
     await wait(this.options.latencyMs ?? 0)
 
@@ -127,9 +129,36 @@ export class FixtureRetrieval implements DatasetRetrievalPort {
     if (!dataset) return { kind: 'withdrawn' }
 
     const rows = executeQuery(rowsFor(datasetId), query)
-    return rows.length === 0
-      ? { kind: 'empty' }
-      : { kind: 'rows', rows, totalCount: rowsFor(datasetId).length }
+    if (rows.length === 0) return { kind: 'empty' }
+
+    /*
+     * FR-DA-14 — recorded here, and only here.
+     *
+     * Three things about the placement are the requirement rather than
+     * convenience:
+     *
+     *   - **At the boundary, not in a component.** This is the only place that
+     *     knows a retrieval happened. A component would miss the ones it did not
+     *     render and double-count the ones it re-rendered.
+     *   - **Only when data was actually served.** A `denied` or `withdrawn`
+     *     outcome means the Viewer saw nothing, and recording those would assert
+     *     someone accessed personal data when they did not — which is worse than
+     *     no record, because it is a false one.
+     *   - **Only for Datasets that say they carry personal data.** Logging every
+     *     retrieval would bury the entries that matter under the ones that do
+     *     not, and FR-DA-14 asks for the former.
+     */
+    if (dataset.exposesPersonalData && this.recorder) {
+      void this.recorder.record({
+        at: new Date().toISOString(),
+        viewerId: viewer.id,
+        viewerName: viewer.displayName,
+        datasetId: dataset.id,
+        datasetName: dataset.name,
+      })
+    }
+
+    return { kind: 'rows', rows, totalCount: rowsFor(datasetId).length }
   }
 
   async listFilterValues(

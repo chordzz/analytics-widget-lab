@@ -378,6 +378,9 @@ const transactions = (): Draft => {
     suits: ['histogram', 'box-plot'],
     name: 'Transactions',
     description: 'Two thousand individual transactions with a long-tailed amount.',
+    /** Individual financial records, at record grain rather than aggregated. */
+    classification: 'confidential',
+    exposesPersonalData: true,
     source: 'Payments',
     fields: [
       { key: 'id', label: 'Transaction', role: 'dimension' },
@@ -481,6 +484,15 @@ const activityEvents = (): Draft => {
     name: 'Activity events',
     description: 'Sixty timestamped platform events with actor and severity.',
     source: 'Audit',
+    /*
+     * FR-DA-14 — `actor` names a person, so every retrieval of this Dataset is
+     * one someone may later have to account for. Declared here rather than left
+     * false for all thirteen, because an access record with nothing in it
+     * demonstrates nothing: the requirement is only testable if some Dataset
+     * actually triggers it.
+     */
+    classification: 'restricted',
+    exposesPersonalData: true,
     fields: [
       { key: 'at', label: 'When', role: 'time-dimension' },
       { key: 'actor', label: 'Actor', role: 'dimension' },

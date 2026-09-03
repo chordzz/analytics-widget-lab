@@ -16,6 +16,7 @@ import { DataTable } from '../widgets/primitives'
 import { WidgetCard } from '../widgets/WidgetCard'
 import { typesFor } from '../builder/requirements'
 import { useComposeIntent } from '../builder/useComposeIntent'
+import { AccessRecordPanel } from './AccessRecordPanel'
 import type { Dataset } from '../data/types'
 import type { ScreenId } from '../shell/nav'
 
@@ -33,7 +34,8 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
   }
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--a-space-4)' }}>
+    <>
+      <div style={{ display: 'grid', gap: 'var(--a-space-4)' }}>
       <p className="a-muted" style={{ margin: 0 }}>
         {datasets.length} mock datasets. Rows are generated from a fixed seed, so a widget looks
         identical between runs and screenshots stay comparable.
@@ -120,7 +122,15 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
               </p>
 
               {open && (
-                <div style={{ marginTop: 'var(--a-space-4)', maxHeight: 280 }}>
+                /* `maxHeight` without `overflow` clips nothing — the sample
+                   ran on over the cards below it. */
+                <div
+                  style={{
+                    marginTop: 'var(--a-space-4)',
+                    maxHeight: 280,
+                    overflowY: 'auto',
+                  }}
+                >
                   <SamplePreview dataset={dataset} />
                 </div>
               )}
@@ -128,7 +138,10 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
           </WidgetCard>
         )
       })}
-    </div>
+      </div>
+
+      <AccessRecordPanel />
+    </>
   )
 }
 

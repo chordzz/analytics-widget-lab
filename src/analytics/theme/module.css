@@ -630,3 +630,68 @@
   font-size: var(--a-text-xs);
   color: var(--a-text-muted);
 }
+
+/* --- access record (FR-DA-14) --------------------------------------------- */
+.a-panel {
+  padding: var(--a-space-4);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+}
+
+.a-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--a-space-4);
+  margin-bottom: var(--a-space-3);
+}
+
+.a-panel__title {
+  margin: 0;
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+  color: var(--a-text);
+}
+
+.a-panel__note {
+  margin: 2px 0 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+.a-record {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 1px;
+}
+
+/*
+ * Three columns rather than a table: when, who, what. An audit read scans down
+ * one column at a time, so they have to line up — and `tabular-nums` is what
+ * keeps the timestamps from shifting under each other.
+ */
+.a-record__row {
+  display: grid;
+  grid-template-columns: 12rem 10rem 1fr;
+  gap: var(--a-space-3);
+  padding: var(--a-space-2) 0;
+  border-bottom: 1px solid var(--a-border-subtle, var(--a-border));
+  font-size: var(--a-text-xs);
+}
+
+.a-record__row:last-child { border-bottom: 0; }
+
+.a-record__when {
+  color: var(--a-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.a-record__who { color: var(--a-text); }
+.a-record__what { color: var(--a-text); font-weight: 500; }
+
+@container (max-width: 520px) {
+  .a-record__row { grid-template-columns: 1fr; gap: 0; }
+}
