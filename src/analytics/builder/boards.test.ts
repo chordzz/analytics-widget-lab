@@ -26,6 +26,7 @@ import {
 import { MAX_H, MAX_W, MIN_H, MIN_W, collides, flowLayout, rowsForPx } from './grid'
 import { RENAMED_TYPES, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
+import { section } from '../../domain/composition'
 import type { WidgetSpec } from '../widgets/Widget'
 
 const AUTHOR = 'local'
@@ -75,6 +76,7 @@ const board = (
     status: 'draft',
     updated: '2026-01-01',
     controls: [],
+    sections: [],
     ...split(given ?? placed('a', 'b', 'c')),
     ...rest,
   }
@@ -993,5 +995,91 @@ describe('migration from v3', () => {
 
     const state = loadState(seed, AUTHOR)
     expect(ids(state, 'dangling')).toEqual(['a'])
+  })
+})
+
+describe('sections — FR-CO-07', () => {
+  const withSections = () => ({
+    ...board(),
+    sections: [section('s-a', 'Alpha', 0), section('s-b', 'Beta', 10, true)],
+  })
+
+  test('a new section goes below everything and moves nothing', () => {
+    /*
+     * Membership is derived from rows, so adding a heading mid-board would
+     * silently reassign every widget beneath it — and pushing them down to make
+     * room reads as the board having been rearranged rather than labelled.
+     */
+    const before = withSections()
+    const after = boardsReducer(stateWith(before), {
+      type: 'add-section',
+      id: before.id,
+      section: section('s-c', 'Gamma', 40),
+      at: '2026-02-01',
+    })
+
+    const next = after.boards[0]
+    expect(next.sections.map((entry) => entry.label)).toEqual(['Alpha', 'Beta', 'Gamma'])
+    expect(next.placements).toEqual(before.placements)
+    expect(next.widgets).toEqual(before.widgets)
+  })
+
+  test('removing a section orphans no widget', () => {
+    // A Section owns only a boundary. Removing it means the widgets fall under a
+    // different heading, or none — never that they are deleted with it.
+    const before = withSections()
+    const after = boardsReducer(stateWith(before), {
+      type: 'remove-section',
+      id: before.id,
+      sectionId: 's-a',
+      at: '2026-02-01',
+    })
+
+    const next = after.boards[0]
+    expect(next.sections.map((entry) => entry.id)).toEqual(['s-b'])
+    expect(next.placements).toEqual(before.placements)
+    expect(Object.keys(next.widgets)).toEqual(Object.keys(before.widgets))
+  })
+
+  test('renaming keeps the boundary and the collapsibility', () => {
+    const before = withSections()
+    const after = boardsReducer(stateWith(before), {
+      type: 'rename-section',
+      id: before.id,
+      sectionId: 's-b',
+      label: 'Renamed',
+      at: '2026-02-01',
+    })
+
+    const renamed = after.boards[0].sections.find((entry) => entry.id === 's-b')!
+    expect(renamed.label).toBe('Renamed')
+    expect(renamed.y).toBe(10)
+    expect(renamed.containerType).toBe('collapsible-section')
+  })
+
+  test('an empty name falls back rather than leaving an unlabelled band', () => {
+    const before = withSections()
+    const after = boardsReducer(stateWith(before), {
+      type: 'rename-section',
+      id: before.id,
+      sectionId: 's-a',
+      label: '   ',
+      at: '2026-02-01',
+    })
+    expect(after.boards[0].sections[0].label).toBe('Untitled section')
+  })
+
+  test('a board saved before sections existed reads back with none', () => {
+    // The migration case. `sections` is absent from every board written before
+    // 6.4, and absent has to mean "no headings" rather than undefined — a board
+    // that renders a crash is worse than one that renders flat.
+    stubStorage()
+    const { sections: _dropped, ...withoutSections } = withSections()
+    localStorage.setItem(
+      'analytics.boards.v4',
+      JSON.stringify({ boards: [withoutSections], editingId: null }),
+    )
+
+    expect(loadState([board()]).boards[0].sections).toEqual([])
   })
 })

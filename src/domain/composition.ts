@@ -167,20 +167,38 @@ export function withBinding(control: Control, widgetId: string, fieldKey: string
 export type ContainerType = 'section' | 'collapsible-section'
 
 /** FR-CO-07 — organizes Widgets spatially. Draws no data. */
+/**
+ * FR-CO-07 — organizes Widgets spatially. Draws no data.
+ *
+ * `y` is Merge Plan **D17**, and it is the same gap D4 closed for `Placement`:
+ * a Section is required to organize Widgets *spatially* and carried no position
+ * at all, so nothing in the model said where one began or which Widgets fell
+ * inside it.
+ *
+ * The Section owns the boundary and membership is derived from it — a Widget
+ * belongs to the last Section starting at or above its row. The alternative was
+ * `Placement.sectionId` as a stored field, which is what this type first
+ * implied, and it makes two sources of truth out of one fact: drag a Widget
+ * under a different heading and the picture and the record disagree. Deriving it
+ * means dragging a Widget into a Section *is* how you move it there.
+ */
 export interface Section {
   id: string
   element: 'container'
   containerType: ContainerType
   label: string
   defaultCollapsed?: boolean
+  /** The grid row this Section begins at. It runs until the next one starts. */
+  y: number
 }
 
-export function section(id: string, label: string, collapsible = false): Section {
+export function section(id: string, label: string, y = 0, collapsible = false): Section {
   return {
     id,
     element: 'container',
     containerType: collapsible ? 'collapsible-section' : 'section',
     label,
+    y,
   }
 }
 
@@ -215,8 +233,11 @@ export interface Placement {
   w: number
   /** Rows spanned. */
   h: number
-  /** Which Section holds this Widget. Undefined means the Dashboard root. */
-  sectionId?: string
+  /*
+   * No `sectionId`. Membership is derived from `y` against the Sections'
+   * boundaries — see `Section.y` and D17. Storing it here as well would be two
+   * records of one fact, free to disagree the moment a Widget is dragged.
+   */
 }
 
 export function clampSpan(span: number): number {

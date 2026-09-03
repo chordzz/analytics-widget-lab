@@ -102,6 +102,7 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
       <GridBoard
         widgets={placedWidgets(active)}
         contributionFor={controls.contribution}
+        sections={active.sections}
         empty={
           <div className="a-empty">
             <h3>{active.name} is empty</h3>

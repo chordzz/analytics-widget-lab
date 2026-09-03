@@ -38,6 +38,7 @@ const board = (id: string): Board => ({
   widgets: {},
   placements: [],
   controls: [],
+  sections: [],
 })
 
 const state = (id: string): BoardsState => ({ boards: [board(id)], editingId: id })

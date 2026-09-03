@@ -136,6 +136,13 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           <button type="button" className="a-button" onClick={() => setComposing('new')}>
             Add widget
           </button>
+          <button
+            type="button"
+            className="a-button"
+            onClick={() => boards.addSection(editing.id)}
+          >
+            Add section
+          </button>
           {editing.controls.length === 0 && (
             <button
               type="button"
@@ -182,6 +189,9 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
       <GridBoard
         widgets={placedWidgets(editing)}
         contributionFor={controls.contribution}
+        sections={editing.sections}
+        onRenameSection={(sectionId, label) => boards.renameSection(editing.id, sectionId, label)}
+        onRemoveSection={(sectionId) => boards.removeSection(editing.id, sectionId)}
         editable
         onLayoutChange={(placements) => boards.applyLayout(editing.id, placements)}
         onEdit={(widget) => setComposing(widget)}

@@ -12,7 +12,9 @@
  */
 
 import { flowLayout, rowsForPx } from './grid'
-import { dateRangeControl } from '../../domain/composition'
+import { dateRangeControl, section } from '../../domain/composition'
+import { SECTION_ROWS } from './sections'
+import type { Section } from '../../domain/composition'
 import { heightForType } from '../widgets/layout'
 import type { Board, PlacedWidget } from './boards'
 import type { WidgetSpec } from '../widgets/Widget'
@@ -38,10 +40,57 @@ import type { WidgetSpec } from '../widgets/Widget'
  */
 const place = (
   widgets: (WidgetSpec & { w: number })[],
-): Pick<Board, 'widgets' | 'placements'> => {
-  const flowed: PlacedWidget[] = flowLayout(
-    widgets.map((widget) => ({ ...widget, h: rowsForPx(heightForType(widget.typeId)) })),
-  )
+  /**
+   * Where headings go, as an index into the list above.
+   *
+   * Given rather than derived because it is an editorial decision — which
+   * widgets belong under "Headline" is not something a layout function can
+   * work out. The *rows* are derived, which is the part that would otherwise be
+   * unmaintainable: a heading reserves `SECTION_ROWS`, so authoring its row by
+   * hand means every width change silently moves a heading into a widget.
+   */
+  headings: { at: number; label: string; collapsible?: boolean }[] = [],
+): Pick<Board, 'widgets' | 'placements' | 'sections'> => {
+  const sized = widgets.map((widget) => ({
+    ...widget,
+    h: rowsForPx(heightForType(widget.typeId)),
+  }))
+
+  /*
+   * Flowed one group at a time, so a heading's rows are reserved before the
+   * group under it is placed. Flowing everything first and inserting headings
+   * afterwards is the version that pushes every widget below the last heading —
+   * the headings are static, so whatever they land on has to move, and by then
+   * the compactor has already packed the board tight.
+   */
+  const groups = headings.length === 0 ? [{ at: 0, label: null as string | null }] : []
+  for (const [index, heading] of headings.entries()) {
+    void index
+    groups.push({ at: heading.at, label: heading.label })
+  }
+
+  const flowed: PlacedWidget[] = []
+  const sections: Section[] = []
+  let row = 0
+
+  groups.forEach((group, index) => {
+    const from = group.at
+    const to = groups[index + 1]?.at ?? sized.length
+
+    if (group.label !== null) {
+      const declared = headings.find((heading) => heading.at === from)!
+      sections.push(section(sectionId(declared.label), declared.label, row, declared.collapsible))
+      row += SECTION_ROWS
+    }
+
+    const laid = flowLayout(sized.slice(from, to)).map((widget) => ({
+      ...widget,
+      y: widget.y + row,
+    }))
+
+    flowed.push(...laid)
+    row = laid.reduce((low, widget) => Math.max(low, widget.y + widget.h), row)
+  })
 
   return {
     widgets: Object.fromEntries(
@@ -51,8 +100,11 @@ const place = (
       }),
     ),
     placements: flowed.map(({ id, x, y, w, h }) => ({ widgetId: id, x, y, w, h })),
+    sections,
   }
 }
+
+const sectionId = (label: string) => `s-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 
 /** Every seeded board belongs to whoever is running the module. */
 const SEED_AUTHOR = 'local'
@@ -164,6 +216,16 @@ export const revenueOverview: Board = {
       mapping: { columns: ['ref', 'opened', 'status', 'priority', 'team', 'ageDays', 'replies'] },
       w: 12,
     },
+  ],
+  /*
+   * Two headings, so FR-CO-07 is reachable by opening the module rather than by
+   * building a board first. "Detail" is collapsible and "Headline" is not — the
+   * KPI row is the reason you opened the board, and a heading you can fold away
+   * over the thing you came to see is a control nobody wants.
+   */
+  [
+    { at: 0, label: 'Headline' },
+    { at: 4, label: 'Detail', collapsible: true },
   ]),
 }
 

@@ -24,10 +24,10 @@ import { currentTypeId, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
 import type { WidgetSpec } from '../widgets/Widget'
 import type { Dashboard, DashboardScope, DashboardStatus, ShareGrant } from '../../domain/dashboard'
-import type { Control } from '../../domain/composition'
+import type { Control, Section } from '../../domain/composition'
 import type { Placement as DashboardPlacement } from '../../domain/composition'
 
-export type { Control, DashboardScope, ShareGrant }
+export type { Control, DashboardScope, Section, ShareGrant }
 
 export type BoardStatus = DashboardStatus
 
@@ -69,7 +69,7 @@ export interface PlacedWidget extends WidgetSpec, Placement {}
  * shows, and `updated`, which it sorts by. Neither is in the FRD's `Dashboard`
  * and neither contradicts it.
  */
-export interface Board extends Omit<Dashboard, 'sections' | 'widgets'> {
+export interface Board extends Omit<Dashboard, 'widgets'> {
   description: string
   /** ISO date, as a string, because that is all it is ever displayed as. */
   updated: string
@@ -130,6 +130,9 @@ export type BoardsAction =
   | { type: 'remove-grant'; id: string; grantId: string; at: string }
   | { type: 'add-control'; id: string; control: Control; at: string }
   | { type: 'remove-control'; id: string; controlId: string; at: string }
+  | { type: 'add-section'; id: string; section: Section; at: string }
+  | { type: 'rename-section'; id: string; sectionId: string; label: string; at: string }
+  | { type: 'remove-section'; id: string; sectionId: string; at: string }
   | {
       type: 'add-widget'
       boardId: string
@@ -190,6 +193,7 @@ export function boardsReducer(state: BoardsState, action: BoardsAction): BoardsS
         widgets: {},
         placements: [],
         controls: [],
+        sections: [],
       }
       // Newest first: a board you just made should not be below six older ones.
       return { boards: [board, ...state.boards], editingId: board.id }
@@ -305,6 +309,35 @@ function applyToBoard(board: Board, action: BoardsAction): Board {
       return {
         ...board,
         controls: board.controls.filter((control) => control.id !== action.controlId),
+        updated: at,
+      }
+
+    /*
+     * FR-CO-07 — a Container organizes Widgets spatially and draws no data.
+     *
+     * A Section owns a starting row and nothing else; which Widgets fall inside
+     * it is derived from that (D17, `sections.ts`). So adding one cannot move a
+     * Widget and removing one cannot orphan any — the widgets stay exactly where
+     * they are and simply fall under a different heading, or none.
+     */
+    case 'add-section':
+      return { ...board, sections: [...board.sections, action.section], updated: at }
+
+    case 'rename-section':
+      return {
+        ...board,
+        sections: board.sections.map((section) =>
+          section.id === action.sectionId
+            ? { ...section, label: action.label.trim() || 'Untitled section' }
+            : section,
+        ),
+        updated: at,
+      }
+
+    case 'remove-section':
+      return {
+        ...board,
+        sections: board.sections.filter((section) => section.id !== action.sectionId),
         updated: at,
       }
 
@@ -622,6 +655,7 @@ function normalizeBoard(board: StoredBoard, authorId: string): Board {
     widgets,
     placements,
     controls: Array.isArray(board.controls) ? (board.controls as Control[]) : [],
+    sections: Array.isArray(board.sections) ? (board.sections as Section[]) : [],
   }
 }
 

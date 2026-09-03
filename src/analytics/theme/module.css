@@ -572,3 +572,61 @@
   font-size: var(--a-text-xs);
   color: var(--a-text-muted);
 }
+
+/* --- sections (FR-CO-07) -------------------------------------------------- */
+/*
+ * A heading is a row of the board rather than an overlay, so it reserves its
+ * own space and widgets flow around it. It sits on the board ground rather than
+ * on a card: a Section organizes cards, it is not one.
+ */
+.a-section {
+  display: flex;
+  align-items: baseline;
+  gap: var(--a-space-3);
+  height: 100%;
+  /*
+   * `.a-grid-cell` is itself a flex container, so without this the heading
+   * shrink-wraps to its text and the rule under it stops after two words
+   * instead of spanning the board.
+   */
+  flex: 1;
+  min-width: 0;
+  padding-bottom: var(--a-space-2);
+  border-bottom: 1px solid var(--a-border);
+}
+
+.a-section__label,
+.a-section__toggle {
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+  color: var(--a-text);
+  letter-spacing: 0.01em;
+}
+
+.a-section__toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--a-space-2);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.a-section__toggle:hover { color: var(--a-accent); }
+.a-section__toggle:focus-visible { outline: 2px solid var(--a-focus-ring); outline-offset: 2px; }
+
+.a-section__chevron {
+  font-size: 0.7em;
+  color: var(--a-text-muted);
+}
+
+/*
+ * The count is how an Author checks the boundary landed where they meant it to.
+ * Membership is derived from rows, so there is nothing else to confirm it by.
+ */
+.a-section__count {
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}

@@ -28,7 +28,7 @@
  *     the same question, free to disagree with the first.
  */
 
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   GridLayout,
   cloneLayout,
@@ -43,9 +43,26 @@ import 'react-grid-layout/css/styles.css'
 import { Widget } from '../widgets/Widget'
 import { COLUMNS, MARGIN_X, MARGIN_Y, MAX_H, MIN_H, MIN_W, ROW_HEIGHT, clampH, clampW } from './grid'
 import type { LayoutEntry, PlacedWidget } from './boards'
+import type { Section } from '../../domain/composition'
+import { SECTION_ROWS, collapsedLayout, sectionOf } from './sections'
 import type { QueryContribution } from '../../composition/correspondence'
 
 const MARGIN: readonly [number, number] = [MARGIN_X, MARGIN_Y]
+
+/*
+ * Section headings are grid items, not overlays.
+ *
+ * A heading has to *reserve* its rows, or it draws on top of whatever widget
+ * happens to sit at that row — and an absolutely-positioned label cannot tell
+ * the grid it is there. As a `static` item it holds its place, widgets flow
+ * around it, and the compactor will not pull anything above it.
+ *
+ * The prefix is what keeps them out of the store: `toEntries` drops them, so a
+ * heading never arrives at `apply-layout` pretending to be a widget placement.
+ */
+const SECTION_PREFIX = 'section:'
+const sectionItemId = (id: string) => `${SECTION_PREFIX}${id}`
+const isSectionItem = (i: string) => i.startsWith(SECTION_PREFIX)
 
 /**
  * Below this container width the board stops being a grid.
@@ -64,6 +81,16 @@ const MARGIN: readonly [number, number] = [MARGIN_X, MARGIN_Y]
 const STACK_BELOW = 900
 
 /** The stored placement, as the grid wants it. */
+const sectionItems = (sections: readonly { section: Section; y: number }[]): LayoutItem[] =>
+  sections.map((entry) => ({
+    i: sectionItemId(entry.section.id),
+    x: 0,
+    y: entry.y,
+    w: COLUMNS,
+    h: SECTION_ROWS,
+    static: true,
+  }))
+
 const toLayout = (widgets: readonly PlacedWidget[]): LayoutItem[] =>
   widgets.map((widget) => ({
     i: widget.id,
@@ -96,7 +123,9 @@ function stackedLayout(widgets: readonly PlacedWidget[]): LayoutItem[] {
 }
 
 const toEntries = (layout: Layout): LayoutEntry[] =>
-  layout.map((item) => ({ id: item.i, x: item.x, y: item.y, w: item.w, h: item.h }))
+  layout
+    .filter((item) => !isSectionItem(item.i))
+    .map((item) => ({ id: item.i, x: item.x, y: item.y, w: item.w, h: item.h }))
 
 export interface GridBoardProps {
   widgets: PlacedWidget[]
@@ -115,6 +144,16 @@ export interface GridBoardProps {
    * is known.
    */
   contributionFor?: (widget: PlacedWidget) => QueryContribution
+  /**
+   * FR-CO-07 — Containers that organize Widgets spatially.
+   *
+   * A Section owns a starting row; which widgets fall inside it is derived
+   * (`sections.ts`). Rendered as static full-width items so a heading reserves
+   * its rows rather than drawing over a widget.
+   */
+  sections?: Section[]
+  onRenameSection?: (sectionId: string, label: string) => void
+  onRemoveSection?: (sectionId: string) => void
   /** Rendered when the board has nothing on it. */
   empty?: React.ReactNode
 }
@@ -127,6 +166,9 @@ export function GridBoard({
   onDuplicate,
   onRemove,
   contributionFor,
+  sections = [],
+  onRenameSection,
+  onRemoveSection,
   empty,
 }: GridBoardProps) {
   const { containerRef, width } = useContainerWidth()
@@ -139,9 +181,38 @@ export function GridBoard({
   const narrow = width > 0 && width < STACK_BELOW
   const interactive = editable && !narrow
 
+  /*
+   * Which Sections are folded shut — the Viewer's, and never persisted.
+   *
+   * Same rule as the narrow stack below: a collapsed board is a *view* of the
+   * Author's board, not a board. Writing it would rearrange what everyone else
+   * sees because one person folded a heading.
+   */
+  const [collapsed, setCollapsed] = useState<string[]>(() =>
+    sections.filter((section) => section.defaultCollapsed).map((section) => section.id),
+  )
+
+  const folded = useMemo(
+    () => collapsedLayout(widgets, sections, narrow ? [] : collapsed),
+    [widgets, sections, collapsed, narrow],
+  )
+
+  /*
+   * Collapsing is off when narrow, because the stack drops the grid entirely and
+   * a fold has nothing to reclaim there — the widgets are already one per row.
+   */
   const layout = useMemo(
-    () => (narrow ? stackedLayout(widgets) : toLayout(widgets)),
-    [widgets, narrow],
+    () =>
+      narrow
+        ? stackedLayout(widgets)
+        : /*
+           * Headings first. The compactor walks the layout in order, so with
+           * them appended last the widgets are packed to the top and the static
+           * headings — which cannot be displaced — end up below the whole board.
+           * Declared first they are anchors, and the widgets flow around them.
+           */
+          [...sectionItems(folded.sections), ...toLayout(folded.widgets)],
+    [widgets, folded, narrow],
   )
 
   const byId = useMemo(() => new Map(widgets.map((widget) => [widget.id, widget])), [widgets])
@@ -275,6 +346,36 @@ export function GridBoard({
         }}
       >
         {layout.map((entry) => {
+          if (isSectionItem(entry.i)) {
+            const section = sections.find(
+              (candidate) => sectionItemId(candidate.id) === entry.i,
+            )
+            if (!section) return <div key={entry.i} className="a-grid-cell" />
+
+            return (
+              <div key={entry.i} className="a-grid-cell">
+                <SectionHeading
+                  section={section}
+                  count={
+                    widgets.filter((widget) => sectionOf(widget, sections)?.id === section.id)
+                      .length
+                  }
+                  collapsed={collapsed.includes(section.id)}
+                  onToggle={() =>
+                    setCollapsed((current) =>
+                      current.includes(section.id)
+                        ? current.filter((id) => id !== section.id)
+                        : [...current, section.id],
+                    )
+                  }
+                  editable={editable}
+                  onRename={onRenameSection}
+                  onRemove={onRemoveSection}
+                />
+              </div>
+            )
+          }
+
           const spec = byId.get(entry.i)
           if (!spec) return <div key={entry.i} className="a-grid-cell" />
 
@@ -308,6 +409,76 @@ export function GridBoard({
           )
         })}
       </GridLayout>
+    </div>
+  )
+}
+
+/**
+ * A Section heading — FR-CO-07's Container, as a row of the board.
+ *
+ * Shows how many widgets fall under it, because membership is derived from rows
+ * rather than stored: a count is how an Author confirms the boundary landed
+ * where they meant it to. A collapsible Section says so; a plain one does not
+ * pretend to be clickable.
+ */
+function SectionHeading({
+  section,
+  count,
+  collapsed,
+  onToggle,
+  editable,
+  onRename,
+  onRemove,
+}: {
+  section: Section
+  count: number
+  collapsed: boolean
+  onToggle: () => void
+  editable: boolean
+  onRename?: (sectionId: string, label: string) => void
+  onRemove?: (sectionId: string) => void
+}) {
+  const collapsible = section.containerType === 'collapsible-section'
+
+  return (
+    <div className="a-section">
+      {collapsible ? (
+        <button
+          type="button"
+          className="a-section__toggle"
+          aria-expanded={!collapsed}
+          onClick={onToggle}
+        >
+          <span aria-hidden="true" className="a-section__chevron">
+            {collapsed ? '\u25B8' : '\u25BE'}
+          </span>
+          {section.label}
+        </button>
+      ) : (
+        <span className="a-section__label">{section.label}</span>
+      )}
+
+      <span className="a-section__count">
+        {count} {count === 1 ? 'widget' : 'widgets'}
+      </span>
+
+      {editable && onRename && (
+        <button
+          type="button"
+          className="a-filters__clear"
+          onClick={() => {
+            const next = window.prompt('Section name', section.label)
+            if (next !== null) onRename(section.id, next)
+          }}
+        >
+          Rename
+        </button>
+      )}
+      {editable && onRemove && (
+        <button type="button" className="a-filters__clear" onClick={() => onRemove(section.id)}>
+          Remove
+        </button>
+      )}
     </div>
   )
 }

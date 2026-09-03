@@ -23,13 +23,15 @@ import {
 import {
   boardsReducer,
   boardById,
+  placedWidgets,
   draftBoards,
   type Board,
   type BoardsAction,
   type BoardsState,
   type LayoutEntry,
 } from './boards'
-import { dateRangeControl } from '../../domain/composition'
+import { dateRangeControl, section } from '../../domain/composition'
+import { nextSectionRow } from './sections'
 import { visibleDashboards } from '../../access/dashboard-access'
 import { useAnalyticsData } from '../data/AnalyticsData'
 import { seedBoards } from './seed'
@@ -83,6 +85,10 @@ interface BoardsContextValue {
   /** FR-CO-05 — a Composition Element that changes how Widgets present data. */
   addDateRangeControl: (id: string, label?: string) => void
   removeControl: (id: string, controlId: string) => void
+  /** FR-CO-07 — a Container that organizes Widgets spatially. */
+  addSection: (id: string, label?: string) => void
+  renameSection: (id: string, sectionId: string, label: string) => void
+  removeSection: (id: string, sectionId: string) => void
   /**
    * Adds a widget. `size` is what the composer chose; anything it leaves out
    * comes from the widget type, and the board decides where it goes.
@@ -221,6 +227,24 @@ export function BoardsProvider({
       addDateRangeControl: (id, label) =>
         dispatch({ type: 'add-control', id, control: dateRangeControl(newId('control'), label), at }),
       removeControl: (id, controlId) => dispatch({ type: 'remove-control', id, controlId, at }),
+      addSection: (id, label) => {
+        const board = boardById(state, id)
+        dispatch({
+          type: 'add-section',
+          id,
+          // Below everything, so labelling a board never rearranges it.
+          section: section(
+            newId('section'),
+            label ?? 'New section',
+            board ? nextSectionRow(placedWidgets(board)) : 0,
+            true,
+          ),
+          at,
+        })
+      },
+      renameSection: (id, sectionId, label) =>
+        dispatch({ type: 'rename-section', id, sectionId, label, at }),
+      removeSection: (id, sectionId) => dispatch({ type: 'remove-section', id, sectionId, at }),
 
       addWidget: (boardId, widget, size) =>
         dispatch({
