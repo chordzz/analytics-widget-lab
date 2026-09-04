@@ -483,6 +483,12 @@ const STATUS_LABEL: Record<DivergenceStatus, string> = {
   resolved: 'Resolved',
 }
 
+const AUTHORITY_LABEL: Record<Divergence['authority'], string> = {
+  frd: 'FRD',
+  api: 'API',
+  both: 'FRD + API',
+}
+
 /**
  * The divergence register — Merge Plan §4.
  *
@@ -493,15 +499,15 @@ const STATUS_LABEL: Record<DivergenceStatus, string> = {
  */
 export const renderDivergences = (): string => {
   const row = (entry: Divergence) =>
-    `| **${entry.id}** | \`${entry.clause}\` | ${entry.divergence} | ${STATUS_LABEL[entry.status]}${
-      entry.endedAt ? ` — ${entry.endedAt}` : ''
-    } |`
+    `| **${entry.id}** | ${AUTHORITY_LABEL[entry.authority]} | \`${entry.clause}\` | ${
+      entry.divergence
+    } | ${STATUS_LABEL[entry.status]}${entry.endedAt ? ` — ${entry.endedAt}` : ''} |`
 
   const detail = (entry: Divergence) =>
     [
       `### ${entry.id} — ${entry.divergence}`,
       '',
-      `**Clause:** \`${entry.clause}\`  `,
+      `**Answers to:** ${AUTHORITY_LABEL[entry.authority]} — \`${entry.clause}\`  `,
       `**Status:** ${STATUS_LABEL[entry.status]}${entry.endedAt ? ` (${entry.endedAt})` : ''}  `,
       entry.findings?.length
         ? `**Findings:** ${entry.findings.map((n) => `Finding ${n}`).join(', ')}  `
@@ -518,8 +524,13 @@ export const renderDivergences = (): string => {
 
   return `# Analytics — Divergence Register
 
-Every place this implementation does not match the FRD, with the clause, the
-reason, and how long it is meant to last.
+Every place this implementation does not match the contract it answers to, with
+the clause, the reason, and how long it is meant to last.
+
+There are two such contracts, so every entry names one. The **FRD** says what the
+capability must do; the **API** — the deployed Analytics service — says what goes
+on the wire. Where those two disagree with *each other*, that is not a divergence
+but a Finding, and it lives in \`Analytics_API_Alignment.md\` §6.
 
 **Generated from \`src/contract-docs/divergences.ts\` by \`bun run docs\`.** Do not
 edit this file. \`src/contract-docs/render.test.ts\` fails if it drifts, so a
@@ -539,14 +550,14 @@ them. Where the two are related the entry says so.
 
 ## Open — ${open.length}
 
-| # | Clause | Divergence | Status |
-| --- | --- | --- | --- |
+| # | Answers to | Clause | Divergence | Status |
+| --- | --- | --- | --- | --- |
 ${open.map(row).join('\n')}
 
 ## Resolved — ${resolved.length}
 
-| # | Clause | Divergence | Status |
-| --- | --- | --- | --- |
+| # | Answers to | Clause | Divergence | Status |
+| --- | --- | --- | --- | --- |
 ${resolved.map(row).join('\n')}
 
 ---

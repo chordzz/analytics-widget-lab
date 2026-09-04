@@ -1,6 +1,15 @@
 /**
  * The divergence register — every place this implementation does not match the
- * FRD, with the clause, the reason, and how long it is meant to last.
+ * contract it answers to, with the clause, the reason, and how long it is meant
+ * to last.
+ *
+ * There are now two such contracts, which is why every entry carries an
+ * `authority`. The **FRD** says what the capability must do; the **deployed
+ * Analytics API** says what goes on the wire. They are mostly answering
+ * different questions, and an entry names which one it departs from. An entry
+ * where the two contracts disagree with *each other* is not a divergence at all
+ * — it is a Finding for the FRD authors, and it belongs in
+ * `Analytics_API_Alignment.md` §6.
  *
  * Merge Plan §4, and §9's third guard. It lives in code rather than in the plan
  * document for one reason: `bun run docs` emits it and `render.test.ts` fails if
@@ -28,10 +37,22 @@ export type DivergenceStatus =
   /** Was one of the above; no longer diverges. Kept for the record. */
   | 'resolved'
 
+/** Which contract an entry departs from. See the header. */
+export type DivergenceAuthority =
+  /** The FRD. The API is silent, or leaves the field opaque to us. */
+  | 'frd'
+  /** The deployed Analytics API. Its wire format wins; we adapt. */
+  | 'api'
+  /** Both say the same thing and we still differ. The hardest to defend. */
+  | 'both'
+
 export interface Divergence {
   id: string
-  /** The requirement, as the FRD numbers it. */
+  /**
+   * The requirement. An FRD clause, or an API path or schema name.
+   */
   clause: string
+  authority: DivergenceAuthority
   /** One line: what we do instead. */
   divergence: string
   status: DivergenceStatus
@@ -49,6 +70,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D1',
     clause: 'FR-VZ-05, §4.2',
+    authority: 'frd',
     divergence: 'Mapping slots carry ten roles, not the four `MappingSlotId` names.',
     status: 'proposed-extension',
     findings: [14],
@@ -59,10 +81,15 @@ export const DIVERGENCES: Divergence[] = [
       'widget a state Dimension, and a pivot a second Dimension for its columns. Three of those are ' +
       "the same shortfall Finding 1 names at Field level, one level up: even with a `state`-semantic " +
       'Field declared, the Status slot table had nowhere to put it.',
+    // The API asks nothing of us here: `Widget.presentation_options` is "opaque to
+    // Analytics" and "the composition surface owns their meaning". So the slot
+    // vocabulary is ours to define, and this stays a request to the FRD for
+    // coherence rather than a blocker on anything.
   },
   {
     id: 'D2',
     clause: 'FR-DP-03 — FR-DP-07',
+    authority: 'frd',
     divergence:
       '`FieldSemantic` distinguishes naming a place from locating one, and latitude from longitude.',
     status: 'proposed-extension',
@@ -78,6 +105,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D3',
     clause: 'FR-VZ-03',
+    authority: 'frd',
     divergence: 'Mapping slots are declared per Visualization Type as well as per Family.',
     status: 'deliberate-deviation',
     where: 'analytics/builder/refinement.test.ts',
@@ -91,6 +119,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D4',
     clause: 'FR-CO-02',
+    authority: 'frd',
     divergence: 'A Placement is `{x, y, w, h}`, not a span and an ordinal.',
     status: 'deliberate-deviation',
     where: 'domain/composition.ts',
@@ -99,10 +128,13 @@ export const DIVERGENCES: Divergence[] = [
       'ordinal gives size and *sequence* but not position — two Widgets cannot sit side by side with ' +
       'a gap beneath one of them. The product module had already moved to this model and proved it, ' +
       'so the model adopted it rather than the module reverting.',
+    // Vindicated: the deployed API's `WidgetLayout` is `{ x, y, w, h }`. Two teams
+    // reading the same requirement landed in the same place, independently.
   },
   {
     id: 'D5',
     clause: 'FR-VZ-05',
+    authority: 'frd',
     divergence: '`Dataset.suits` promotes the Visualization Types a publisher intends.',
     status: 'deliberate-deviation',
     where: 'domain/dataset.ts',
@@ -116,6 +148,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D6',
     clause: 'FR-VZ-01',
+    authority: 'frd',
     divergence: 'Six of the 42 Visualization Types have no renderer.',
     status: 'temporary',
     where: 'analytics/widgets/catalog.ts',
@@ -129,6 +162,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D7',
     clause: 'FR-VZ-01',
+    authority: 'frd',
     divergence: '`status-list` is a 43rd Visualization Type.',
     status: 'proposed-extension',
     where: 'analytics/widgets/taxonomy.test.ts',
@@ -141,6 +175,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D8',
     clause: 'FR-DA-09 — FR-DA-12',
+    authority: 'frd',
     divergence: 'Authorization was absent; the module had no Viewer.',
     status: 'resolved',
     endedAt: 'Stage 5',
@@ -153,20 +188,26 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D9',
     clause: 'FR-DA-12',
+    authority: 'frd',
     divergence: 'Aggregation happened in the browser.',
-    status: 'resolved',
-    endedAt: 'Stage 4',
-    findings: [5],
-    where: 'analytics/data/query.ts',
+    status: 'deliberate-deviation',
+    findings: [5, 19],
+    where: 'analytics/data/query.ts, analytics/widgets/Widget.tsx',
     reason:
-      'A client that receives raw rows and aggregates them has already obtained data the Viewer may ' +
-      'not be entitled to, so the guarantee is unenforceable. Measures now carry their aggregation ' +
-      'in the query and the roll-up comes from what the Dataset declared meaningful. Two reductions ' +
-      'remain and are recorded separately as D13 and D14.',
+      'REOPENED. Resolved at Stage 4 by moving aggregation into the query, on Finding 5\'s argument ' +
+      'that a client receiving raw rows has already obtained data the Viewer may not be entitled to. ' +
+      'That premise assumed Analytics would query on the Viewer\'s behalf with its own credentials. ' +
+      'It does not: it relays the Viewer\'s own token and tells the Source System to "treat the ' +
+      'request identically to direct API access by that user". Every row reaching the browser is ' +
+      'therefore a row that Viewer could have fetched directly, and FR-DA-12 holds by a better ' +
+      'mechanism than ours. The query has nowhere to carry an aggregation, so this stops being a ' +
+      'thing to fix and becomes a thing to state — and the three types that send `measures` need ' +
+      'their client-side reduction back. See Finding 19.',
   },
   {
     id: 'D10',
     clause: 'FR-VZ-09',
+    authority: 'frd',
     divergence: 'A board embedded its Widgets by value.',
     status: 'resolved',
     endedAt: 'Stage 6.2',
@@ -176,10 +217,14 @@ export const DIVERGENCES: Divergence[] = [
       'A Widget saved to a Widget Library and reused across Dashboards has identity independent of ' +
       'any one of them, so a board holds placements pointing at Widgets. Cheap to adopt then, an ' +
       'expensive migration later.',
+    // Superseded by D23: the deployed API embeds Widgets by value, so this was
+    // resolved in the direction the FRD implied and the implementation went the
+    // other way. Kept resolved against the FRD; D23 carries the API's answer.
   },
   {
     id: 'D11',
     clause: 'FR-CO-05 — FR-CO-08',
+    authority: 'frd',
     divergence: 'The module had no Controls, Containers or exposed filters.',
     status: 'resolved',
     endedAt: 'Stage 6',
@@ -192,6 +237,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D12',
     clause: 'FR-DP-03',
+    authority: 'frd',
     divergence: 'A Field carries a `format`.',
     status: 'proposed-extension',
     where: 'domain/dataset.ts',
@@ -204,11 +250,14 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D13',
     clause: 'FR-DA-12',
+    authority: 'frd',
     divergence: 'Single-value widgets still reduce records in the browser.',
-    status: 'temporary',
-    findings: [5],
+    status: 'deliberate-deviation',
+    findings: [5, 19],
     where: 'analytics/widgets/Widget.tsx',
     reason:
+      'Permanent as of the API review: the query cannot express an aggregation, so there is no ' +
+      'server to move this to, and token relay means the rows were the Viewer\'s to see anyway. ' +
       'A delta card needs the latest value *and* the one before it, which is two aggregates over ' +
       'different windows of one query. `DatasetQuery` expresses one. Until it can express a ' +
       'comparison window, the second point is taken from the returned rows.',
@@ -216,11 +265,14 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D14',
     clause: 'FR-DA-12',
+    authority: 'frd',
     divergence: 'Distribution widgets bin values in the browser.',
-    status: 'temporary',
-    findings: [5],
+    status: 'deliberate-deviation',
+    findings: [5, 19],
     where: 'analytics/widgets/primitives/Distribution.tsx',
     reason:
+      'Permanent as of the API review: the query cannot express an aggregation, so there is no ' +
+      'server to move this to, and token relay means the rows were the Viewer\'s to see anyway. ' +
       'A histogram is a reduction over every value, and bucket boundaries depend on the data — ' +
       '`DatasetQuery` has no bucketing clause to ask for them. Either the query model gains one or ' +
       'these two Types keep an explicit, bounded row budget.',
@@ -228,6 +280,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D17',
     clause: 'FR-VZ-04',
+    authority: 'frd',
     divergence: "A board keys `WidgetSpec` rather than the model's `Widget`.",
     status: 'deliberate-deviation',
     where: 'analytics/builder/boards.ts',
@@ -240,6 +293,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D18',
     clause: 'FR-VZ-02, §4.2',
+    authority: 'frd',
     divergence: '`timeline-chart` does not satisfy its Family\'s Data Shape.',
     status: 'deliberate-deviation',
     findings: [16],
@@ -253,6 +307,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D19',
     clause: 'FR-CO-07',
+    authority: 'frd',
     divergence: 'A Section carries its starting row; membership is derived, not stored.',
     status: 'deliberate-deviation',
     where: 'domain/composition.ts, analytics/builder/sections.ts',
@@ -265,6 +320,7 @@ export const DIVERGENCES: Divergence[] = [
   {
     id: 'D20',
     clause: 'FR-VZ-03, §4.2',
+    authority: 'frd',
     divergence:
       'The Status Family requires none of its mapping slots, because its Data Shape is a disjunction.',
     status: 'proposed-extension',
@@ -281,8 +337,141 @@ export const DIVERGENCES: Divergence[] = [
       'evaluates — and a counterpart guard now asserts every built Type still requires at least one ' +
       'slot of its own, so "the Family requires nothing" cannot become "a Type may require nothing".',
   },
-]
+  // --- the deployed API -----------------------------------------------------
+  // Everything below answers to https://api.dev.analytics.penilabs.com, not to
+  // the FRD. Where the API and the FRD disagree with each other, the entry says
+  // so and a Finding carries the question upstream.
 
+  {
+    id: 'D21',
+    clause: 'API: schema Field.role',
+    authority: 'api',
+    divergence: 'A Field has three roles; the API has two, and time is a Field *type*.',
+    status: 'temporary',
+    endedAt: 'the HTTP adapter',
+    findings: [18],
+    where: 'domain/dataset.ts, analytics/builder/requirements.ts',
+    reason:
+      "The API's `FieldRole` is `dimension | measure`. A date is `type: 'date'`, and the Dataset " +
+      'names one of them in `time_dimension_field`. We followed FR-DP-06 and made Time Dimension a ' +
+      'third role, which every slot that accepts a temporal axis then depends on. The API wins: it ' +
+      'is shared across products and already published to integrators, and the translation is an ' +
+      'adapter in our repo rather than a change to a contract other teams have read.',
+  },
+  {
+    id: 'D22',
+    clause: 'API: GET /v1/datasets/{datasetId}/query',
+    authority: 'api',
+    divergence: 'A query is flat filter parameters, not a `DatasetQuery`.',
+    status: 'temporary',
+    endedAt: 'the HTTP adapter',
+    findings: [19],
+    where: 'analytics/data/query.ts',
+    reason:
+      'The endpoint accepts the Dataset\'s published Filter Parameters "and nothing else". There ' +
+      'is no `dimensions`, no `measures`, no `sort` and no `limit`, because Analytics stores nothing ' +
+      'and computes nothing: it forwards to the Source System and relays the answer byte-for-byte. ' +
+      'Measured against our 37 built types, this costs less than it sounds — 25 emit an empty query ' +
+      'already, which is exactly a bare GET. Nine emit `sort` and three emit `measures`, and those ' +
+      'twelve are the whole of the work.',
+  },
+  {
+    id: 'D23',
+    clause: 'API: schema Dashboard.widgets',
+    authority: 'api',
+    divergence: 'A board references its Widgets by id; the API embeds them by value.',
+    status: 'temporary',
+    endedAt: 'the HTTP adapter',
+    findings: [20],
+    where: 'analytics/builder/boards.ts',
+    reason:
+      '`Dashboard.widgets` is an array of Widgets, each with an id "assigned on save when absent". ' +
+      'A Widget therefore has no identity independent of the Dashboard holding it. We moved the ' +
+      'other way at Stage 6.2 on Finding 4\'s advice, which read FR-VZ-09\'s Widget Library as ' +
+      'implying references. The API contradicts that, so this is a straight revert of one of our own ' +
+      'decisions — and Finding 20 asks the FRD authors which of the two is intended.',
+  },
+  {
+    id: 'D24',
+    clause: 'API: schema FilterParameter',
+    authority: 'api',
+    divergence: 'A Field carries `filterable`; the API declares Filter Parameters separately.',
+    status: 'temporary',
+    endedAt: 'the HTTP adapter',
+    where: 'domain/dataset.ts',
+    reason:
+      'The API keeps two lists. `fields` describes the *response* shape — and a Field name "must ' +
+      'match the field name the Source System returns", which is the promise that lets us render ' +
+      'generically at all. `filter_parameters` describes the *accepted query inputs*, each with its ' +
+      'own type, `required` flag and optional `allowed_values`. We collapsed both into a boolean on ' +
+      'the Field, which cannot express a parameter that is not also a returned column, nor an ' +
+      'enumerated value list. This is the one API divergence where their model is plainly richer ' +
+      'than ours rather than merely different.',
+  },
+  {
+    id: 'D25',
+    clause: 'API: schema DashboardScopeLevel',
+    authority: 'api',
+    divergence: 'Scope has three levels; the API has four, including `role`.',
+    status: 'temporary',
+    endedAt: 'the HTTP adapter',
+    findings: [21],
+    where: 'domain/dashboard.ts',
+    reason:
+      "The API's levels are `personal | department | role | organization`, and the reference field " +
+      'is `scope_organizational_ref`. We modelled three, leaving role-based Scope out because ' +
+      "Frontend Plan §8 recorded the naming hazard around it. The API added it, and its own note " +
+      'says a `role` scope "currently admits only the creator and Administrators" — so the level ' +
+      'exists and does not yet mean what it says. Finding 21 carries that.',
+  },
+  {
+    id: 'D26',
+    clause: 'API: schema ShareGrantTarget',
+    authority: 'api',
+    divergence: 'A Share Grant targets an individual or a group; the API says user or department.',
+    status: 'temporary',
+    endedAt: 'the HTTP adapter',
+    where: 'domain/dashboard.ts',
+    reason:
+      'Ours is `individual | group` with a `recipientLabel`; the API is `user | department` with a ' +
+      '`target_ref`. The same idea under different names, and the rename is the whole of the fix. ' +
+      'Worth recording only because `group` is the broader word and the API deliberately is not: a ' +
+      'department is an IAM concept it holds a reference to, not an arbitrary set.',
+  },
+  {
+    id: 'D27',
+    clause: 'API: schema Envelope',
+    authority: 'api',
+    divergence: 'Every response is wrapped in `{ status, message, data }`; we read bodies directly.',
+    status: 'temporary',
+    endedAt: 'the HTTP adapter',
+    where: 'analytics/data/adapters.ts',
+    reason:
+      'A boolean `status`, a human `message`, and the payload under `data`. One unwrap in the ' +
+      'adapter and nothing above it needs to know — which is the argument for the adapter existing ' +
+      'at all. Recorded because the envelope also carries the partial-result marker: a Source System ' +
+      'may answer `200` with `meta.partial` and a reason, and a widget that ignores that shows a ' +
+      'truncated series as if it were the whole one.',
+  },
+  {
+    id: 'D28',
+    clause: 'API: schema Widget.visualization_type',
+    authority: 'api',
+    divergence: 'Visualization Type ids may be a third vocabulary, neither ours nor the FRD\'s.',
+    status: 'temporary',
+    endedAt: 'confirmation against a live Dataset',
+    findings: [22],
+    where: 'analytics/widgets/catalog.ts, analytics/widgets/taxonomy.test.ts',
+    reason:
+      '`visualization_type` is a bare string that Analytics *validates* against the Families the ' +
+      "bound Dataset's Data Shape satisfies, so the API is the authority for those strings. It " +
+      'publishes no enum: they are discovered at runtime from `/presentation`. Its examples read ' +
+      '`family: "trend-over-time"` and `types: ["line", "area"]` where Stage 1 renamed us to the ' +
+      "FRD's `trend`, `line-chart` and `area-chart`. Examples are not a contract and may simply be " +
+      'loose, so this is unconfirmed — one authenticated call settles it. If it holds, Stage 1 needs ' +
+      'doing again, and `taxonomy.test.ts` should assert against the API rather than a local manifest.',
+  },
+]
 /** Entries that still diverge. */
 export const openDivergences = (): Divergence[] =>
   DIVERGENCES.filter((entry) => entry.status !== 'resolved')

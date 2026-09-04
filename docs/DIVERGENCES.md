@@ -1,7 +1,12 @@
 # Analytics — Divergence Register
 
-Every place this implementation does not match the FRD, with the clause, the
-reason, and how long it is meant to last.
+Every place this implementation does not match the contract it answers to, with
+the clause, the reason, and how long it is meant to last.
+
+There are two such contracts, so every entry names one. The **FRD** says what the
+capability must do; the **API** — the deployed Analytics service — says what goes
+on the wire. Where those two disagree with *each other*, that is not a divergence
+but a Finding, and it lives in `Analytics_API_Alignment.md` §6.
 
 **Generated from `src/contract-docs/divergences.ts` by `bun run docs`.** Do not
 edit this file. `src/contract-docs/render.test.ts` fails if it drifts, so a
@@ -19,33 +24,41 @@ them. Where the two are related the entry says so.
 | Temporary | Conformance deferred, with a stage that ends it. |
 | Resolved | Was one of the above; no longer diverges. Kept for the record. |
 
-## Open — 14
+## Open — 23
 
-| # | Clause | Divergence | Status |
-| --- | --- | --- | --- |
-| **D1** | `FR-VZ-05, §4.2` | Mapping slots carry ten roles, not the four `MappingSlotId` names. | Proposed extension |
-| **D2** | `FR-DP-03 — FR-DP-07` | `FieldSemantic` distinguishes naming a place from locating one, and latitude from longitude. | Proposed extension |
-| **D3** | `FR-VZ-03` | Mapping slots are declared per Visualization Type as well as per Family. | Deliberate deviation |
-| **D4** | `FR-CO-02` | A Placement is `{x, y, w, h}`, not a span and an ordinal. | Deliberate deviation |
-| **D5** | `FR-VZ-05` | `Dataset.suits` promotes the Visualization Types a publisher intends. | Deliberate deviation |
-| **D6** | `FR-VZ-01` | Six of the 42 Visualization Types have no renderer. | Temporary |
-| **D7** | `FR-VZ-01` | `status-list` is a 43rd Visualization Type. | Proposed extension |
-| **D12** | `FR-DP-03` | A Field carries a `format`. | Proposed extension |
-| **D13** | `FR-DA-12` | Single-value widgets still reduce records in the browser. | Temporary |
-| **D14** | `FR-DA-12` | Distribution widgets bin values in the browser. | Temporary |
-| **D17** | `FR-VZ-04` | A board keys `WidgetSpec` rather than the model's `Widget`. | Deliberate deviation |
-| **D18** | `FR-VZ-02, §4.2` | `timeline-chart` does not satisfy its Family's Data Shape. | Deliberate deviation |
-| **D19** | `FR-CO-07` | A Section carries its starting row; membership is derived, not stored. | Deliberate deviation |
-| **D20** | `FR-VZ-03, §4.2` | The Status Family requires none of its mapping slots, because its Data Shape is a disjunction. | Proposed extension |
+| # | Answers to | Clause | Divergence | Status |
+| --- | --- | --- | --- | --- |
+| **D1** | FRD | `FR-VZ-05, §4.2` | Mapping slots carry ten roles, not the four `MappingSlotId` names. | Proposed extension |
+| **D2** | FRD | `FR-DP-03 — FR-DP-07` | `FieldSemantic` distinguishes naming a place from locating one, and latitude from longitude. | Proposed extension |
+| **D3** | FRD | `FR-VZ-03` | Mapping slots are declared per Visualization Type as well as per Family. | Deliberate deviation |
+| **D4** | FRD | `FR-CO-02` | A Placement is `{x, y, w, h}`, not a span and an ordinal. | Deliberate deviation |
+| **D5** | FRD | `FR-VZ-05` | `Dataset.suits` promotes the Visualization Types a publisher intends. | Deliberate deviation |
+| **D6** | FRD | `FR-VZ-01` | Six of the 42 Visualization Types have no renderer. | Temporary |
+| **D7** | FRD | `FR-VZ-01` | `status-list` is a 43rd Visualization Type. | Proposed extension |
+| **D9** | FRD | `FR-DA-12` | Aggregation happened in the browser. | Deliberate deviation |
+| **D12** | FRD | `FR-DP-03` | A Field carries a `format`. | Proposed extension |
+| **D13** | FRD | `FR-DA-12` | Single-value widgets still reduce records in the browser. | Deliberate deviation |
+| **D14** | FRD | `FR-DA-12` | Distribution widgets bin values in the browser. | Deliberate deviation |
+| **D17** | FRD | `FR-VZ-04` | A board keys `WidgetSpec` rather than the model's `Widget`. | Deliberate deviation |
+| **D18** | FRD | `FR-VZ-02, §4.2` | `timeline-chart` does not satisfy its Family's Data Shape. | Deliberate deviation |
+| **D19** | FRD | `FR-CO-07` | A Section carries its starting row; membership is derived, not stored. | Deliberate deviation |
+| **D20** | FRD | `FR-VZ-03, §4.2` | The Status Family requires none of its mapping slots, because its Data Shape is a disjunction. | Proposed extension |
+| **D21** | API | `API: schema Field.role` | A Field has three roles; the API has two, and time is a Field *type*. | Temporary — the HTTP adapter |
+| **D22** | API | `API: GET /v1/datasets/{datasetId}/query` | A query is flat filter parameters, not a `DatasetQuery`. | Temporary — the HTTP adapter |
+| **D23** | API | `API: schema Dashboard.widgets` | A board references its Widgets by id; the API embeds them by value. | Temporary — the HTTP adapter |
+| **D24** | API | `API: schema FilterParameter` | A Field carries `filterable`; the API declares Filter Parameters separately. | Temporary — the HTTP adapter |
+| **D25** | API | `API: schema DashboardScopeLevel` | Scope has three levels; the API has four, including `role`. | Temporary — the HTTP adapter |
+| **D26** | API | `API: schema ShareGrantTarget` | A Share Grant targets an individual or a group; the API says user or department. | Temporary — the HTTP adapter |
+| **D27** | API | `API: schema Envelope` | Every response is wrapped in `{ status, message, data }`; we read bodies directly. | Temporary — the HTTP adapter |
+| **D28** | API | `API: schema Widget.visualization_type` | Visualization Type ids may be a third vocabulary, neither ours nor the FRD's. | Temporary — confirmation against a live Dataset |
 
-## Resolved — 4
+## Resolved — 3
 
-| # | Clause | Divergence | Status |
-| --- | --- | --- | --- |
-| **D8** | `FR-DA-09 — FR-DA-12` | Authorization was absent; the module had no Viewer. | Resolved — Stage 5 |
-| **D9** | `FR-DA-12` | Aggregation happened in the browser. | Resolved — Stage 4 |
-| **D10** | `FR-VZ-09` | A board embedded its Widgets by value. | Resolved — Stage 6.2 |
-| **D11** | `FR-CO-05 — FR-CO-08` | The module had no Controls, Containers or exposed filters. | Resolved — Stage 6 |
+| # | Answers to | Clause | Divergence | Status |
+| --- | --- | --- | --- | --- |
+| **D8** | FRD | `FR-DA-09 — FR-DA-12` | Authorization was absent; the module had no Viewer. | Resolved — Stage 5 |
+| **D10** | FRD | `FR-VZ-09` | A board embedded its Widgets by value. | Resolved — Stage 6.2 |
+| **D11** | FRD | `FR-CO-05 — FR-CO-08` | The module had no Controls, Containers or exposed filters. | Resolved — Stage 6 |
 
 ---
 
@@ -53,7 +66,7 @@ them. Where the two are related the entry says so.
 
 ### D1 — Mapping slots carry ten roles, not the four `MappingSlotId` names.
 
-**Clause:** `FR-VZ-05, §4.2`  
+**Answers to:** FRD — `FR-VZ-05, §4.2`  
 **Status:** Proposed extension  
 **Findings:** Finding 14  
 **Where:** `analytics/builder/requirements.ts`  
@@ -62,7 +75,7 @@ Five built Visualization Types cannot be mapped at all with four roles: a point 
 
 ### D2 — `FieldSemantic` distinguishes naming a place from locating one, and latitude from longitude.
 
-**Clause:** `FR-DP-03 — FR-DP-07`  
+**Answers to:** FRD — `FR-DP-03 — FR-DP-07`  
 **Status:** Proposed extension  
 **Findings:** Finding 1, Finding 15  
 **Where:** `domain/dataset.ts`  
@@ -71,7 +84,7 @@ Finding 1 recommends a single `geographic-location` descriptor. It cannot tell a
 
 ### D3 — Mapping slots are declared per Visualization Type as well as per Family.
 
-**Clause:** `FR-VZ-03`  
+**Answers to:** FRD — `FR-VZ-03`  
 **Status:** Deliberate deviation  
 **Where:** `analytics/builder/refinement.test.ts`  
 
@@ -79,7 +92,7 @@ Per Family is right for eligibility and too coarse for rendering: `line-chart` a
 
 ### D4 — A Placement is `{x, y, w, h}`, not a span and an ordinal.
 
-**Clause:** `FR-CO-02`  
+**Answers to:** FRD — `FR-CO-02`  
 **Status:** Deliberate deviation  
 **Where:** `domain/composition.ts`  
 
@@ -87,7 +100,7 @@ Per Family is right for eligibility and too coarse for rendering: `line-chart` a
 
 ### D5 — `Dataset.suits` promotes the Visualization Types a publisher intends.
 
-**Clause:** `FR-VZ-05`  
+**Answers to:** FRD — `FR-VZ-05`  
 **Status:** Deliberate deviation  
 **Where:** `domain/dataset.ts`  
 
@@ -95,7 +108,7 @@ The invariant holds — nothing is excluded by it and every Type whose Family th
 
 ### D6 — Six of the 42 Visualization Types have no renderer.
 
-**Clause:** `FR-VZ-01`  
+**Answers to:** FRD — `FR-VZ-01`  
 **Status:** Temporary  
 **Where:** `analytics/widgets/catalog.ts`  
 
@@ -103,15 +116,24 @@ Down from eight before the merge, which brought three workbench renderers across
 
 ### D7 — `status-list` is a 43rd Visualization Type.
 
-**Clause:** `FR-VZ-01`  
+**Answers to:** FRD — `FR-VZ-01`  
 **Status:** Proposed extension  
 **Where:** `analytics/widgets/taxonomy.test.ts`  
 
 The Status Family's three Types are a badge, a threshold indicator and an alert banner. A list of services each carrying a state is none of them, and composing it from single indicators loses the shared axis that makes it readable. Proposed rather than dropped, and pinned by a test so a fourth addition is a decision rather than a slot appearing.
 
+### D9 — Aggregation happened in the browser.
+
+**Answers to:** FRD — `FR-DA-12`  
+**Status:** Deliberate deviation  
+**Findings:** Finding 5, Finding 19  
+**Where:** `analytics/data/query.ts, analytics/widgets/Widget.tsx`  
+
+REOPENED. Resolved at Stage 4 by moving aggregation into the query, on Finding 5's argument that a client receiving raw rows has already obtained data the Viewer may not be entitled to. That premise assumed Analytics would query on the Viewer's behalf with its own credentials. It does not: it relays the Viewer's own token and tells the Source System to "treat the request identically to direct API access by that user". Every row reaching the browser is therefore a row that Viewer could have fetched directly, and FR-DA-12 holds by a better mechanism than ours. The query has nowhere to carry an aggregation, so this stops being a thing to fix and becomes a thing to state — and the three types that send `measures` need their client-side reduction back. See Finding 19.
+
 ### D12 — A Field carries a `format`.
 
-**Clause:** `FR-DP-03`  
+**Answers to:** FRD — `FR-DP-03`  
 **Status:** Proposed extension  
 **Where:** `domain/dataset.ts`  
 
@@ -119,25 +141,25 @@ How a value reads is a property of the data, not of any one picture of it: reven
 
 ### D13 — Single-value widgets still reduce records in the browser.
 
-**Clause:** `FR-DA-12`  
-**Status:** Temporary  
-**Findings:** Finding 5  
+**Answers to:** FRD — `FR-DA-12`  
+**Status:** Deliberate deviation  
+**Findings:** Finding 5, Finding 19  
 **Where:** `analytics/widgets/Widget.tsx`  
 
-A delta card needs the latest value *and* the one before it, which is two aggregates over different windows of one query. `DatasetQuery` expresses one. Until it can express a comparison window, the second point is taken from the returned rows.
+Permanent as of the API review: the query cannot express an aggregation, so there is no server to move this to, and token relay means the rows were the Viewer's to see anyway. A delta card needs the latest value *and* the one before it, which is two aggregates over different windows of one query. `DatasetQuery` expresses one. Until it can express a comparison window, the second point is taken from the returned rows.
 
 ### D14 — Distribution widgets bin values in the browser.
 
-**Clause:** `FR-DA-12`  
-**Status:** Temporary  
-**Findings:** Finding 5  
+**Answers to:** FRD — `FR-DA-12`  
+**Status:** Deliberate deviation  
+**Findings:** Finding 5, Finding 19  
 **Where:** `analytics/widgets/primitives/Distribution.tsx`  
 
-A histogram is a reduction over every value, and bucket boundaries depend on the data — `DatasetQuery` has no bucketing clause to ask for them. Either the query model gains one or these two Types keep an explicit, bounded row budget.
+Permanent as of the API review: the query cannot express an aggregation, so there is no server to move this to, and token relay means the rows were the Viewer's to see anyway. A histogram is a reduction over every value, and bucket boundaries depend on the data — `DatasetQuery` has no bucketing clause to ask for them. Either the query model gains one or these two Types keep an explicit, bounded row budget.
 
 ### D17 — A board keys `WidgetSpec` rather than the model's `Widget`.
 
-**Clause:** `FR-VZ-04`  
+**Answers to:** FRD — `FR-VZ-04`  
 **Status:** Deliberate deviation  
 **Where:** `analytics/builder/boards.ts`  
 
@@ -145,7 +167,7 @@ The same record with two differences, both tracing to D1: the mapping vocabulary
 
 ### D18 — `timeline-chart` does not satisfy its Family's Data Shape.
 
-**Clause:** `FR-VZ-02, §4.2`  
+**Answers to:** FRD — `FR-VZ-02, §4.2`  
 **Status:** Deliberate deviation  
 **Findings:** Finding 16  
 **Where:** `analytics/builder/refinement.test.ts`  
@@ -154,7 +176,7 @@ The FRD classifies "Gantt / timeline chart" under Temporal Pattern, which requir
 
 ### D19 — A Section carries its starting row; membership is derived, not stored.
 
-**Clause:** `FR-CO-07`  
+**Answers to:** FRD — `FR-CO-07`  
 **Status:** Deliberate deviation  
 **Where:** `domain/composition.ts, analytics/builder/sections.ts`  
 
@@ -162,12 +184,81 @@ The same gap D4 closed for Placement: a Container required to organize Widgets *
 
 ### D20 — The Status Family requires none of its mapping slots, because its Data Shape is a disjunction.
 
-**Clause:** `FR-VZ-03, §4.2`  
+**Answers to:** FRD — `FR-VZ-03, §4.2`  
 **Status:** Proposed extension  
 **Findings:** Finding 14, Finding 17  
 **Where:** `visualization/mapping-slots.ts, analytics/builder/refinement.test.ts`  
 
 §4.2 gives Status two alternative shapes — "one Measure with a threshold, *or* one state Dimension" — and the two need different slots: a threshold indicator takes a Measure and no Dimension, a status tile takes a state Dimension. A per-Family slot table can only express a conjunction, so requiring either slot asserts something the Family does not require and makes the other route unrepresentable. Surfaced by porting the threshold route in §2: D3's refinement guard rejected both new Types, correctly. The eligibility guarantee is not lost — the disjunction is modelled properly in the Data Shape clause, which is what FR-VZ-05 evaluates — and a counterpart guard now asserts every built Type still requires at least one slot of its own, so "the Family requires nothing" cannot become "a Type may require nothing".
+
+### D21 — A Field has three roles; the API has two, and time is a Field *type*.
+
+**Answers to:** API — `API: schema Field.role`  
+**Status:** Temporary (the HTTP adapter)  
+**Findings:** Finding 18  
+**Where:** `domain/dataset.ts, analytics/builder/requirements.ts`  
+
+The API's `FieldRole` is `dimension | measure`. A date is `type: 'date'`, and the Dataset names one of them in `time_dimension_field`. We followed FR-DP-06 and made Time Dimension a third role, which every slot that accepts a temporal axis then depends on. The API wins: it is shared across products and already published to integrators, and the translation is an adapter in our repo rather than a change to a contract other teams have read.
+
+### D22 — A query is flat filter parameters, not a `DatasetQuery`.
+
+**Answers to:** API — `API: GET /v1/datasets/{datasetId}/query`  
+**Status:** Temporary (the HTTP adapter)  
+**Findings:** Finding 19  
+**Where:** `analytics/data/query.ts`  
+
+The endpoint accepts the Dataset's published Filter Parameters "and nothing else". There is no `dimensions`, no `measures`, no `sort` and no `limit`, because Analytics stores nothing and computes nothing: it forwards to the Source System and relays the answer byte-for-byte. Measured against our 37 built types, this costs less than it sounds — 25 emit an empty query already, which is exactly a bare GET. Nine emit `sort` and three emit `measures`, and those twelve are the whole of the work.
+
+### D23 — A board references its Widgets by id; the API embeds them by value.
+
+**Answers to:** API — `API: schema Dashboard.widgets`  
+**Status:** Temporary (the HTTP adapter)  
+**Findings:** Finding 20  
+**Where:** `analytics/builder/boards.ts`  
+
+`Dashboard.widgets` is an array of Widgets, each with an id "assigned on save when absent". A Widget therefore has no identity independent of the Dashboard holding it. We moved the other way at Stage 6.2 on Finding 4's advice, which read FR-VZ-09's Widget Library as implying references. The API contradicts that, so this is a straight revert of one of our own decisions — and Finding 20 asks the FRD authors which of the two is intended.
+
+### D24 — A Field carries `filterable`; the API declares Filter Parameters separately.
+
+**Answers to:** API — `API: schema FilterParameter`  
+**Status:** Temporary (the HTTP adapter)  
+**Where:** `domain/dataset.ts`  
+
+The API keeps two lists. `fields` describes the *response* shape — and a Field name "must match the field name the Source System returns", which is the promise that lets us render generically at all. `filter_parameters` describes the *accepted query inputs*, each with its own type, `required` flag and optional `allowed_values`. We collapsed both into a boolean on the Field, which cannot express a parameter that is not also a returned column, nor an enumerated value list. This is the one API divergence where their model is plainly richer than ours rather than merely different.
+
+### D25 — Scope has three levels; the API has four, including `role`.
+
+**Answers to:** API — `API: schema DashboardScopeLevel`  
+**Status:** Temporary (the HTTP adapter)  
+**Findings:** Finding 21  
+**Where:** `domain/dashboard.ts`  
+
+The API's levels are `personal | department | role | organization`, and the reference field is `scope_organizational_ref`. We modelled three, leaving role-based Scope out because Frontend Plan §8 recorded the naming hazard around it. The API added it, and its own note says a `role` scope "currently admits only the creator and Administrators" — so the level exists and does not yet mean what it says. Finding 21 carries that.
+
+### D26 — A Share Grant targets an individual or a group; the API says user or department.
+
+**Answers to:** API — `API: schema ShareGrantTarget`  
+**Status:** Temporary (the HTTP adapter)  
+**Where:** `domain/dashboard.ts`  
+
+Ours is `individual | group` with a `recipientLabel`; the API is `user | department` with a `target_ref`. The same idea under different names, and the rename is the whole of the fix. Worth recording only because `group` is the broader word and the API deliberately is not: a department is an IAM concept it holds a reference to, not an arbitrary set.
+
+### D27 — Every response is wrapped in `{ status, message, data }`; we read bodies directly.
+
+**Answers to:** API — `API: schema Envelope`  
+**Status:** Temporary (the HTTP adapter)  
+**Where:** `analytics/data/adapters.ts`  
+
+A boolean `status`, a human `message`, and the payload under `data`. One unwrap in the adapter and nothing above it needs to know — which is the argument for the adapter existing at all. Recorded because the envelope also carries the partial-result marker: a Source System may answer `200` with `meta.partial` and a reason, and a widget that ignores that shows a truncated series as if it were the whole one.
+
+### D28 — Visualization Type ids may be a third vocabulary, neither ours nor the FRD's.
+
+**Answers to:** API — `API: schema Widget.visualization_type`  
+**Status:** Temporary (confirmation against a live Dataset)  
+**Findings:** Finding 22  
+**Where:** `analytics/widgets/catalog.ts, analytics/widgets/taxonomy.test.ts`  
+
+`visualization_type` is a bare string that Analytics *validates* against the Families the bound Dataset's Data Shape satisfies, so the API is the authority for those strings. It publishes no enum: they are discovered at runtime from `/presentation`. Its examples read `family: "trend-over-time"` and `types: ["line", "area"]` where Stage 1 renamed us to the FRD's `trend`, `line-chart` and `area-chart`. Examples are not a contract and may simply be loose, so this is unconfirmed — one authenticated call settles it. If it holds, Stage 1 needs doing again, and `taxonomy.test.ts` should assert against the API rather than a local manifest.
 
 ---
 
@@ -175,24 +266,15 @@ The same gap D4 closed for Placement: a Container required to organize Widgets *
 
 ### D8 — Authorization was absent; the module had no Viewer.
 
-**Clause:** `FR-DA-09 — FR-DA-12`  
+**Answers to:** FRD — `FR-DA-09 — FR-DA-12`  
 **Status:** Resolved (Stage 5)  
 **Where:** `analytics/data/adapters.ts`  
 
 Every port call now carries a `ViewerIdentity` and authorization is resolved per Dataset per call. Resolved in shape rather than in substance: the local Viewer is authorized for everything, so the *seam* is real and the policy behind it is a fixture.
 
-### D9 — Aggregation happened in the browser.
-
-**Clause:** `FR-DA-12`  
-**Status:** Resolved (Stage 4)  
-**Findings:** Finding 5  
-**Where:** `analytics/data/query.ts`  
-
-A client that receives raw rows and aggregates them has already obtained data the Viewer may not be entitled to, so the guarantee is unenforceable. Measures now carry their aggregation in the query and the roll-up comes from what the Dataset declared meaningful. Two reductions remain and are recorded separately as D13 and D14.
-
 ### D10 — A board embedded its Widgets by value.
 
-**Clause:** `FR-VZ-09`  
+**Answers to:** FRD — `FR-VZ-09`  
 **Status:** Resolved (Stage 6.2)  
 **Findings:** Finding 4  
 **Where:** `analytics/builder/boards.ts`  
@@ -201,7 +283,7 @@ A Widget saved to a Widget Library and reused across Dashboards has identity ind
 
 ### D11 — The module had no Controls, Containers or exposed filters.
 
-**Clause:** `FR-CO-05 — FR-CO-08`  
+**Answers to:** FRD — `FR-CO-05 — FR-CO-08`  
 **Status:** Resolved (Stage 6)  
 **Where:** `analytics/builder/BoardControls.tsx, analytics/builder/sections.ts`  
 

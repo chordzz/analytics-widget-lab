@@ -201,7 +201,13 @@ describe('the divergence register is complete', () => {
 
   test('every entry gives a clause, a divergence and a reason', () => {
     for (const entry of DIVERGENCES) {
-      expect(entry.clause).toMatch(/^(FR-|§)/)
+      /*
+       * A clause has to be citable, and what counts as citable depends on which
+       * contract the entry answers to: the FRD numbers its requirements, the API
+       * has paths and schema names. Kept strict per authority rather than
+       * loosened to accept both, or an entry citing nothing at all would pass.
+       */
+      expect(entry.clause).toMatch(entry.authority === 'api' ? /^API: \S/ : /^(FR-|§)/)
       expect(entry.divergence.length).toBeGreaterThan(20)
       // "Because the FRD is wrong" is not a reason. A real one names the failure
       // it avoids, and that does not fit in a sentence fragment.

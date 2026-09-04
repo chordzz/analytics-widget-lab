@@ -16,6 +16,7 @@ Companion documents, all still current:
 | [`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) | **Every departure from the FRD**, numbered, with the clause and the reason. Generated; 14 open, 4 resolved. |
 | [`README.md`](README.md) | Phase-by-phase record of the requirements work. Historical narrative, not orientation. |
 | [`../Analytics_Merge_Plan.md`](../Analytics_Merge_Plan.md) | **The plan for ending the two-application split** — sequenced stages, the divergence register, and the taxonomy reconciliation. Read it with §1 and §5 below. |
+| [`../Analytics_API_Alignment.md`](../Analytics_API_Alignment.md) | **The deployed API, and where we differ from it.** Read this before writing the HTTP adapter — it retires one of our Findings and reopens a divergence we had closed. |
 
 ---
 
