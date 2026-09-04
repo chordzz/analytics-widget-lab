@@ -159,9 +159,9 @@ satisfy.
 
 ### Geospatial
 
-§4.2 requires a "location-typed Dimension". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type.
+§4.2 requires a "location-typed Dimension". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type. It also cannot say that two Measures are a coordinate pair rather than two figures.
 
-**Proposed resolution:** proposed Field semantic 'geographic-location'
+**Proposed resolution:** proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude'
 
 ### Status
 

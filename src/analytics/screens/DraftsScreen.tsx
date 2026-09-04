@@ -8,6 +8,7 @@
  * pretending to be a preview.
  */
 
+import { placedWidgets, widgetCountOf } from '../builder/boards'
 import { useBoards } from '../builder/useBoards'
 import { widgetType } from '../widgets/catalog'
 import type { Board } from '../builder/boards'
@@ -15,6 +16,8 @@ import type { ScreenId } from '../shell/nav'
 
 export function DraftsScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const boards = useBoards()
+
+  if (boards.loading) return <p className="a-muted">Loading your boards…</p>
 
   if (boards.drafts.length === 0) {
     return (
@@ -64,7 +67,7 @@ function DraftRow({
   onPublish: () => void
   onDelete: () => void
 }) {
-  const types = board.widgets
+  const types = placedWidgets(board)
     .map((widget) => widgetType(widget.typeId)?.label)
     .filter((label): label is string => Boolean(label))
 
@@ -73,7 +76,7 @@ function DraftRow({
       <button type="button" className="a-list__main" onClick={onOpen}>
         <span className="a-list__name">{board.name}</span>
         <span className="a-list__meta">
-          {board.widgets.length} {board.widgets.length === 1 ? 'widget' : 'widgets'} · updated{' '}
+          {widgetCountOf(board)} {widgetCountOf(board) === 1 ? 'widget' : 'widgets'} · updated{' '}
           {board.updated}
         </span>
         {types.length > 0 && (
@@ -93,7 +96,7 @@ function DraftRow({
         <button
           type="button"
           className="a-button"
-          disabled={board.widgets.length === 0}
+          disabled={widgetCountOf(board) === 0}
           onClick={onPublish}
         >
           Publish

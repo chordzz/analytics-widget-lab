@@ -274,6 +274,25 @@
   color: var(--a-status-critical);
 }
 
+/*
+ * Denied is neutral, not negative. It is a deliberate, legible outcome rather
+ * than a fault, and drawing it in the failure colour would tell the Viewer the
+ * system is broken when the system is working exactly as intended.
+ */
+.a-placeholder--neutral {
+  color: var(--a-status-neutral);
+}
+
+/* Withdrawn is cautionary: something changed underneath this widget. */
+.a-placeholder--warning {
+  color: var(--a-status-warning);
+}
+
+.a-placeholder__heading {
+  font-weight: 600;
+  color: var(--a-text);
+}
+
 /* --- visualisation layout -------------------------------------------------
  * A primitive returns exactly one element, so the card body's `flex: 1` lands
  * on the wrapper rather than being split between the plot and the legend —
@@ -366,4 +385,419 @@
 
 .a-tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* --- exposed filters (FR-VZ-06) -------------------------------------------
+ * Between the header and the picture, and deliberately quiet. These are the
+ * Viewer's controls over somebody else's widget: legible when looked for, never
+ * competing with the figure they modify.
+ */
+.a-card__controls {
+  padding: 0 var(--a-space-4) var(--a-space-3);
+  border-bottom: 1px solid var(--a-border);
+}
+
+.a-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--a-space-2) var(--a-space-3);
+}
+
+.a-filters__field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.a-filters__label {
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+.a-filters__select {
+  font: inherit;
+  font-size: var(--a-text-xs);
+  color: var(--a-text);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+  padding: 3px 6px;
+  max-width: 14ch;
+}
+
+.a-filters__select:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 1px;
+}
+
+.a-filters__clear {
+  font: inherit;
+  font-size: var(--a-text-xs);
+  color: var(--a-accent);
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.a-filters__clear:hover {
+  text-decoration: underline;
+}
+
+/*
+ * A widget at three columns has no room for a filter row beside its chart. The
+ * card is the container, as everywhere else in this module — the viewport says
+ * nothing about how wide this particular card is.
+ */
+@container (max-width: 260px) {
+  .a-filters__select {
+    max-width: 100%;
+  }
+
+  .a-filters__field {
+    flex: 1 1 100%;
+  }
+}
+
+/* --- the Author's side of FR-VZ-06 --------------------------------------- */
+.a-expose {
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+  padding: var(--a-space-2) var(--a-space-3) var(--a-space-3);
+  margin: var(--a-space-2) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-space-2) var(--a-space-4);
+}
+
+.a-expose__legend {
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+  padding: 0 var(--a-space-1);
+}
+
+.a-expose__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--a-text-sm);
+  color: var(--a-text);
+  cursor: pointer;
+}
+
+/* --- who can see this board (FR-DA-01 to FR-DA-07) ----------------------- */
+.a-share {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-2);
+  padding: var(--a-space-3) var(--a-space-4);
+  margin-bottom: var(--a-space-4);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+}
+
+.a-share__row {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-3);
+  flex-wrap: wrap;
+}
+
+/*
+ * The summary, not the control, is the thing to read. Scope and publishing are
+ * separate gates and neither says what the combination means, so this line is
+ * the only place an Author can see the actual answer.
+ */
+.a-share__summary {
+  margin: 0;
+  font-size: var(--a-text-sm);
+  color: var(--a-text);
+}
+
+.a-share__grants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-space-2) var(--a-space-4);
+  padding-top: var(--a-space-2);
+  border-top: 1px solid var(--a-border);
+}
+
+.a-share__grants .a-field__help {
+  flex: 1 1 100%;
+  margin: 0;
+}
+
+/* --- dashboard controls (FR-CO-05, FR-CO-06) ----------------------------- */
+.a-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-space-3) var(--a-space-5);
+  padding: var(--a-space-3) var(--a-space-4);
+  margin-bottom: var(--a-space-4);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+}
+
+.a-controls__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.a-controls__field {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  flex-wrap: wrap;
+}
+
+.a-controls__range {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--a-space-2);
+}
+
+/*
+ * The second half of FR-CO-06, and the reason this line exists at all: a
+ * Control that silently moves two widgets out of three leaves a Viewer to guess
+ * whether the third is stale, filtered differently, or broken. Quiet, because it
+ * is reassurance rather than a warning.
+ */
+.a-controls__reach {
+  margin: 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+/* --- sections (FR-CO-07) -------------------------------------------------- */
+/*
+ * A heading is a row of the board rather than an overlay, so it reserves its
+ * own space and widgets flow around it. It sits on the board ground rather than
+ * on a card: a Section organizes cards, it is not one.
+ */
+.a-section {
+  display: flex;
+  align-items: baseline;
+  gap: var(--a-space-3);
+  height: 100%;
+  /*
+   * `.a-grid-cell` is itself a flex container, so without this the heading
+   * shrink-wraps to its text and the rule under it stops after two words
+   * instead of spanning the board.
+   */
+  flex: 1;
+  min-width: 0;
+  padding-bottom: var(--a-space-2);
+  border-bottom: 1px solid var(--a-border);
+}
+
+.a-section__label,
+.a-section__toggle {
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+  color: var(--a-text);
+  letter-spacing: 0.01em;
+}
+
+.a-section__toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--a-space-2);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.a-section__toggle:hover { color: var(--a-accent); }
+.a-section__toggle:focus-visible { outline: 2px solid var(--a-focus-ring); outline-offset: 2px; }
+
+.a-section__chevron {
+  font-size: 0.7em;
+  color: var(--a-text-muted);
+}
+
+/*
+ * The count is how an Author checks the boundary landed where they meant it to.
+ * Membership is derived from rows, so there is nothing else to confirm it by.
+ */
+.a-section__count {
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+/* --- access record (FR-DA-14) --------------------------------------------- */
+.a-panel {
+  padding: var(--a-space-4);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+}
+
+.a-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--a-space-4);
+  margin-bottom: var(--a-space-3);
+}
+
+.a-panel__title {
+  margin: 0;
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+  color: var(--a-text);
+}
+
+.a-panel__note {
+  margin: 2px 0 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+.a-record {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 1px;
+}
+
+/*
+ * Three columns rather than a table: when, who, what. An audit read scans down
+ * one column at a time, so they have to line up — and `tabular-nums` is what
+ * keeps the timestamps from shifting under each other.
+ */
+.a-record__row {
+  display: grid;
+  grid-template-columns: 12rem 10rem 1fr;
+  gap: var(--a-space-3);
+  padding: var(--a-space-2) 0;
+  border-bottom: 1px solid var(--a-border-subtle, var(--a-border));
+  font-size: var(--a-text-xs);
+}
+
+.a-record__row:last-child { border-bottom: 0; }
+
+.a-record__when {
+  color: var(--a-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.a-record__who { color: var(--a-text); }
+.a-record__what { color: var(--a-text); font-weight: 500; }
+
+@container (max-width: 520px) {
+  .a-record__row { grid-template-columns: 1fr; gap: 0; }
+}
+
+/* --- threshold status (§4.2's second Status Data Shape) ------------------ */
+.a-threshold {
+  display: flex;
+  flex-direction: column;
+  gap: var(--a-space-1);
+  justify-content: center;
+  height: 100%;
+}
+
+.a-threshold__state {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  margin: 0;
+  font-size: var(--a-text-xs);
+  font-weight: 500;
+}
+
+.a-threshold__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.a-threshold__value {
+  margin: 0;
+  font-size: var(--a-text-2xl);
+  font-weight: 600;
+  color: var(--a-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.a-threshold__label {
+  margin: 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-secondary);
+}
+
+.a-threshold__rule {
+  margin: 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+/*
+ * A banner is bordered rather than filled: a filled strip in a status colour
+ * competes with the widgets around it for attention on a board where several
+ * cards may be unhealthy at once.
+ */
+.a-alert {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-3);
+  height: 100%;
+  padding: var(--a-space-3);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+}
+
+.a-alert__body { min-width: 0; }
+
+.a-alert__state {
+  margin: 0;
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+}
+
+.a-alert__detail {
+  margin: 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- event log (Chronological's record form) ---------------------------- */
+.a-log {
+  height: 100%;
+  overflow: auto;
+}
+
+.a-log__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--a-font-mono);
+  font-size: var(--a-text-xs);
+}
+
+.a-log__table tr { border-bottom: 1px solid var(--a-border); }
+.a-log__table tr:last-child { border-bottom: 0; }
+
+.a-log__time {
+  padding: var(--a-space-1) var(--a-space-3) var(--a-space-1) 0;
+  white-space: nowrap;
+  vertical-align: top;
+  color: var(--a-text-muted);
+}
+
+.a-log__entry {
+  padding: var(--a-space-1) 0;
+  color: var(--a-text);
 }

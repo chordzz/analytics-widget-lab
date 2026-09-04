@@ -195,7 +195,7 @@ describe('exclusions are explained', () => {
     expect(geospatial.satisfaction.status).toBe('indeterminate')
     if (geospatial.satisfaction.status !== 'indeterminate') throw new Error('unreachable')
     expect(geospatial.satisfaction.undecided[0].requirement).toContain('location-typed Dimension')
-    expect(geospatial.satisfaction.undecided[0].resolvedBy).toContain('geographic-location')
+    expect(geospatial.satisfaction.undecided[0].resolvedBy).toContain('geographic-area')
   })
 
   test('every non-satisfied outcome carries at least one reason', () => {

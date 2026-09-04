@@ -24,6 +24,12 @@ export type { GaugeTileProps } from './GaugeTile'
 export { StatusList, StatusTile } from './StatusList'
 export type { StatusListProps } from './StatusList'
 
+export { ThresholdTile, AlertBanner } from './ThresholdTile'
+export type { ThresholdTileProps, AlertBannerProps } from './ThresholdTile'
+
+export { EventLog } from './EventLog'
+export type { EventLogProps } from './EventLog'
+
 export { RankedList } from './RankedList'
 export type { RankedListProps } from './RankedList'
 

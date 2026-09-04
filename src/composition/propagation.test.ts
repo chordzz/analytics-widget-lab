@@ -20,15 +20,23 @@ import {
   peniremitSettlements,
 } from '../catalogue/fixtures'
 import { defaultMapping } from '../authoring/mapping'
-import { registerBuiltInRenderers } from '../renderers'
-import { registeredRendererIds } from '../widget-runtime/renderer'
+import { WIDGET_TYPES } from '../analytics/widgets/catalog'
 import { canPresent } from '../visualization/registry'
 import type { Dataset } from '../domain/dataset'
 import type { Widget } from '../domain/widget'
 
-registerBuiltInRenderers()
-const rendererIds = new Set(registeredRendererIds())
-const hasRenderer = (id: string) => rendererIds.has(id)
+/*
+ * Which Visualization Types can be drawn.
+ *
+ * Was the workbench renderer registry, which merge §2 deleted along with the
+ * renderers it registered. The product module's catalogue is the answer now, and
+ * `analytics/widgets/built.test.ts` is what keeps its `built` flag from being a
+ * claim — it fails if a type flagged built has no branch in the render switch.
+ */
+const drawableIds = new Set(
+  WIDGET_TYPES.filter((type) => type.built).map((type) => type.id),
+)
+const hasRenderer = (id: string) => drawableIds.has(id)
 
 const widgetOn = (dataset: Dataset, typeId: string): Widget => ({
   id: `${dataset.id}-${typeId}`,
@@ -156,12 +164,18 @@ describe('view-switcher Controls — the target must also be permissible', () =>
   })
 
   test('an eligible Type with no renderer is refused, and gives the right reason', () => {
-    // Pivot table is Tabular, so Corridor coverage satisfies its Data Shape —
-    // it simply has not been built. That is a different refusal from an
-    // ineligible Type, and the two must not be reported the same way.
-    expect(canPresent(corridorCoverage, 'pivot-table')).toBe(true)
+    /*
+     * Comparison table is Tabular, so Corridor coverage satisfies its Data Shape
+     * — it simply has not been built. That is a different refusal from an
+     * ineligible Type, and the two must not be reported the same way.
+     *
+     * This was `pivot-table` until merge §2, when the module's renderer became
+     * the source of truth and the pivot table turned out to be built. Swapped
+     * for the other unbuilt Tabular Type, which keeps the case identical.
+     */
+    expect(canPresent(corridorCoverage, 'comparison-table')).toBe(true)
 
-    const verdict = canSwitchTo('pivot-table', corridorCoverage, hasRenderer)
+    const verdict = canSwitchTo('comparison-table', corridorCoverage, hasRenderer)
     expect(verdict.applies).toBe(false)
     if (verdict.applies) throw new Error('unreachable')
     expect(verdict.reason).toContain('no renderer')

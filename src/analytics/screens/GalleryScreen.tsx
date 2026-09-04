@@ -27,7 +27,9 @@ const STATES: { id: WidgetState | 'auto'; label: string }[] = [
   { id: 'auto', label: 'Ready' },
   { id: 'loading', label: 'Loading' },
   { id: 'empty', label: 'Empty' },
-  { id: 'error', label: 'Error' },
+  { id: 'denied', label: 'Denied' },
+  { id: 'withdrawn', label: 'Withdrawn' },
+  { id: 'failed', label: 'Failed' },
 ]
 
 export function GalleryScreen() {
@@ -142,7 +144,7 @@ function heightFor(family: string, preset: number): number {
   if (family === 'status') return Math.round(preset * 0.8)
   // A calendar year and a cohort matrix need vertical room a 4-span chart cell
   // does not give them.
-  if (family === 'temporal') return Math.round(preset * 1.15)
+  if (family === 'temporal-pattern') return Math.round(preset * 1.15)
   return preset
 }
 

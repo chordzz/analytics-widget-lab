@@ -23,7 +23,14 @@
 
 import { WIDGET_TYPES, widgetType } from '../widgets/catalog'
 import type { WidgetType } from '../widgets/catalog'
-import type { Dataset, Field, FieldKind } from '../data/types'
+import {
+  fieldOf,
+  isCoordinate,
+  isGeographic,
+  type Dataset,
+  type Field,
+  type FieldRole,
+} from '../data/types'
 import type { WidgetMapping } from '../widgets/Widget'
 
 export type SlotId = keyof WidgetMapping
@@ -33,7 +40,7 @@ export interface Slot {
   label: string
   /** Shown under the control. Says what the choice does, not what it is. */
   help: string
-  accepts: readonly FieldKind[]
+  accepts: readonly FieldRole[]
   /** Fewest fields that make the widget valid. 0 means optional. */
   min: number
   /** Most it will use. Above 1 the slot is an ordered list. */
@@ -51,16 +58,16 @@ export interface Slot {
 
 const MEASURE = ['measure'] as const
 const DIMENSION = ['dimension'] as const
-const TIME = ['time'] as const
+const TIME = ['time-dimension'] as const
 /** An axis that reads either as a category or as a period. */
-const CATEGORY = ['dimension', 'time'] as const
-const ANY = ['dimension', 'time', 'measure'] as const
+const CATEGORY = ['dimension', 'time-dimension'] as const
+const ANY = ['dimension', 'time-dimension', 'measure'] as const
 
 const slot = (
   id: SlotId,
   label: string,
   help: string,
-  accepts: readonly FieldKind[],
+  accepts: readonly FieldRole[],
   min = 1,
   max = 1,
   geo = false,
@@ -110,19 +117,19 @@ const SLOTS: Record<string, Slot[]> = {
   ],
 
   // Categorical
-  'bar-vertical': [
+  'bar-chart-vertical': [
     slot('x', 'Categories', 'One bar per value.', CATEGORY),
     slot('series', 'Measures', 'Bar height.', MEASURE, 1, 4),
   ],
-  'bar-horizontal': [
+  'bar-chart-horizontal': [
     slot('x', 'Categories', 'One bar per value. Suits long labels.', CATEGORY),
     slot('series', 'Measures', 'Bar length.', MEASURE, 1, 4),
   ],
-  'bar-grouped': [
+  'grouped-bar-chart': [
     slot('x', 'Categories', 'One group of bars per value.', CATEGORY),
     slot('series', 'Measures', 'One bar within each group.', MEASURE, 2, 4),
   ],
-  'bar-stacked': [
+  'stacked-bar-chart': [
     slot('x', 'Categories', 'One stack per value.', CATEGORY),
     slot('series', 'Measures', 'One segment within each stack.', MEASURE, 2, 4),
   ],
@@ -166,9 +173,20 @@ const SLOTS: Record<string, Slot[]> = {
     slot('state', 'State', 'Drives the status colour.', DIMENSION),
     slot('value', 'Measure', 'Optional figure beside each row.', MEASURE, 0, 1),
   ],
-  'status-tile': [
+  'status-indicator': [
     slot('x', 'Entities', 'The worst one is shown.', DIMENSION),
     slot('state', 'State', 'Drives the status colour.', DIMENSION),
+  ],
+  /*
+   * The Family's *other* Data Shape — one Measure with a threshold. The
+   * threshold is Widget configuration rather than a Dataset property, which is
+   * why a bare Measure satisfies these two and no `state` slot appears.
+   */
+  'threshold-indicator': [
+    slot('value', 'Measure', 'The figure to assess.', MEASURE, 1, 1),
+  ],
+  'alert-banner': [
+    slot('value', 'Measure', 'The figure to assess.', MEASURE, 1, 1),
   ],
 
   // Radial
@@ -206,11 +224,21 @@ const SLOTS: Record<string, Slot[]> = {
     slot('value', 'Measure', 'Cell shade.', MEASURE),
   ],
   'cohort-grid': [
-    slot('x', 'Cohorts', 'One row each.', CATEGORY),
+    /*
+     * A cohort is a *period* — the month or week a group of users joined — so
+     * this takes a Time Dimension and not the wider CATEGORY it used to.
+     *
+     * Widening it here silently widened eligibility: the type was offered for
+     * `transactions`, `sales-by-country` and `traffic-flow`, none of which are
+     * cohort data, because any Dimension could fill the axis. Caught by
+     * `refinement.test.ts` — Temporal Pattern requires a Time Dimension, and a
+     * slot that would also accept a plain Dimension does not satisfy that.
+     */
+    slot('x', 'Cohorts', 'One row per cohort period.', TIME),
     slot('secondary', 'Elapsed period', 'One column each.', CATEGORY),
     slot('value', 'Measure', 'Cell shade.', MEASURE),
   ],
-  'gantt-chart': [
+  'timeline-chart': [
     slot('x', 'Rows', 'One bar per value.', DIMENSION),
     slot('series', 'Start and end', 'Exactly two — where the bar begins and ends.', MEASURE, 2, 2),
     slot('secondary', 'Grouping', 'Optional. Colours bars by group.', DIMENSION, 0, 1),
@@ -223,6 +251,15 @@ const SLOTS: Record<string, Slot[]> = {
     slot('secondary', 'Actor', 'Who did it.', DIMENSION),
     slot('value', 'Action', 'What they did.', DIMENSION),
   ],
+  /*
+   * A log takes columns rather than named roles, because a log row is a record
+   * and a feed row is a sentence. Chronological is the Family with no Measure,
+   * so `columns` accepts anything — the figures are shown, never aggregated.
+   */
+  'event-log-view': [
+    slot('x', 'When', 'Orders the log, most recent first.', TIME),
+    slot('columns', 'Columns', 'Shown after the timestamp, in this order.', ANY, 1, 8),
+  ],
 
   // Geospatial
   'point-map': [
@@ -233,6 +270,51 @@ const SLOTS: Record<string, Slot[]> = {
   ],
 }
 
+/**
+ * D3 — how a Type's slots are checked against its Family's.
+ *
+ * FR-VZ-03 declares mapping slots **per Family**, and `mapping-slots.ts` does
+ * exactly that; the module declares them **per Type**, because `funnel` and
+ * `sankey` share a Family and are not the same mapping while `line-chart` and
+ * `area-chart` are. Both are right about different things, and the resolution is
+ * two layers of one table rather than two tables — which only holds if something
+ * checks the layers agree. `refinement.test.ts` is that check.
+ *
+ * A Type slot **contributes** to a Family slot when every role it accepts is a
+ * role the Family slot accepts. That is refinement, stated:
+ *
+ *   - narrowing contributes — a Family slot taking any Field is satisfied by a
+ *     Type slot taking a Dimension
+ *   - **widening does not** — a Family slot requiring a Time Dimension is *not*
+ *     satisfied by a Type slot that would also accept a plain Dimension, because
+ *     an Author can then fill it with one and the Family's requirement is gone
+ *
+ * The second case is the whole point, and it is why this compares accepted roles
+ * rather than slot ids. An id-based map cannot see it: `value` holds a Measure in
+ * a donut chart and a Dimension in an activity feed, so what a slot *is* named
+ * says nothing about which requirement it answers.
+ */
+export const contributesTo = (
+  typeSlot: Pick<Slot, 'accepts'>,
+  familySlot: { accepts: readonly FieldRole[] },
+): boolean => typeSlot.accepts.every((role) => familySlot.accepts.includes(role))
+
+/**
+ * How much of a Family slot's requirement a Type demands.
+ *
+ * Summed over every contributing slot, because two module slots can answer one
+ * Family slot: a bubble chart's `value` and `series` are both Measures, and a
+ * Family asking for two is satisfied by one of each.
+ */
+export function demandFor(
+  typeId: string,
+  familySlot: { accepts: readonly FieldRole[] },
+): number {
+  return slotsFor(typeId)
+    .filter((entry) => contributesTo(entry, familySlot))
+    .reduce((total, entry) => total + entry.min, 0)
+}
+
 export const slotsFor = (typeId: string): Slot[] => SLOTS[typeId] ?? []
 
 export const requiredSlots = (typeId: string): Slot[] =>
@@ -241,7 +323,7 @@ export const requiredSlots = (typeId: string): Slot[] =>
 /** Fields of a dataset that could go in a slot. */
 export const candidatesFor = (dataset: Dataset, entry: Slot): Field[] =>
   dataset.fields.filter(
-    (field) => entry.accepts.includes(field.kind) && (!entry.geo || Boolean(field.geo)),
+    (field) => entry.accepts.includes(field.role) && (!entry.geo || isGeographic(field)),
   )
 
 /** Whether a dataset has enough of the right fields for every required slot. */
@@ -292,12 +374,16 @@ export const suitsType = (dataset: Dataset, typeId: string): boolean =>
 
 // --- automatic mapping ------------------------------------------------------
 
-/** Distinct values of a field. Cheap enough at these row counts. */
-function distinctCount(dataset: Dataset, key: string): number {
-  const seen = new Set<unknown>()
-  for (const row of dataset.rows) seen.add(row[key])
-  return seen.size
-}
+/**
+ * Distinct values of a Field, as declared rather than counted.
+ *
+ * This used to scan the records. It cannot any more, and should not have: an
+ * Author's tool deciding which chart to *offer* would be performing a retrieval
+ * to do it, which is the thing FR-DP-11 exists to prevent. The count is
+ * published metadata now — Finding 16.
+ */
+const distinctCount = (dataset: Dataset, key: string): number =>
+  fieldOf(dataset, key)?.distinctCount ?? 0
 
 /**
  * Beyond this many rows, a near-unique dimension is an identifier.
@@ -319,21 +405,25 @@ const IDENTIFIER_ROWS = 50
  * separates a category from an identifier, but only in a long table; see
  * `IDENTIFIER_ROWS`.
  */
-/**
+/*
  * Coordinates are locations, not quantities.
  *
- * Latitude is a Measure by kind, and in `sales-by-country` it is the first one
+ * Latitude is a Measure by role, and in `sales-by-country` it is the first one
  * declared — so a ranked list of countries picks it up and sorts them by how far
- * north they are. Nothing about the kind system prevents that; the geo marker
- * does. Still selectable by hand, just never the automatic answer.
+ * north they are. Nothing about the role system prevents that; the Field's
+ * geographic semantic does. Still selectable by hand, just never the automatic
+ * answer.
+ *
+ * `isCoordinate` now comes from the model rather than being decided again here.
+ * It was a local predicate over the module's own `geo` flag; the same question is
+ * asked by the Geospatial Data Shape, and two answers to it could disagree.
  */
-const isCoordinate = (field: Field): boolean => field.geo === 'lat' || field.geo === 'lng'
 
 function groupingScore(dataset: Dataset, field: Field): number {
-  if (field.kind === 'measure') return isCoordinate(field) ? -1 : 0
+  if (field.role === 'measure') return isCoordinate(field) ? -1 : 0
 
   const distinct = distinctCount(dataset, field.key)
-  const rows = dataset.rows.length || 1
+  const rows = dataset.recordCount ?? 1
 
   if (distinct < 2) return 0
   if (rows > IDENTIFIER_ROWS && distinct > rows * 0.5) return 0

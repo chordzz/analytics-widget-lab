@@ -11,19 +11,31 @@
  */
 
 import { useState } from 'react'
-import { datasets } from '../data/datasets'
+import { useDatasets, useRows } from '../data/AnalyticsData'
 import { DataTable } from '../widgets/primitives'
 import { WidgetCard } from '../widgets/WidgetCard'
 import { typesFor } from '../builder/requirements'
 import { useComposeIntent } from '../builder/useComposeIntent'
+import { AccessRecordPanel } from './AccessRecordPanel'
+import type { Dataset } from '../data/types'
 import type { ScreenId } from '../shell/nav'
 
 export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const [openId, setOpenId] = useState<string | null>(null)
   const { composeWith } = useComposeIntent()
+  const { datasets, loading } = useDatasets()
+
+  if (loading) {
+    return (
+      <p className="a-muted" style={{ margin: 0 }}>
+        Loading the catalogue…
+      </p>
+    )
+  }
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--a-space-4)' }}>
+    <>
+      <div style={{ display: 'grid', gap: 'var(--a-space-4)' }}>
       <p className="a-muted" style={{ margin: 0 }}>
         {datasets.length} mock datasets. Rows are generated from a fixed seed, so a widget looks
         identical between runs and screenshots stay comparable.
@@ -33,16 +45,16 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
         const open = openId === dataset.id
         const buildable = typesFor(dataset).length
         const counts = {
-          time: dataset.fields.filter((f) => f.kind === 'time').length,
-          dimensions: dataset.fields.filter((f) => f.kind === 'dimension').length,
-          measures: dataset.fields.filter((f) => f.kind === 'measure').length,
+          time: dataset.fields.filter((f) => f.role === 'time-dimension').length,
+          dimensions: dataset.fields.filter((f) => f.role === 'dimension').length,
+          measures: dataset.fields.filter((f) => f.role === 'measure').length,
         }
 
         return (
           <WidgetCard
             key={dataset.id}
             title={dataset.name}
-            subtitle={`${dataset.source} · ${dataset.rows.length.toLocaleString()} rows`}
+            subtitle={dataset.sourceSystem}
             actions={[
               {
                 label: open ? 'Hide sample' : 'Show sample',
@@ -91,7 +103,7 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
                   >
                     {field.label}
                     <span style={{ color: 'var(--a-text-muted)' }}>
-                      {field.kind === 'time' ? 'time' : field.kind === 'measure' ? 'measure' : 'dimension'}
+                      {field.role === 'time-dimension' ? 'time' : field.role === 'measure' ? 'measure' : 'dimension'}
                     </span>
                   </span>
                 ))}
@@ -110,14 +122,47 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
               </p>
 
               {open && (
-                <div style={{ marginTop: 'var(--a-space-4)', maxHeight: 280 }}>
-                  <DataTable data={dataset.rows} columns={dataset.fields} limit={20} />
+                /* `maxHeight` without `overflow` clips nothing — the sample
+                   ran on over the cards below it. */
+                <div
+                  style={{
+                    marginTop: 'var(--a-space-4)',
+                    maxHeight: 280,
+                    overflowY: 'auto',
+                  }}
+                >
+                  <SamplePreview dataset={dataset} />
                 </div>
               )}
             </div>
           </WidgetCard>
         )
       })}
-    </div>
+      </div>
+
+      <AccessRecordPanel />
+    </>
   )
+}
+
+/**
+ * A few records from one source.
+ *
+ * Its own component because it needs a hook, and a hook cannot be called from
+ * inside the list's `map`. That is a React rule rather than a design one, but
+ * the split it forces is right anyway: the listing is Catalogue work and the
+ * sample is retrieval work, and they are different ports.
+ */
+function SamplePreview({ dataset }: { dataset: Dataset }) {
+  const rows = useRows(dataset.id, 20)
+
+  if (rows.length === 0) {
+    return (
+      <p className="a-muted" style={{ margin: 0, fontSize: 'var(--a-text-xs)' }}>
+        No records to show.
+      </p>
+    )
+  }
+
+  return <DataTable data={rows} columns={dataset.fields} limit={20} />
 }

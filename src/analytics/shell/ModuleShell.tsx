@@ -15,6 +15,7 @@ import { GalleryScreen } from '../screens/GalleryScreen'
 import { DataScreen } from '../screens/DataScreen'
 import { CreateScreen } from '../screens/CreateScreen'
 import { DraftsScreen } from '../screens/DraftsScreen'
+import { AnalyticsDataProvider } from '../data/AnalyticsData'
 import { BoardsProvider, useBoards } from '../builder/useBoards'
 import { ComposeIntentProvider } from '../builder/useComposeIntent'
 import './shell.css'
@@ -45,6 +46,7 @@ export function ModuleShell({
   const current = NAV_ITEMS.find((item) => item.id === screen)
 
   return (
+    <AnalyticsDataProvider>
     <BoardsProvider>
     <ComposeIntentProvider>
     <div className="a-shell">
@@ -76,6 +78,7 @@ export function ModuleShell({
     </div>
     </ComposeIntentProvider>
     </BoardsProvider>
+    </AnalyticsDataProvider>
   )
 }
 

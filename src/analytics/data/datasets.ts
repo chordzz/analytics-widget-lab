@@ -11,7 +11,117 @@
  */
 
 import { between, daysEndingAt, intBetween, monthsEndingAt, pick, seeded, trendingSeries } from './generate'
-import type { Dataset, Row } from './types'
+import type {
+  Aggregation,
+  DataClassification,
+  Dataset,
+  Field,
+  FieldRole,
+  FieldSemantic,
+  Row,
+  ValueFormat,
+} from './types'
+
+/**
+ * A dataset as it is *authored* here, before publication fills in the rest.
+ *
+ * The FRD's `Field` requires `filterable`, `sortable` and — for a Measure — the
+ * aggregations that are meaningful for it. Restating all three on all 59 fields
+ * would bury the part of a fixture that is worth reading, which is its shape.
+ * So a draft states what is interesting and `publish` supplies the rest. A real
+ * Source System declares them explicitly; a fixture is allowed a default, and
+ * saying so here is more honest than pretending someone chose per field.
+ */
+interface DraftField {
+  key: string
+  label: string
+  role: FieldRole
+  format?: ValueFormat
+  semantic?: FieldSemantic
+  filterable?: boolean
+  sortable?: boolean
+  aggregations?: Aggregation[]
+}
+
+interface Draft {
+  id: string
+  name: string
+  description: string
+  /** Becomes `sourceSystem`. */
+  source: string
+  suits?: string[]
+  classification?: DataClassification
+  exposesPersonalData?: boolean
+  fields: DraftField[]
+  /** Held beside the metadata here and separated by `publish` — see below. */
+  rows: Row[]
+}
+
+/**
+ * Which aggregations are meaningful for a Measure (FR-DP-04).
+ *
+ * The rule is the one `Widget.tsx` has been applying in a switch statement:
+ * rates and durations average, quantities total. Adding revenue across months
+ * gives revenue for the year; adding uptime across services gives 890%, which is
+ * not a number that exists.
+ *
+ * It belongs here rather than in the view. A Measure's roll-up is a property of
+ * what it *is*, and letting each Widget infer it is precisely the
+ * divergent-definition failure this capability exists to remove. Stage 4 deletes
+ * the view-layer copy and reads this instead.
+ */
+const aggregationsFor = (format: ValueFormat | undefined): Aggregation[] =>
+  format === 'percent' || format === 'duration'
+    ? ['average', 'minimum', 'maximum']
+    : ['sum', 'average', 'minimum', 'maximum', 'count']
+
+function publishField(draft: DraftField, rows: Row[]): Field {
+  const distinct = new Set(rows.map((row) => row[draft.key])).size
+
+  const base = {
+    key: draft.key,
+    label: draft.label,
+    // Finding 16 — so an Author's tool can tell a category from an identifier
+    // without retrieving records to find out.
+    distinctCount: distinct,
+    // You filter on what a record *is* and sort by any of it. A Measure is a
+    // poor filter — nobody asks for "revenue equals 41,208".
+    filterable: draft.filterable ?? draft.role !== 'measure',
+    sortable: draft.sortable ?? true,
+    ...(draft.format === undefined ? {} : { format: draft.format }),
+    ...(draft.semantic === undefined ? {} : { semantic: draft.semantic }),
+  }
+
+  return draft.role === 'measure'
+    ? { ...base, role: 'measure', aggregations: draft.aggregations ?? aggregationsFor(draft.format) }
+    : { ...base, role: draft.role }
+}
+
+/**
+ * A draft, split into what the Catalogue serves and what retrieval serves.
+ *
+ * The two halves answer different questions at different times, and the returned
+ * `Dataset` carries no rows at all — which is the point. While they were one
+ * object every consumer could reach records by accident, and `Widget` did:
+ * `datasetById(id).rows` in a render body. A backend cannot answer that, so the
+ * type stopped allowing it.
+ */
+function publish(draft: Draft): { dataset: Dataset; rows: Row[] } {
+  const { rows, source, classification, exposesPersonalData, fields, ...rest } = draft
+
+  return {
+    rows,
+    dataset: {
+      ...rest,
+      sourceSystem: source,
+      classification: classification ?? 'internal',
+      exposesPersonalData: exposesPersonalData ?? false,
+      recordCount: rows.length,
+      recordVolume: rows.length >= 50 ? 'many' : 'few',
+      fields: fields.map((field) => publishField(field, rows)),
+    },
+  }
+}
 
 const TODAY = '2026-08-07'
 
@@ -19,7 +129,7 @@ const TODAY = '2026-08-07'
 // 365 points: enough for a calendar heatmap to fill a year and for a
 // distribution to have a real shape.
 
-const revenueDaily = (): Dataset => {
+const revenueDaily = (): Draft => {
   const random = seeded(1001)
   const dates = daysEndingAt(TODAY, 365)
   const revenue = trendingSeries(random, {
@@ -39,10 +149,10 @@ const revenueDaily = (): Dataset => {
     description: 'Daily revenue, orders and refunds over the last year.',
     source: 'Billing',
     fields: [
-      { key: 'date', label: 'Date', kind: 'time' },
-      { key: 'revenue', label: 'Revenue', kind: 'measure', format: 'currency' },
-      { key: 'orders', label: 'Orders', kind: 'measure', format: 'number' },
-      { key: 'refunds', label: 'Refunds', kind: 'measure', format: 'currency' },
+      { key: 'date', label: 'Date', role: 'time-dimension' },
+      { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
+      { key: 'orders', label: 'Orders', role: 'measure', format: 'number' },
+      { key: 'refunds', label: 'Refunds', role: 'measure', format: 'currency' },
     ],
     rows: dates.map((date, index) => ({
       date,
@@ -57,7 +167,7 @@ const revenueDaily = (): Dataset => {
 // Carries a target so gauges and progress trackers have something to measure
 // against without inventing one.
 
-const revenueMonthly = (): Dataset => {
+const revenueMonthly = (): Draft => {
   const random = seeded(1002)
   const months = monthsEndingAt('2026-08', 24)
   const revenue = trendingSeries(random, { length: 24, start: 1_180_000, driftPerStep: 26_000, noise: 0.09 })
@@ -69,10 +179,10 @@ const revenueMonthly = (): Dataset => {
     description: 'Monthly revenue against target, two years.',
     source: 'Billing',
     fields: [
-      { key: 'month', label: 'Month', kind: 'time' },
-      { key: 'revenue', label: 'Revenue', kind: 'measure', format: 'currency' },
-      { key: 'target', label: 'Target', kind: 'measure', format: 'currency' },
-      { key: 'customers', label: 'Customers', kind: 'measure', format: 'number' },
+      { key: 'month', label: 'Month', role: 'time-dimension' },
+      { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
+      { key: 'target', label: 'Target', role: 'measure', format: 'currency' },
+      { key: 'customers', label: 'Customers', role: 'measure', format: 'number' },
     ],
     rows: months.map((month, index) => ({
       month,
@@ -87,21 +197,21 @@ const revenueMonthly = (): Dataset => {
 // Six slices. Composition falls apart past about seven, so this is sized to
 // what a pie can actually carry.
 
-const salesByRegion = (): Dataset => {
+const salesByRegion = (): Draft => {
   const random = seeded(1003)
   const regions = ['West Africa', 'East Africa', 'Europe', 'North America', 'Middle East', 'Asia Pacific']
 
   return {
     id: 'sales-by-region',
-    suits: ['donut-chart', 'pie-chart', 'bar-vertical'],
+    suits: ['donut-chart', 'pie-chart', 'bar-chart-vertical'],
     name: 'Sales by region',
     description: 'Revenue and order volume across six regions.',
     source: 'Billing',
     fields: [
-      { key: 'region', label: 'Region', kind: 'dimension' },
-      { key: 'revenue', label: 'Revenue', kind: 'measure', format: 'currency' },
-      { key: 'orders', label: 'Orders', kind: 'measure', format: 'number' },
-      { key: 'growth', label: 'Growth', kind: 'measure', format: 'percent' },
+      { key: 'region', label: 'Region', role: 'dimension' },
+      { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
+      { key: 'orders', label: 'Orders', role: 'measure', format: 'number' },
+      { key: 'growth', label: 'Growth', role: 'measure', format: 'percent' },
     ],
     rows: regions.map((region) => ({
       region,
@@ -115,7 +225,7 @@ const salesByRegion = (): Dataset => {
 // --- 4. Sales by country ----------------------------------------------------
 // ISO codes so a choropleth has something to join on when maps arrive.
 
-const salesByCountry = (): Dataset => {
+const salesByCountry = (): Draft => {
   const random = seeded(1004)
   // Centroids, so a point map can plot without boundary data. A choropleth
   // would need GeoJSON; this does not.
@@ -138,12 +248,12 @@ const salesByCountry = (): Dataset => {
     description: 'Revenue and customer count for twenty countries, with ISO codes.',
     source: 'Billing',
     fields: [
-      { key: 'code', label: 'Country code', kind: 'dimension', geo: 'country' },
-      { key: 'country', label: 'Country', kind: 'dimension' },
-      { key: 'lat', label: 'Latitude', kind: 'measure', format: 'number', geo: 'lat' },
-      { key: 'lng', label: 'Longitude', kind: 'measure', format: 'number', geo: 'lng' },
-      { key: 'revenue', label: 'Revenue', kind: 'measure', format: 'currency' },
-      { key: 'customers', label: 'Customers', kind: 'measure', format: 'number' },
+      { key: 'code', label: 'Country code', role: 'dimension', semantic: 'geographic-area' },
+      { key: 'country', label: 'Country', role: 'dimension' },
+      { key: 'lat', label: 'Latitude', role: 'measure', format: 'number', semantic: 'geographic-latitude' },
+      { key: 'lng', label: 'Longitude', role: 'measure', format: 'number', semantic: 'geographic-longitude' },
+      { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
+      { key: 'customers', label: 'Customers', role: 'measure', format: 'number' },
     ],
     rows: countries.map(([code, country, lat, lng]) => ({
       code,
@@ -159,7 +269,7 @@ const salesByCountry = (): Dataset => {
 // --- 5. Product performance -------------------------------------------------
 // Five measures so radar has enough axes and bubble has a third channel.
 
-const productPerformance = (): Dataset => {
+const productPerformance = (): Draft => {
   const random = seeded(1005)
   const products = [
     'Transfers', 'Cards', 'Wallets', 'Payouts', 'Invoicing', 'Lending',
@@ -173,12 +283,12 @@ const productPerformance = (): Dataset => {
     description: 'Twelve products scored across five measures.',
     source: 'Product analytics',
     fields: [
-      { key: 'product', label: 'Product', kind: 'dimension' },
-      { key: 'revenue', label: 'Revenue', kind: 'measure', format: 'currency' },
-      { key: 'adoption', label: 'Adoption', kind: 'measure', format: 'percent' },
-      { key: 'retention', label: 'Retention', kind: 'measure', format: 'percent' },
-      { key: 'satisfaction', label: 'Satisfaction', kind: 'measure', format: 'number' },
-      { key: 'tickets', label: 'Support tickets', kind: 'measure', format: 'number' },
+      { key: 'product', label: 'Product', role: 'dimension' },
+      { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
+      { key: 'adoption', label: 'Adoption', role: 'measure', format: 'percent' },
+      { key: 'retention', label: 'Retention', role: 'measure', format: 'percent' },
+      { key: 'satisfaction', label: 'Satisfaction', role: 'measure', format: 'number' },
+      { key: 'tickets', label: 'Support tickets', role: 'measure', format: 'number' },
     ],
     rows: products.map((product) => ({
       product,
@@ -194,7 +304,7 @@ const productPerformance = (): Dataset => {
 // --- 6. Signup funnel -------------------------------------------------------
 // Monotonically decreasing, because a funnel that widens is a bug not a design.
 
-const signupFunnel = (): Dataset => {
+const signupFunnel = (): Draft => {
   const stages = [
     ['Visited', 48_200],
     ['Started signup', 21_400],
@@ -211,9 +321,9 @@ const signupFunnel = (): Dataset => {
     description: 'Six ordered onboarding stages with drop-off.',
     source: 'Product analytics',
     fields: [
-      { key: 'stage', label: 'Stage', kind: 'dimension' },
-      { key: 'users', label: 'Users', kind: 'measure', format: 'number' },
-      { key: 'position', label: 'Position', kind: 'measure', format: 'number' },
+      { key: 'stage', label: 'Stage', role: 'dimension' },
+      { key: 'users', label: 'Users', role: 'measure', format: 'number' },
+      { key: 'position', label: 'Position', role: 'measure', format: 'number' },
     ],
     rows: stages.map(([stage, users], index) => ({ stage, users, position: index })),
   }
@@ -221,7 +331,7 @@ const signupFunnel = (): Dataset => {
 
 // --- 7. Traffic flow --------------------------------------------------------
 
-const trafficFlow = (): Dataset => {
+const trafficFlow = (): Draft => {
   const random = seeded(1007)
   const links: [string, string][] = [
     ['Organic search', 'Landing page'], ['Paid ads', 'Landing page'], ['Referral', 'Landing page'],
@@ -236,9 +346,9 @@ const trafficFlow = (): Dataset => {
     description: 'Source-to-target session volume across the acquisition path.',
     source: 'Product analytics',
     fields: [
-      { key: 'from', label: 'From', kind: 'dimension' },
-      { key: 'to', label: 'To', kind: 'dimension' },
-      { key: 'sessions', label: 'Sessions', kind: 'measure', format: 'number' },
+      { key: 'from', label: 'From', role: 'dimension' },
+      { key: 'to', label: 'To', role: 'dimension' },
+      { key: 'sessions', label: 'Sessions', role: 'measure', format: 'number' },
     ],
     rows: links.map(([from, to]) => ({ from, to, sessions: intBetween(random, 1_200, 28_000) })),
   }
@@ -248,7 +358,7 @@ const trafficFlow = (): Dataset => {
 // 2,000 rows with a deliberate long right tail, so a histogram shows a shape
 // and a box plot has outliers to draw.
 
-const transactions = (): Dataset => {
+const transactions = (): Draft => {
   const random = seeded(1008)
   const channels = ['Card', 'Bank transfer', 'Wallet', 'Direct debit']
 
@@ -268,12 +378,15 @@ const transactions = (): Dataset => {
     suits: ['histogram', 'box-plot'],
     name: 'Transactions',
     description: 'Two thousand individual transactions with a long-tailed amount.',
+    /** Individual financial records, at record grain rather than aggregated. */
+    classification: 'confidential',
+    exposesPersonalData: true,
     source: 'Payments',
     fields: [
-      { key: 'id', label: 'Transaction', kind: 'dimension' },
-      { key: 'channel', label: 'Channel', kind: 'dimension' },
-      { key: 'amount', label: 'Amount', kind: 'measure', format: 'currency' },
-      { key: 'duration', label: 'Settlement time', kind: 'measure', format: 'duration' },
+      { key: 'id', label: 'Transaction', role: 'dimension' },
+      { key: 'channel', label: 'Channel', role: 'dimension' },
+      { key: 'amount', label: 'Amount', role: 'measure', format: 'currency' },
+      { key: 'duration', label: 'Settlement time', role: 'measure', format: 'duration' },
     ],
     rows,
   }
@@ -283,7 +396,7 @@ const transactions = (): Dataset => {
 // Decays along each row and slightly across cohorts, which is what real
 // retention does and what makes the grid readable as a gradient.
 
-const cohortRetention = (): Dataset => {
+const cohortRetention = (): Draft => {
   const random = seeded(1009)
   const cohorts = monthsEndingAt('2026-08', 12)
   const rows: Row[] = []
@@ -309,10 +422,10 @@ const cohortRetention = (): Dataset => {
     description: 'Monthly signup cohorts tracked across subsequent periods.',
     source: 'Product analytics',
     fields: [
-      { key: 'cohort', label: 'Cohort', kind: 'time' },
-      { key: 'period', label: 'Period', kind: 'dimension' },
-      { key: 'retention', label: 'Retention', kind: 'measure', format: 'percent' },
-      { key: 'users', label: 'Users', kind: 'measure', format: 'number' },
+      { key: 'cohort', label: 'Cohort', role: 'time-dimension' },
+      { key: 'period', label: 'Period', role: 'dimension' },
+      { key: 'retention', label: 'Retention', role: 'measure', format: 'percent' },
+      { key: 'users', label: 'Users', role: 'measure', format: 'number' },
     ],
     rows,
   }
@@ -320,7 +433,7 @@ const cohortRetention = (): Dataset => {
 
 // --- 10. Project timeline ---------------------------------------------------
 
-const projectTimeline = (): Dataset => {
+const projectTimeline = (): Draft => {
   const random = seeded(1010)
   const tasks = [
     ['Discovery', 'Research', 0, 18], ['Requirements', 'Research', 12, 34],
@@ -332,16 +445,16 @@ const projectTimeline = (): Dataset => {
 
   return {
     id: 'project-timeline',
-    suits: ['gantt-chart'],
+    suits: ['timeline-chart'],
     name: 'Project timeline',
     description: 'Nine workstreams with start and end offsets, grouped by phase.',
     source: 'Delivery',
     fields: [
-      { key: 'task', label: 'Task', kind: 'dimension' },
-      { key: 'phase', label: 'Phase', kind: 'dimension' },
-      { key: 'start', label: 'Start day', kind: 'measure', format: 'number' },
-      { key: 'end', label: 'End day', kind: 'measure', format: 'number' },
-      { key: 'progress', label: 'Progress', kind: 'measure', format: 'percent' },
+      { key: 'task', label: 'Task', role: 'dimension' },
+      { key: 'phase', label: 'Phase', role: 'dimension' },
+      { key: 'start', label: 'Start day', role: 'measure', format: 'number' },
+      { key: 'end', label: 'End day', role: 'measure', format: 'number' },
+      { key: 'progress', label: 'Progress', role: 'measure', format: 'percent' },
     ],
     rows: tasks.map(([task, phase, start, end]) => ({
       task,
@@ -355,7 +468,7 @@ const projectTimeline = (): Dataset => {
 
 // --- 11. Activity events ----------------------------------------------------
 
-const activityEvents = (): Dataset => {
+const activityEvents = (): Draft => {
   const random = seeded(1011)
   const actors = ['A. Okafor', 'B. Mensah', 'C. Adeyemi', 'D. Ncube', 'E. Wanjiru', 'System']
   const actions = [
@@ -371,11 +484,20 @@ const activityEvents = (): Dataset => {
     name: 'Activity events',
     description: 'Sixty timestamped platform events with actor and severity.',
     source: 'Audit',
+    /*
+     * FR-DA-14 — `actor` names a person, so every retrieval of this Dataset is
+     * one someone may later have to account for. Declared here rather than left
+     * false for all thirteen, because an access record with nothing in it
+     * demonstrates nothing: the requirement is only testable if some Dataset
+     * actually triggers it.
+     */
+    classification: 'restricted',
+    exposesPersonalData: true,
     fields: [
-      { key: 'at', label: 'When', kind: 'time' },
-      { key: 'actor', label: 'Actor', kind: 'dimension' },
-      { key: 'action', label: 'Action', kind: 'dimension' },
-      { key: 'severity', label: 'Severity', kind: 'dimension' },
+      { key: 'at', label: 'When', role: 'time-dimension' },
+      { key: 'actor', label: 'Actor', role: 'dimension' },
+      { key: 'action', label: 'Action', role: 'dimension' },
+      { key: 'severity', label: 'Severity', role: 'dimension' },
     ],
     rows: days.map((at) => ({
       at,
@@ -390,18 +512,18 @@ const activityEvents = (): Dataset => {
 // Deliberately mixed states, so every branch of a status widget is reachable
 // from one dataset rather than needing three.
 
-const serviceHealth = (): Dataset => ({
+const serviceHealth = (): Draft => ({
   id: 'service-health',
-    suits: ['status-list', 'status-tile'],
+    suits: ['status-list', 'status-indicator'],
   name: 'Service health',
   description: 'Nine services with uptime, latency and current state.',
   source: 'Platform',
   fields: [
-    { key: 'service', label: 'Service', kind: 'dimension' },
-    { key: 'state', label: 'State', kind: 'dimension' },
-    { key: 'uptime', label: 'Uptime', kind: 'measure', format: 'percent' },
-    { key: 'latency', label: 'p95 latency', kind: 'measure', format: 'duration' },
-    { key: 'errorRate', label: 'Error rate', kind: 'measure', format: 'percent' },
+    { key: 'service', label: 'Service', role: 'dimension' },
+    { key: 'state', label: 'State', role: 'dimension' },
+    { key: 'uptime', label: 'Uptime', role: 'measure', format: 'percent' },
+    { key: 'latency', label: 'p95 latency', role: 'measure', format: 'duration' },
+    { key: 'errorRate', label: 'Error rate', role: 'measure', format: 'percent' },
   ],
   rows: [
     { service: 'Payments API', state: 'good', uptime: 0.9998, latency: 0.14, errorRate: 0.0004 },
@@ -419,7 +541,7 @@ const serviceHealth = (): Dataset => ({
 // --- 13. Support tickets ----------------------------------------------------
 // Wide, so a table has enough columns to need column configuration.
 
-const supportTickets = (): Dataset => {
+const supportTickets = (): Draft => {
   const random = seeded(1013)
   const statuses = ['Open', 'In progress', 'Waiting on customer', 'Resolved', 'Closed']
   const priorities = ['Low', 'Medium', 'High', 'Urgent']
@@ -433,13 +555,13 @@ const supportTickets = (): Dataset => {
     description: 'A hundred and twenty tickets across status, priority and team.',
     source: 'Support',
     fields: [
-      { key: 'ref', label: 'Reference', kind: 'dimension' },
-      { key: 'opened', label: 'Opened', kind: 'time' },
-      { key: 'status', label: 'Status', kind: 'dimension' },
-      { key: 'priority', label: 'Priority', kind: 'dimension' },
-      { key: 'team', label: 'Team', kind: 'dimension' },
-      { key: 'ageDays', label: 'Age', kind: 'measure', format: 'number' },
-      { key: 'replies', label: 'Replies', kind: 'measure', format: 'number' },
+      { key: 'ref', label: 'Reference', role: 'dimension' },
+      { key: 'opened', label: 'Opened', role: 'time-dimension' },
+      { key: 'status', label: 'Status', role: 'dimension' },
+      { key: 'priority', label: 'Priority', role: 'dimension' },
+      { key: 'team', label: 'Team', role: 'dimension' },
+      { key: 'ageDays', label: 'Age', role: 'measure', format: 'number' },
+      { key: 'replies', label: 'Replies', role: 'measure', format: 'number' },
     ],
     rows: days.map((opened, index) => ({
       ref: `SUP-${4200 + index}`,
@@ -455,7 +577,7 @@ const supportTickets = (): Dataset => {
 
 // --- library ----------------------------------------------------------------
 
-export const datasets: Dataset[] = [
+const DRAFTS: Draft[] = [
   revenueDaily(),
   revenueMonthly(),
   salesByRegion(),
@@ -470,6 +592,32 @@ export const datasets: Dataset[] = [
   serviceHealth(),
   supportTickets(),
 ]
+
+const PUBLISHED = DRAFTS.map(publish)
+
+/**
+ * The Catalogue's half: descriptions, no records.
+ *
+ * FR-DP-11 wants discovery without retrieval, and this is the shape of it even
+ * while both halves are compiled into the same bundle. Stage 5 puts a port in
+ * front of these two exports; nothing above them has to change when it does,
+ * because nothing above them can already reach a row through a `Dataset`.
+ */
+export const datasets: Dataset[] = PUBLISHED.map((entry) => entry.dataset)
+
+const ROWS = new Map(PUBLISHED.map((entry) => [entry.dataset.id, entry.rows]))
+
+/**
+ * Retrieval's half.
+ *
+ * Deliberately a lookup by id rather than a property on the Dataset. A caller
+ * has to *ask* for records, which is what makes the eventual port a change of
+ * implementation rather than a change of shape.
+ */
+export const rowsFor = (id: string): Row[] => ROWS.get(id) ?? []
+
+/** How many records a Dataset holds, without handing them over. */
+export const rowCountOf = (id: string): number => rowsFor(id).length
 
 export const datasetById = (id: string): Dataset | undefined =>
   datasets.find((dataset) => dataset.id === id)

@@ -11,15 +11,19 @@
 
 import { useEffect, useState } from 'react'
 import { GridBoard } from '../builder/GridBoard'
+import { SharePanel } from '../builder/SharePanel'
+import { BoardControls } from '../builder/BoardControls'
+import { useBoardControls } from '../builder/useBoardControls'
 import { WidgetComposer, type ComposerDraft } from '../builder/WidgetComposer'
 import { useBoards } from '../builder/useBoards'
 import { useComposeIntent } from '../builder/useComposeIntent'
-import type { PlacedWidget } from '../builder/boards'
+import { placedWidgets, widgetCountOf, type PlacedWidget } from '../builder/boards'
 import type { ScreenId } from '../shell/nav'
 
 export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const boards = useBoards()
   const { editing } = boards
+  const controls = useBoardControls(editing)
 
   const intent = useComposeIntent()
 
@@ -46,10 +50,14 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
   // store decides whether that means adopting a blank draft or making one — see
   // `ensure-editing`, which is idempotent precisely because this effect is not.
   useEffect(() => {
-    if (!editing) boards.ensureEditing()
+    // Not while the store is still answering. Creating a board because the load
+    // has not resolved yet leaves a blank draft behind on every single visit,
+    // and the one you were actually editing arrives a moment later beside it.
+    if (!boards.loading && !editing) boards.ensureEditing()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editing])
+  }, [editing, boards.loading])
 
+  if (boards.loading) return <p className="a-muted">Loading your boards…</p>
   if (!editing) return null
 
   const isEditing = (value: typeof composing): value is PlacedWidget =>
@@ -64,6 +72,8 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           datasetId: draft.datasetId,
           title: draft.title,
           mapping: draft.mapping,
+          exposedFilters: draft.exposedFilters,
+          exposedSorts: draft.exposedSorts,
         },
         { w: draft.span },
       )
@@ -76,6 +86,8 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           datasetId: draft.datasetId,
           title: draft.title,
           mapping: draft.mapping,
+          exposedFilters: draft.exposedFilters,
+          exposedSorts: draft.exposedSorts,
         },
         draft.span,
       )
@@ -94,6 +106,8 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
                 title: composing.title ?? '',
                 mapping: composing.mapping,
                 span: composing.w,
+                exposedFilters: composing.exposedFilters ?? [],
+                exposedSorts: composing.exposedSorts ?? [],
               }
             : undefined
         }
@@ -116,17 +130,33 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
 
         <div className="a-board-head__actions">
           <span className="a-muted">
-            {editing.widgets.length} {editing.widgets.length === 1 ? 'widget' : 'widgets'} ·{' '}
+            {widgetCountOf(editing)} {widgetCountOf(editing) === 1 ? 'widget' : 'widgets'} ·{' '}
             {editing.status === 'published' ? 'Published' : 'Draft'}
           </span>
           <button type="button" className="a-button" onClick={() => setComposing('new')}>
             Add widget
           </button>
+          <button
+            type="button"
+            className="a-button"
+            onClick={() => boards.addSection(editing.id)}
+          >
+            Add section
+          </button>
+          {editing.controls.length === 0 && (
+            <button
+              type="button"
+              className="a-button"
+              onClick={() => boards.addDateRangeControl(editing.id)}
+            >
+              Add date range
+            </button>
+          )}
           {editing.status === 'draft' ? (
             <button
               type="button"
               className="a-button a-button--primary"
-              disabled={editing.widgets.length === 0}
+              disabled={widgetCountOf(editing) === 0}
               onClick={() => {
                 boards.publishBoard(editing.id)
                 onNavigate('dashboards')
@@ -146,8 +176,22 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
         </div>
       </div>
 
+      <SharePanel board={editing} />
+
+      <BoardControls
+        controls={editing.controls}
+        widgets={placedWidgets(editing)}
+        values={controls.values}
+        onChange={controls.setValues}
+        onRemove={(controlId) => boards.removeControl(editing.id, controlId)}
+      />
+
       <GridBoard
-        widgets={editing.widgets}
+        widgets={placedWidgets(editing)}
+        contributionFor={controls.contribution}
+        sections={editing.sections}
+        onRenameSection={(sectionId, label) => boards.renameSection(editing.id, sectionId, label)}
+        onRemoveSection={(sectionId) => boards.removeSection(editing.id, sectionId)}
         editable
         onLayoutChange={(placements) => boards.applyLayout(editing.id, placements)}
         onEdit={(widget) => setComposing(widget)}

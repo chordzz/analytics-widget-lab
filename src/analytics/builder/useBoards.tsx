@@ -10,32 +10,61 @@
  * clock is injectable in tests.
  */
 
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import {
   boardsReducer,
   boardById,
+  placedWidgets,
   draftBoards,
-  loadState,
-  publishedBoards,
-  saveState,
   type Board,
   type BoardsAction,
   type BoardsState,
   type LayoutEntry,
 } from './boards'
+import { dateRangeControl, section } from '../../domain/composition'
+import { nextSectionRow } from './sections'
+import { visibleDashboards } from '../../access/dashboard-access'
+import { useAnalyticsData } from '../data/AnalyticsData'
 import { seedBoards } from './seed'
+import { LocalBoardStore, type BoardStorePort } from './store'
+import type { DashboardScope } from './boards'
 import type { WidgetSpec } from '../widgets/Widget'
 
-const today = () => new Date().toISOString().slice(0, 10)
-
-/** Unique enough for a client-side board; no server is issuing these. */
-const newId = (prefix: string) =>
-  `${prefix}-${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36).slice(-4)}`
+/**
+ * How long to sit on changes before writing them.
+ *
+ * `GridBoard` already commits once per gesture rather than once per frame; this
+ * is the same idea one layer out. Against localStorage it barely matters, and
+ * against a network it is the difference between one request per drag and one
+ * per keystroke in the rename field.
+ */
+const WRITE_DEBOUNCE_MS = 400
 
 interface BoardsContextValue {
   state: BoardsState
+  /** True until the store has answered. Nothing below it is meaningful yet. */
+  loading: boolean
   dispatch: (action: BoardsAction) => void
+  /** Every board in the store, whether or not this Viewer may see it. */
   boards: Board[]
+  /**
+   * FR-DA-02 — FR-DA-07. What this Viewer may actually see.
+   *
+   * Asynchronous, because authorization is a port and a Grant may name a group
+   * that has to be resolved. Until it answers this is empty rather than
+   * everything: showing boards first and hiding them a moment later is a
+   * disclosure, however brief.
+   */
+  visible: Board[]
   drafts: Board[]
   published: Board[]
   editing: Board | undefined
@@ -48,6 +77,18 @@ interface BoardsContextValue {
   deleteBoard: (id: string) => void
   publishBoard: (id: string) => void
   unpublishBoard: (id: string) => void
+  /** FR-DA-01 — every Dashboard has a Scope, and it is the Author's to set. */
+  setScope: (id: string, scope: DashboardScope) => void
+  /** FR-DA-06 — refines who within the Scope sees it. Never reaches beyond. */
+  addGrant: (id: string, recipient: { kind: 'individual' | 'group'; id: string; label: string }) => void
+  removeGrant: (id: string, grantId: string) => void
+  /** FR-CO-05 — a Composition Element that changes how Widgets present data. */
+  addDateRangeControl: (id: string, label?: string) => void
+  removeControl: (id: string, controlId: string) => void
+  /** FR-CO-07 — a Container that organizes Widgets spatially. */
+  addSection: (id: string, label?: string) => void
+  renameSection: (id: string, sectionId: string, label: string) => void
+  removeSection: (id: string, sectionId: string) => void
   /**
    * Adds a widget. `size` is what the composer chose; anything it leaves out
    * comes from the widget type, and the board decides where it goes.
@@ -63,35 +104,147 @@ interface BoardsContextValue {
 
 const BoardsContext = createContext<BoardsContextValue | null>(null)
 
-export function BoardsProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(boardsReducer, null, () => loadState(seedBoards))
+export function BoardsProvider({
+  children,
+  store,
+}: {
+  children: ReactNode
+  /** Supplied by a host with a real store. Omit to persist locally. */
+  store?: BoardStorePort
+}) {
+  const { viewer, authorization } = useAnalyticsData()
+  const backing = useMemo(() => store ?? new LocalBoardStore(), [store])
+
+  /*
+   * An empty board list is the honest starting point, not the seed.
+   *
+   * Seeding here and replacing on load would show a board that is not yours for
+   * a frame, and — worse — the persist effect below would race the load and
+   * write the seed over your saved session. `loading` is what callers render
+   * against instead.
+   */
+  const [state, dispatch] = useReducer(boardsReducer, { boards: [], editingId: null })
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    saveState(state)
-  }, [state])
+    let live = true
+    backing
+      .load(seedBoards, viewer.id)
+      .then((loaded) => {
+        if (!live) return
+        dispatch({ type: 'replace-all', boards: loaded.boards })
+        if (loaded.editingId) dispatch({ type: 'open-board', id: loaded.editingId })
+        setLoading(false)
+      })
+      .catch(() => live && setLoading(false))
+
+    return () => {
+      live = false
+    }
+  }, [backing, viewer.id])
+
+  /*
+   * Persist after the load, never during it, and never on the first render.
+   *
+   * Without the guard the empty initial state is written the moment the provider
+   * mounts, which erases the saved session before the load that would have
+   * restored it has even resolved.
+   */
+  /*
+   * Visibility is recomputed whenever the boards or the Viewer change.
+   *
+   * It cannot be a selector: `canViewDashboard` asks the authorization port,
+   * which is asynchronous because resolving a group Grant is a lookup. Holding
+   * the answer in state is what lets the screens stay synchronous.
+   */
+  const [visible, setVisible] = useState<Board[]>([])
+
+  useEffect(() => {
+    let live = true
+    visibleDashboards(state.boards, viewer, authorization)
+      .then((allowed) => live && setVisible(allowed))
+      .catch(() => live && setVisible([]))
+    return () => {
+      live = false
+    }
+  }, [state.boards, viewer, authorization])
+
+  const settled = useRef(false)
+
+  useEffect(() => {
+    if (loading) return
+    if (!settled.current) {
+      settled.current = true
+      return
+    }
+
+    const timer = setTimeout(() => void backing.save(state), WRITE_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [backing, state, loading])
 
   const value = useMemo<BoardsContextValue>(() => {
-    const at = today()
+    const at = backing.now()
+    const newId = (prefix: string) => backing.mintId(prefix)
+    const authorId = viewer.id
 
     return {
       state,
+      loading,
       dispatch,
       boards: state.boards,
-      drafts: draftBoards(state),
-      published: publishedBoards(state),
+      visible,
+      // Drafts are the Author's own by definition (FR-CO-04), so this list is
+      // already scoped by `authorId` rather than by the visibility pass.
+      drafts: draftBoards(state).filter((board) => board.authorId === viewer.id),
+      published: visible.filter((board) => board.status === 'published'),
       editing: boardById(state, state.editingId),
 
       createBoard: (name) => {
         const id = newId('board')
-        dispatch({ type: 'create-board', id, name, at })
+        dispatch({ type: 'create-board', id, name, authorId, at })
         return id
       },
       openBoard: (id) => dispatch({ type: 'open-board', id }),
-      ensureEditing: () => dispatch({ type: 'ensure-editing', id: newId('board'), at }),
+      ensureEditing: () => dispatch({ type: 'ensure-editing', id: newId('board'), authorId, at }),
       renameBoard: (id, name) => dispatch({ type: 'rename-board', id, name, at }),
       deleteBoard: (id) => dispatch({ type: 'delete-board', id }),
       publishBoard: (id) => dispatch({ type: 'set-status', id, status: 'published', at }),
       unpublishBoard: (id) => dispatch({ type: 'set-status', id, status: 'draft', at }),
+      setScope: (id, scope) => dispatch({ type: 'set-scope', id, scope, at }),
+      addGrant: (id, recipient) =>
+        dispatch({
+          type: 'add-grant',
+          id,
+          grant: {
+            id: newId('grant'),
+            recipientKind: recipient.kind,
+            recipientId: recipient.id,
+            recipientLabel: recipient.label,
+          },
+          at,
+        }),
+      removeGrant: (id, grantId) => dispatch({ type: 'remove-grant', id, grantId, at }),
+      addDateRangeControl: (id, label) =>
+        dispatch({ type: 'add-control', id, control: dateRangeControl(newId('control'), label), at }),
+      removeControl: (id, controlId) => dispatch({ type: 'remove-control', id, controlId, at }),
+      addSection: (id, label) => {
+        const board = boardById(state, id)
+        dispatch({
+          type: 'add-section',
+          id,
+          // Below everything, so labelling a board never rearranges it.
+          section: section(
+            newId('section'),
+            label ?? 'New section',
+            board ? nextSectionRow(placedWidgets(board)) : 0,
+            true,
+          ),
+          at,
+        })
+      },
+      renameSection: (id, sectionId, label) =>
+        dispatch({ type: 'rename-section', id, sectionId, label, at }),
+      removeSection: (id, sectionId) => dispatch({ type: 'remove-section', id, sectionId, at }),
 
       addWidget: (boardId, widget, size) =>
         dispatch({
@@ -112,7 +265,7 @@ export function BoardsProvider({ children }: { children: ReactNode }) {
       applyLayout: (boardId, placements) =>
         dispatch({ type: 'apply-layout', boardId, placements, at }),
     }
-  }, [state])
+  }, [state, loading, backing, viewer.id, visible])
 
   return <BoardsContext.Provider value={value}>{children}</BoardsContext.Provider>
 }

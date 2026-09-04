@@ -180,17 +180,29 @@ export const visualizationFamilies: VisualizationFamily[] = [
       clauses: [
         minMeasures(1),
         {
-          describe: 'a location-typed Dimension',
+          /*
+           * Two routes, because the Family has two shapes of member and they
+           * need different Fields. A choropleth shades named areas; a point map
+           * plots coordinates. Requiring one clause to cover both is what made
+           * the earlier version unsatisfiable — see Finding 15.
+           */
+          describe: 'a Field naming a place, or a latitude and longitude pair',
           test: () => false,
-          testWithSemantics: (d) =>
-            d.fields.some(
-              (f) => f.semantic === 'geographic-location' && f.role !== 'measure',
-            ),
+          testWithSemantics: (d) => {
+            const named = d.fields.some((f) => f.semantic === 'geographic-area')
+            const located =
+              d.fields.some((f) => f.semantic === 'geographic-latitude') &&
+              d.fields.some((f) => f.semantic === 'geographic-longitude')
+            return named || located
+          },
           undecidable: {
             requirement:
               '§4.2 requires a "location-typed Dimension". The published model has exactly three ' +
-              'Field roles — Dimension, Measure, Time Dimension — and no notion of a location type.',
-            resolvedBy: "proposed Field semantic 'geographic-location'",
+              'Field roles — Dimension, Measure, Time Dimension — and no notion of a location type. ' +
+              'It also cannot say that two Measures are a coordinate pair rather than two figures.',
+            resolvedBy:
+              "proposed Field semantics 'geographic-area', or " +
+              "'geographic-latitude' with 'geographic-longitude'",
           },
         },
       ],

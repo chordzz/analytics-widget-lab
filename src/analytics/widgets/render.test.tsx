@@ -20,11 +20,12 @@ import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactElement } from 'react'
 
-import { Widget } from './Widget'
+import { WidgetView } from './Widget'
 import { SAMPLES } from './samples'
 import { WIDGET_TYPES } from './catalog'
-import { datasets, requireDataset } from '../data/datasets'
-import type { Dataset, Row } from '../data/types'
+import { datasets, requireDataset, rowsFor } from '../data/datasets'
+import { rowsForWidget } from '../data/query'
+import type { Field, Row } from '../data/types'
 import * as P from './primitives'
 
 const builtTypes = WIDGET_TYPES.filter((type) => type.built)
@@ -48,7 +49,14 @@ describe('every built widget type', () => {
     for (const type of builtTypes) {
       const markup = render(
         type.id,
-        <Widget spec={{ id: 'test', typeId: type.id, ...SAMPLES[type.id] }} />,
+        <WidgetView
+          spec={{ id: 'test', typeId: type.id, ...SAMPLES[type.id] }}
+          dataset={requireDataset(SAMPLES[type.id].datasetId)}
+          rows={rowsForWidget(
+            { id: 'test', typeId: type.id, ...SAMPLES[type.id] },
+            requireDataset(SAMPLES[type.id].datasetId),
+          )}
+        />,
       )
       expect(markup.length).toBeGreaterThan(0)
     }
@@ -60,7 +68,14 @@ describe('every built widget type', () => {
     for (const type of builtTypes) {
       const markup = render(
         type.id,
-        <Widget spec={{ id: 'test', typeId: type.id, ...SAMPLES[type.id] }} />,
+        <WidgetView
+          spec={{ id: 'test', typeId: type.id, ...SAMPLES[type.id] }}
+          dataset={requireDataset(SAMPLES[type.id].datasetId)}
+          rows={rowsForWidget(
+            { id: 'test', typeId: type.id, ...SAMPLES[type.id] },
+            requireDataset(SAMPLES[type.id].datasetId),
+          )}
+        />,
       )
       expect({ type: type.id, broken: markup.includes('No widget type') }).toEqual({
         type: type.id,
@@ -72,25 +87,36 @@ describe('every built widget type', () => {
   test('shows the empty state rather than a chart when the data has no rows', () => {
     for (const type of builtTypes) {
       const sample = SAMPLES[type.id]
-      const empty: Dataset = { ...requireDataset(sample.datasetId), rows: [] }
-      // The dataset registry is keyed by id, so the spec is pointed at a real
-      // dataset and the emptiness is asserted through the primitive tests below.
+      // A Dataset no longer carries rows, so "empty" is a property of the
+      // retrieval and not of the description. The description still has to exist
+      // — a spec pointed at a missing dataset is a wiring error, not emptiness —
+      // and the no-rows behaviour itself is asserted by the primitive tests below.
+      const described = requireDataset(sample.datasetId)
       const markup = render(
         `${type.id} (empty)`,
-        <Widget spec={{ id: 'test', typeId: type.id, ...sample }} state="empty" />,
+        <WidgetView
+          spec={{ id: 'test', typeId: type.id, ...sample }}
+          dataset={described}
+          rows={[]}
+          state="empty"
+        />,
       )
       expect(markup).toContain('No data')
-      expect(empty.rows).toEqual([])
+      expect(described.fields.length).toBeGreaterThan(0)
     }
   })
 
   test('renders loading and error states for every type', () => {
     for (const type of builtTypes) {
       const sample = SAMPLES[type.id]
-      for (const state of ['loading', 'error'] as const) {
+      for (const state of ['loading', 'denied', 'withdrawn', 'failed'] as const) {
         const markup = render(
           `${type.id} (${state})`,
-          <Widget spec={{ id: 'test', typeId: type.id, ...sample }} state={state} />,
+          <WidgetView
+            spec={{ id: 'test', typeId: type.id, ...sample }}
+            dataset={requireDataset(sample.datasetId)}
+            state={state}
+          />,
         )
         expect(markup.length).toBeGreaterThan(0)
       }
@@ -112,9 +138,9 @@ describe('every built widget type', () => {
  */
 const NO_ROWS: readonly Row[] = []
 const SERIES = [{ key: 'v', label: 'Value' }, { key: 'w', label: 'Other' }]
-const COLUMNS = [
-  { key: 'x', label: 'Category', kind: 'dimension' as const },
-  { key: 'v', label: 'Value', kind: 'measure' as const },
+const COLUMNS: Field[] = [
+  { key: 'x', label: 'Category', role: 'dimension', filterable: true, sortable: true },
+  { key: 'v', label: 'Value', role: 'measure', filterable: false, sortable: true, aggregations: ['sum'] },
 ]
 
 const primitives: { name: string; element: ReactElement }[] = [
@@ -143,6 +169,21 @@ const primitives: { name: string; element: ReactElement }[] = [
   { name: 'Sparkline', element: <P.Sparkline data={NO_ROWS} seriesKey="v" /> },
   { name: 'Treemap', element: <P.Treemap data={NO_ROWS} xKey="x" valueKey="v" /> },
   { name: 'TrendChart', element: <P.TrendChart data={NO_ROWS} xKey="x" series={SERIES} /> },
+  { name: 'EventLog', element: <P.EventLog data={NO_ROWS} timeKey="t" /> },
+  /*
+   * The threshold pair are tiles, so "no data" for them is no *threshold* — the
+   * figure is a bare number that always arrives. An unconfigured tile must not
+   * read as healthy, which is asserted properly in `threshold.test.ts`; here we
+   * only need it to render and to emit no NaN.
+   */
+  {
+    name: 'ThresholdTile',
+    element: <P.ThresholdTile value={Number.NaN} label="Empty" config={{ direction: 'below-is-bad' }} />,
+  },
+  {
+    name: 'AlertBanner',
+    element: <P.AlertBanner value={Number.NaN} label="Empty" config={{ direction: 'below-is-bad' }} />,
+  },
 ]
 
 describe('primitives with no data', () => {
@@ -189,7 +230,7 @@ describe('every dataset', () => {
     for (const dataset of datasets) {
       const markup = render(
         dataset.id,
-        <P.DataTable data={dataset.rows} columns={dataset.fields} limit={5} />,
+        <P.DataTable data={rowsFor(dataset.id)} columns={dataset.fields} limit={5} />,
       )
       expect(markup).toContain(dataset.fields[0].label)
     }
