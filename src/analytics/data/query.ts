@@ -61,6 +61,84 @@ export function aggregationFor(
     : declared[0]
 }
 
+/**
+ * Apply an aggregation to a column of rows.
+ *
+ * The arithmetic behind `aggregationFor`, so the same declaration decides both
+ * what we *ask* for and what we compute if the answer arrives unaggregated. Two
+ * implementations of "sum" is precisely the divergent-definition failure this
+ * capability exists to remove, and it would be an easy one to reintroduce here.
+ */
+function applyAggregation(values: number[], aggregation: Aggregation): number {
+  if (values.length === 0) return 0
+
+  switch (aggregation) {
+    case 'average':
+      return values.reduce((total, value) => total + value, 0) / values.length
+    case 'count':
+      return values.length
+    case 'distinct-count':
+      return new Set(values).size
+    // `minimum`/`maximum` here; the deployed API spells the same two `min`/`max`
+    // (D29). The adapter translates; nothing above it should know.
+    case 'minimum':
+      return Math.min(...values)
+    case 'maximum':
+      return Math.max(...values)
+    case 'sum':
+      return values.reduce((total, value) => total + value, 0)
+  }
+}
+
+/**
+ * One number for a single-value widget, however the rows arrived.
+ *
+ * A stat card, a threshold indicator and an alert banner each show one figure,
+ * and each asks the query for it. Whether the query is honoured is not ours to
+ * decide: the deployed API is a proxy that forwards to the Source System and
+ * relays the body verbatim (D22), so `measures` may be ignored entirely and the
+ * whole column may come back.
+ *
+ * So the widget stops caring. One row means somebody aggregated — use it.
+ * Several means nobody did — aggregate here, with the aggregation the publisher
+ * *declared*, which is the same one the query asked for.
+ *
+ * This is not the reduction Stage 4 removed. That one re-derived the roll-up
+ * rule from the field's display `format`, so a widget decided what "sum" meant.
+ * This one obeys the declaration either way, and the figure is identical
+ * whichever side computes it — which is the property that makes the uncertainty
+ * survivable rather than merely hidden.
+ */
+export function singleValueOf(
+  spec: WidgetSpec,
+  dataset: Dataset,
+  rows: readonly Row[],
+  fieldKey: string,
+): number {
+  if (rows.length === 0) return Number.NaN
+  if (rows.length === 1) return Number(rows[0][fieldKey] ?? Number.NaN)
+
+  const override =
+    typeof spec.options?.aggregation === 'string' ? spec.options.aggregation : undefined
+  const values = rows
+    .map((row) => Number(row[fieldKey] ?? Number.NaN))
+    .filter((value) => Number.isFinite(value))
+
+  /*
+   * Nothing readable is not a zero.
+   *
+   * Skipping values we cannot parse is the right call per row — one absent
+   * service should not blank a fleet-wide figure. Skipping *all* of them and
+   * then reporting the empty sum would put a confident `0` on the card, which
+   * claims the figure is zero when we only failed to read it. That is the
+   * precise failure §3 of the widget data contract asks Source Systems to avoid,
+   * and it would be poor form to commit it ourselves on the way past.
+   */
+  if (values.length === 0) return Number.NaN
+
+  return applyAggregation(values, aggregationFor(dataset, fieldKey, override))
+}
+
 /** The Time Dimension a widget orders by, if its Dataset has one. */
 const timeKeyOf = (dataset: Dataset, mapping: WidgetSpec['mapping']): string | undefined => {
   const named = mapping.x !== undefined ? fieldOf(dataset, mapping.x) : undefined

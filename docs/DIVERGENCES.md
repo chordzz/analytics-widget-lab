@@ -24,7 +24,7 @@ them. Where the two are related the entry says so.
 | Temporary | Conformance deferred, with a stage that ends it. |
 | Resolved | Was one of the above; no longer diverges. Kept for the record. |
 
-## Open — 23
+## Open — 24
 
 | # | Answers to | Clause | Divergence | Status |
 | --- | --- | --- | --- | --- |
@@ -51,6 +51,7 @@ them. Where the two are related the entry says so.
 | **D26** | API | `API: schema ShareGrantTarget` | A Share Grant targets an individual or a group; the API says user or department. | Temporary — the HTTP adapter |
 | **D27** | API | `API: schema Envelope` | Every response is wrapped in `{ status, message, data }`; we read bodies directly. | Temporary — the HTTP adapter |
 | **D28** | API | `API: schema Widget.visualization_type` | Visualization Type ids may be a third vocabulary, neither ours nor the FRD's. | Temporary — confirmation against a live Dataset |
+| **D29** | API | `API: schema Aggregation` | Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`. | Temporary — the HTTP adapter |
 
 ## Resolved — 3
 
@@ -259,6 +260,14 @@ A boolean `status`, a human `message`, and the payload under `data`. One unwrap 
 **Where:** `analytics/widgets/catalog.ts, analytics/widgets/taxonomy.test.ts`  
 
 `visualization_type` is a bare string that Analytics *validates* against the Families the bound Dataset's Data Shape satisfies, so the API is the authority for those strings. It publishes no enum: they are discovered at runtime from `/presentation`. Its examples read `family: "trend-over-time"` and `types: ["line", "area"]` where Stage 1 renamed us to the FRD's `trend`, `line-chart` and `area-chart`. Examples are not a contract and may simply be loose, so this is unconfirmed — one authenticated call settles it. If it holds, Stage 1 needs doing again, and `taxonomy.test.ts` should assert against the API rather than a local manifest.
+
+### D29 — Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`.
+
+**Answers to:** API — `API: schema Aggregation`  
+**Status:** Temporary (the HTTP adapter)  
+**Where:** `domain/dataset.ts, analytics/data/adapters.ts`  
+
+Both enumerate the same six — sum, average, count, the two extremes, and a distinct count — and differ only on whether the extremes are abbreviated. Found by the type-checker while writing the reduction for D22, which is the useful part: a declared `min` would have fallen through our switch to a silent zero rather than failing, because an aggregation we do not recognise looks exactly like an empty column. Two names for one operation is also how a board ends up averaging a count, so the translation belongs in one place.
 
 ---
 

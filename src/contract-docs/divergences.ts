@@ -471,6 +471,22 @@ export const DIVERGENCES: Divergence[] = [
       'loose, so this is unconfirmed — one authenticated call settles it. If it holds, Stage 1 needs ' +
       'doing again, and `taxonomy.test.ts` should assert against the API rather than a local manifest.',
   },
+  {
+    id: 'D29',
+    clause: 'API: schema Aggregation',
+    authority: 'api',
+    divergence: 'Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`.',
+    status: 'temporary',
+    endedAt: 'the HTTP adapter',
+    where: 'domain/dataset.ts, analytics/data/adapters.ts',
+    reason:
+      'Both enumerate the same six — sum, average, count, the two extremes, and a distinct count — ' +
+      'and differ only on whether the extremes are abbreviated. Found by the type-checker while ' +
+      'writing the reduction for D22, which is the useful part: a declared `min` would have fallen ' +
+      'through our switch to a silent zero rather than failing, because an aggregation we do not ' +
+      'recognise looks exactly like an empty column. Two names for one operation is also how a ' +
+      'board ends up averaging a count, so the translation belongs in one place.',
+  },
 ]
 /** Entries that still diverge. */
 export const openDivergences = (): Divergence[] =>

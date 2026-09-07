@@ -13,6 +13,7 @@ import { thresholdFrom } from './threshold'
 import { useState, type ReactNode } from 'react'
 import { useDataset, useWidgetRows } from '../data/AnalyticsData'
 import { WidgetFilters } from './WidgetFilters'
+import { singleValueOf } from '../data/query'
 import type { ViewerChoices } from '../data/query'
 import type { QueryContribution } from '../../composition/correspondence'
 import { fieldOf } from '../data/types'
@@ -395,6 +396,14 @@ function renderBody(
        */
       const isAggregate = typeId === 'stat-card'
       /*
+       * The aggregate, whether or not the query's `measures` was honoured. The
+       * deployed API relays the Source System's body verbatim and may ignore the
+       * aggregation entirely (D22), in which case the whole column arrives and
+       * `values[0]` would be the *first* record shown as if it were the total.
+       * `singleValueOf` obeys the publisher's declared aggregation either way.
+       */
+      const aggregate = singleValueOf(spec, dataset, rows, key)
+      /*
        * A comparison needs two points. One is not a flat period, it is a period
        * with nothing to compare against — which a Control makes reachable, by
        * narrowing a delta card to a single month. Showing "0%" there asserts
@@ -405,7 +414,7 @@ function renderBody(
       return (
         <StatTile
           label={spec.title ?? fieldOf(dataset, key)?.label ?? key}
-          value={isAggregate ? (values[0] ?? 0) : latest}
+          value={isAggregate ? aggregate : latest}
           format={primaryFormat}
           delta={comparable ? latest / previous - 1 : undefined}
           direction={
@@ -476,7 +485,10 @@ function renderBody(
     case 'threshold-indicator':
     case 'alert-banner': {
       const key = mapping.value ?? ''
-      const value = Number(rows[0]?.[key] ?? Number.NaN)
+      // Same reasoning as the stat card: `rows[0]` is the aggregate only if
+      // somebody aggregated. Against a pass-through source it is one service's
+      // uptime standing in for the fleet's.
+      const value = singleValueOf(spec, dataset, rows, key)
       const label = spec.title ?? fieldOf(dataset, key)?.label ?? key
       const config = thresholdFrom(options)
       const format = primaryFormat

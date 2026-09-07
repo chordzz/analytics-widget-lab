@@ -1,0 +1,950 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SMC DAO, Analytics API",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Liveness probe",
+        "responses": [
+          "200"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "summary": "Readiness probe",
+        "responses": [
+          "200",
+          "503"
+        ]
+      }
+    },
+    "/v1/dashboards": {
+      "get": {
+        "summary": "List Dashboards the viewer may see",
+        "responses": [
+          "200",
+          "401",
+          "403"
+        ]
+      },
+      "post": {
+        "summary": "Create a Dashboard",
+        "responses": [
+          "201",
+          "400",
+          "401",
+          "403"
+        ]
+      }
+    },
+    "/v1/dashboards/{dashboardId}": {
+      "delete": {
+        "summary": "Delete a Dashboard",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ]
+      },
+      "get": {
+        "summary": "Read a Dashboard",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ]
+      },
+      "patch": {
+        "summary": "Edit a Dashboard",
+        "responses": [
+          "200",
+          "400",
+          "401",
+          "403",
+          "404"
+        ]
+      }
+    },
+    "/v1/dashboards/{dashboardId}/pin": {
+      "delete": {
+        "summary": "Unpin a Dashboard",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ]
+      },
+      "put": {
+        "summary": "Pin a Dashboard",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ]
+      }
+    },
+    "/v1/dashboards/{dashboardId}/publish": {
+      "post": {
+        "summary": "Publish a Dashboard and set its scope",
+        "responses": [
+          "200",
+          "400",
+          "401",
+          "403",
+          "404"
+        ]
+      }
+    },
+    "/v1/dashboards/{dashboardId}/share-grants": {
+      "post": {
+        "summary": "Grant view access to a user or department",
+        "responses": [
+          "201",
+          "400",
+          "401",
+          "403",
+          "404"
+        ]
+      }
+    },
+    "/v1/datasets": {
+      "get": {
+        "summary": "Browse the Catalogue",
+        "responses": [
+          "200",
+          "401",
+          "403"
+        ]
+      },
+      "post": {
+        "summary": "Publish a Dataset declaration",
+        "responses": [
+          "200",
+          "201",
+          "400",
+          "401",
+          "403"
+        ]
+      }
+    },
+    "/v1/datasets/{datasetId}": {
+      "delete": {
+        "summary": "Remove a Dataset from the Catalogue",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ]
+      },
+      "get": {
+        "summary": "Read one declaration",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ]
+      }
+    },
+    "/v1/datasets/{datasetId}/presentation": {
+      "get": {
+        "summary": "Data Shape and the Visualization Families that may present it",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ]
+      }
+    },
+    "/v1/datasets/{datasetId}/query": {
+      "get": {
+        "summary": "Query a Dataset through the proxy",
+        "responses": [
+          "200",
+          "400",
+          "401",
+          "403",
+          "404",
+          "410",
+          "500",
+          "503",
+          "504"
+        ]
+      }
+    },
+    "/v1/datasets/{datasetId}/withdraw": {
+      "post": {
+        "summary": "Withdraw a Dataset from service",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ]
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "summary": "The authenticated caller",
+        "responses": [
+          "200",
+          "401"
+        ]
+      }
+    },
+    "/v1/source-systems": {
+      "get": {
+        "summary": "List Source Systems",
+        "responses": [
+          "200",
+          "401",
+          "403"
+        ]
+      },
+      "post": {
+        "summary": "Register a Source System",
+        "responses": [
+          "201",
+          "400",
+          "401",
+          "403",
+          "503"
+        ]
+      }
+    },
+    "/v1/source-systems/{sourceSystemId}/services": {
+      "get": {
+        "summary": "List a Source System's Services",
+        "responses": [
+          "200",
+          "401",
+          "403"
+        ]
+      },
+      "post": {
+        "summary": "Register a Service",
+        "responses": [
+          "201",
+          "400",
+          "401",
+          "403"
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Actor": {
+        "description": "The IAM-resolved caller. Note `department_id` is not yet populated from the\ntoken, which is why department-scoped sharing currently fails closed.\n",
+        "properties": {
+          "department_id": {
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "is_head_of_department": {
+            "type": "boolean"
+          },
+          "permissions": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "description": "The decision for each permission key checked on this request. A key absent\nfrom the map is denied.\n",
+            "type": "object"
+          },
+          "profile_image_url": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Aggregation": {
+        "enum": [
+          "sum",
+          "average",
+          "count",
+          "min",
+          "max",
+          "distinct-count"
+        ],
+        "type": "string"
+      },
+      "Dashboard": {
+        "properties": {
+          "composition_elements": {
+            "additionalProperties": true,
+            "nullable": true,
+            "type": "object"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "creator_actor_id": {
+            "description": "Attribution, not ownership: there is deliberately no foreign key to any\nuser table and no cascade, so a board survives its creator being removed\nfrom IAM and stays attributed to them.\n",
+            "type": "string"
+          },
+          "creator_name": {
+            "description": "Denormalised at creation so attribution survives the actor's removal from\nIAM.\n",
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "scope_level": {
+            "$ref": "#/components/schemas/DashboardScopeLevel"
+          },
+          "scope_organizational_ref": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DashboardStatus"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "widgets": {
+            "items": {
+              "$ref": "#/components/schemas/Widget"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "DashboardInput": {
+        "properties": {
+          "composition_elements": {
+            "additionalProperties": true,
+            "description": "Controls and layout containers — date pickers, dropdowns, section headers.\nThey draw from no Dataset, which is what distinguishes them from Widgets,\nand Analytics stores their configuration verbatim for the composition\nsurface.\n",
+            "type": "object"
+          },
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "widgets": {
+            "items": {
+              "$ref": "#/components/schemas/Widget"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "DashboardScopeLevel": {
+        "description": "The access floor of a published Dashboard, from most restrictive to most open:\n\n- `personal` — the creator only\n- `department` — the department named in `scope_organizational_ref`\n- `role` — the role named in `scope_organizational_ref`\n- `organization` — every authenticated user\n\nThe scope is a floor, not a whitelist: a Share Grant refines access within it\nand can never elevate anyone above it.\n",
+        "enum": [
+          "personal",
+          "department",
+          "role",
+          "organization"
+        ],
+        "type": "string"
+      },
+      "DashboardStatus": {
+        "enum": [
+          "draft",
+          "published"
+        ],
+        "type": "string"
+      },
+      "DashboardSummary": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Dashboard"
+          },
+          {
+            "properties": {
+              "is_pinned": {
+                "description": "Whether the calling viewer pinned it.",
+                "type": "boolean"
+              },
+              "widget_count": {
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          }
+        ]
+      },
+      "DataClassification": {
+        "description": "The sensitivity tag. May be raised on amendment but never lowered from `pii`:\ndata already went out under that label.\n",
+        "enum": [
+          "internal",
+          "pii",
+          "financial"
+        ],
+        "type": "string"
+      },
+      "DataShape": {
+        "description": "The structural properties that decide which Visualization Families may present\na Dataset.\n",
+        "properties": {
+          "dimensions": {
+            "example": 2,
+            "type": "integer"
+          },
+          "has_location_field": {
+            "type": "boolean"
+          },
+          "has_time_dimension": {
+            "type": "boolean"
+          },
+          "measures": {
+            "example": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Dataset": {
+        "description": "A Dataset declaration. Metadata only — it points at data the Source System\nserves and holds none of it.\n",
+        "properties": {
+          "accountable_department_id": {
+            "description": "The IAM department accountable for the data.",
+            "example": "dept-finance",
+            "type": "string"
+          },
+          "classification": {
+            "$ref": "#/components/schemas/DataClassification"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/Field"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "filter_parameters": {
+            "items": {
+              "$ref": "#/components/schemas/FilterParameter"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "Dotted lowercase segments. Appears in URLs and Widget bindings.",
+            "example": "peniremit.settlements",
+            "type": "string"
+          },
+          "name": {
+            "example": "Settlements",
+            "type": "string"
+          },
+          "path": {
+            "description": "Absolute path appended to the Service's base URL. No query string,\nfragment, or traversal.\n",
+            "example": "/internal/analytics/settlements",
+            "type": "string"
+          },
+          "required_permission_key": {
+            "description": "The IAM key that gates this Dataset's **data**, checked against the viewer\nat query time. Normally the owning product's own read permission, not an\nAnalytics key — that indirection is what stops a Widget becoming an IAM\nbypass. Immutable once published.\n",
+            "example": "holdings.penilabs.peniremit::settlement.read",
+            "type": "string"
+          },
+          "service_id": {
+            "description": "The registered Service whose base URL the path resolves against. Must\nbelong to `source_system_id`.\n",
+            "example": "fiat-bridge",
+            "type": "string"
+          },
+          "source_system_id": {
+            "description": "The publishing product. Never reassignable: the permission key and the\nendpoint both belong to it.\n",
+            "example": "peniremit",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DatasetStatus"
+          },
+          "time_dimension_field": {
+            "description": "Names a declared date Dimension, or is omitted. Trend and temporal\nVisualization Families need it, and it may not move once published.\n",
+            "example": "day",
+            "nullable": true,
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source_system_id",
+          "service_id",
+          "path",
+          "fields",
+          "required_permission_key"
+        ],
+        "type": "object"
+      },
+      "DatasetStatus": {
+        "enum": [
+          "published",
+          "withdrawn"
+        ],
+        "type": "string"
+      },
+      "Envelope": {
+        "description": "The shape of every response, success or failure.",
+        "properties": {
+          "data": {},
+          "message": {
+            "example": "Query executed",
+            "type": "string"
+          },
+          "status": {
+            "example": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "status",
+          "message"
+        ],
+        "type": "object"
+      },
+      "Field": {
+        "properties": {
+          "aggregations": {
+            "description": "Measures only, and at least one is required. Each must be meaningful for\nthe Field type — a user identifier supports `count` and `distinct-count`\nbut never `sum`, which is what makes that declaration impossible.\n",
+            "items": {
+              "$ref": "#/components/schemas/Aggregation"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "filter_operators": {
+            "description": "Must suit the Field type.",
+            "items": {
+              "$ref": "#/components/schemas/FilterOperator"
+            },
+            "type": "array"
+          },
+          "name": {
+            "description": "Must match the field name the Source System returns.",
+            "example": "total_amount",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/FieldRole"
+          },
+          "sortable": {
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/FieldType"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "role"
+        ],
+        "type": "object"
+      },
+      "FieldRole": {
+        "description": "A `dimension` is groupable and filterable (country, status); a `measure` is\naggregatable (amount, count). Every Field is exactly one of the two.\n",
+        "enum": [
+          "dimension",
+          "measure"
+        ],
+        "type": "string"
+      },
+      "FieldType": {
+        "enum": [
+          "string",
+          "number",
+          "date",
+          "boolean",
+          "category",
+          "location"
+        ],
+        "type": "string"
+      },
+      "FilterOperator": {
+        "enum": [
+          "equals",
+          "range",
+          "contains",
+          "in-list"
+        ],
+        "type": "string"
+      },
+      "FilterParameter": {
+        "description": "A parameter callers may pass through to the Source System. Publishing one is a\npromise to callers: it may not later vanish.\n",
+        "properties": {
+          "allowed_values": {
+            "description": "When present, a value outside this list is refused.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "description": {
+            "type": "string"
+          },
+          "name": {
+            "description": "The query parameter name sent upstream.",
+            "example": "from",
+            "type": "string"
+          },
+          "required": {
+            "description": "The endpoint cannot answer without it.",
+            "type": "boolean"
+          },
+          "type": {
+            "$ref": "#/components/schemas/FieldType"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ],
+        "type": "object"
+      },
+      "PresentationOption": {
+        "description": "One Visualization Family the Data Shape satisfies.",
+        "properties": {
+          "family": {
+            "example": "trend-over-time",
+            "type": "string"
+          },
+          "requirement": {
+            "description": "The shape requirement, in words.",
+            "example": "at least one Measure and a Time Dimension",
+            "type": "string"
+          },
+          "types": {
+            "description": "The concrete Visualization Types in this Family.",
+            "example": [
+              "line",
+              "area"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "ReadinessChecks": {
+        "description": "Only `database` gates readiness. Optional dependencies are reported so an\noperator can see them, but never make the service unready.\n",
+        "properties": {
+          "database": {
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "redis": {
+            "enum": [
+              "ok",
+              "unavailable",
+              "not_configured"
+            ],
+            "type": "string"
+          },
+          "storage": {
+            "enum": [
+              "ok",
+              "not_configured"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Service": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "base_url": {
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source_system_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ServiceInput": {
+        "properties": {
+          "base_url": {
+            "description": "Absolute `http`/`https` origin with a host and no query string or\nfragment. A trailing slash is trimmed.\n",
+            "example": "https://fiat-bridge.peniremit.internal",
+            "type": "string"
+          },
+          "id": {
+            "example": "fiat-bridge",
+            "type": "string"
+          },
+          "name": {
+            "example": "Fiat Bridge",
+            "type": "string"
+          },
+          "source_system_id": {
+            "description": "Taken from the path; a value in the body is overwritten.",
+            "readOnly": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "base_url"
+        ],
+        "type": "object"
+      },
+      "ShareGrant": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "dashboard_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "granted_by_actor_id": {
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "target_ref": {
+            "type": "string"
+          },
+          "target_type": {
+            "$ref": "#/components/schemas/ShareGrantTarget"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "ShareGrantTarget": {
+        "enum": [
+          "user",
+          "department"
+        ],
+        "type": "string"
+      },
+      "SourceSystem": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "deleted": {
+            "type": "boolean"
+          },
+          "description": {
+            "type": "string"
+          },
+          "iam_product_id": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "SourceSystemInput": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "iam_product_id": {
+            "description": "The IAM product this projects. Mandatory: a Source System references an\nexisting IAM product rather than defining one.\n",
+            "type": "string"
+          },
+          "id": {
+            "description": "Lowercase, hyphen or underscore separated.",
+            "example": "peniremit",
+            "type": "string"
+          },
+          "name": {
+            "example": "Peniremit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "iam_product_id"
+        ],
+        "type": "object"
+      },
+      "Violation": {
+        "properties": {
+          "field": {
+            "description": "The offending field, using dotted and indexed paths.",
+            "example": "fields[0].type",
+            "type": "string"
+          },
+          "message": {
+            "example": "\"money\" is not a known Field type",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "Widget": {
+        "description": "One data-bound visual instance. A Widget draws from exactly one Dataset and\ncannot span Datasets. Composition Elements — controls and layout containers —\nare not Widgets and carry no Dataset binding.\n",
+        "properties": {
+          "dataset_id": {
+            "example": "peniremit.settlements",
+            "type": "string"
+          },
+          "default_filters": {
+            "additionalProperties": true,
+            "description": "Filter values applied unless a viewer changes an exposed one. Keys must be\npublished Filter Parameters of the bound Dataset.\n",
+            "type": "object"
+          },
+          "exposed_filters": {
+            "description": "Which published Filter Parameters the viewer may change. Every entry must\nbe declared by the Dataset, otherwise the viewer is offered a control that\ncannot work.\n",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "id": {
+            "description": "Assigned on save when absent.",
+            "type": "string"
+          },
+          "layout": {
+            "$ref": "#/components/schemas/WidgetLayout"
+          },
+          "presentation_options": {
+            "additionalProperties": true,
+            "description": "Rendering settings, opaque to Analytics. The composition surface owns their\nmeaning; every option has a default, so an absent value is never an error.\n",
+            "type": "object"
+          },
+          "title": {
+            "type": "string"
+          },
+          "visualization_type": {
+            "description": "Must belong to a Family the bound Dataset's Data Shape satisfies — checked\non save, so a stored Widget can never reference a chart its Dataset could\nnot render.\n",
+            "example": "line",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset_id",
+          "visualization_type"
+        ],
+        "type": "object"
+      },
+      "WidgetLayout": {
+        "description": "Grid position and size, as sent by the composition surface.",
+        "properties": {
+          "h": {
+            "type": "integer"
+          },
+          "w": {
+            "type": "integer"
+          },
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "bearerFormat": "JWT",
+        "description": "An IAM access token. Verified in-process against IAM's pinned RS256 public\nkey; `token_use` must be `access`.\n",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  }
+}

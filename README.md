@@ -17,6 +17,7 @@ bun dev              # the eligibility explorer
 bun test             # 437 tests
 bun run typecheck
 bun run docs         # regenerate the contract documentation
+bun run scripts/fetch-api-spec.ts   # refresh the upstream API snapshot; read the diff
 ```
 
 `bun run build` needs Node 20.19+ or 22.12+ (Vite 8's `engines`). On the Node v16 default it dies on a `node:util.styleText` mismatch, which is the environment and not the code. Either of these works: `bunx --bun vite build`, or `nvm use 22.23.0 && bun run build`. `bun test` and `bun run typecheck` run on Bun and are unaffected.
