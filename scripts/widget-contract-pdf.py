@@ -171,14 +171,63 @@ TOTAL = sum(len(f['rows']) for f in families)
 AGGN = sum(1 for f in families for r in f['rows'] if r['grain'] != 'records')
 RECN = TOTAL - AGGN
 
-req = re.search(r'## 1\. The request\n\n(.*?)\n```ts\n(.*?)\n```\n\n(.*?)\n\n---', md, re.S)
-resp = re.search(
-    r'## 2\. The response\n\n(.*?)\n```ts\n(.*?)\n```\n\n(.*?)\n\n### Row shape\n\n(.*?)\n\n---',
-    md, re.S,
-)
-grain_md = re.search(r'## 3\. Aggregation grain.*?\n\n(.*?)\n\n---', md, re.S).group(1)
-roles_md = re.search(r'## 5\. Field roles, for reference\n\n(.*?)\n\n---', md, re.S).group(1)
-never_md = re.search(r'## 6\. What we will not ask you for\n\n(.*)$', md, re.S).group(1)
+def section(title, last=False):
+    """A top-level section's body, found by title rather than by number.
+
+    The numbers shift whenever a section is inserted, and a regex pinned to one
+    either raises or, worse, matches the wrong block. The titles are stable.
+    """
+    tail = r'(.*)$' if last else r'(.*?)\n\n---'
+    m = re.search(r'## \d+\. ' + re.escape(title) + r'[^\n]*\n\n' + tail, md, re.S)
+    if m is None:
+        raise SystemExit('section not found in the markdown: ' + title)
+    return m.group(1)
+
+
+def split_fenced(text):
+    """A section body as (prose-before, fenced-code, prose-after).
+
+    Every section here is at most one code block deep, and pinning the parse to
+    that rather than to a neighbouring heading is what stops the PDF breaking
+    each time a section is inserted above it.
+    """
+    m = re.search(r'```(?:ts|json)?\n(.*?)\n```', text, re.S)
+    if m is None:
+        return text, None, ''
+    return text[:m.start()], m.group(1), text[m.end():]
+
+
+req_before, req_code, req_after = split_fenced(section('The request'))
+resp_before, resp_code, resp_after = split_fenced(section('The response'))
+rowshape_md = section('What a row must look like')
+grain_md = section('Aggregation grain')
+roles_md = section('Field roles, for reference')
+never_md = section('What we will not ask you for', last=True)
+
+def render_rowshape(text):
+    """The row-invariant section: `###` subsections, prose, and fenced JSON.
+
+    Its examples are yes/no pairs, and the whole point is that the wrong one is
+    indistinguishable from the right one at a glance — so they stay verbatim in
+    a code block rather than being prettified into a table.
+    """
+    out = []
+    head, *subs = re.split(r'\n### ', text)
+    out += blocks(strip_fences(head))
+    for sub in subs:
+        title, _, body = sub.partition('\n')
+        out.append(Paragraph(rich(title.strip()), S['h3']))
+        for chunk in re.split(r'```(?:json)?\n(.*?)```', body, flags=re.S):
+            if chunk.strip().startswith(('{', '//')) or '// yes' in chunk:
+                out += code(chunk, PROSE_W)
+            else:
+                out += blocks(chunk)
+    return out
+
+
+def strip_fences(text):
+    return re.sub(r'```(?:json)?\n.*?```', '', text, flags=re.S)
+
 
 # --- page furniture ----------------------------------------------------------
 PAGE = landscape(A4)
@@ -257,9 +306,9 @@ story += blocks(
 
 # --- 1. request --------------------------------------------------------------
 story += [Paragraph('1 &nbsp;&middot;&nbsp; The request', S['h2'])]
-story += blocks('One shape, for every widget.')
-story += code(req.group(2), PROSE_W)
-story += blocks(req.group(3))
+story += blocks(req_before)
+story += code(req_code, PROSE_W)
+story += blocks(req_after)
 
 # --- 2. response -------------------------------------------------------------
 story += [Paragraph('2 &nbsp;&middot;&nbsp; The response', S['h2'])]
@@ -268,13 +317,15 @@ story += blocks(
     'the contract to get wrong, because nothing in the requirements says it about '
     'the API - only about the display.'
 )
-story += code(resp.group(2), PROSE_W)
-story += blocks(resp.group(3))
-story += [Paragraph('Row shape', S['h3'])]
-story += blocks(resp.group(4))
+story += code(resp_code, PROSE_W)
+story += blocks(resp_after)
 
 # --- 3. grain ----------------------------------------------------------------
-story += [Paragraph('3 &nbsp;&middot;&nbsp; Aggregation grain - the thing to settle with us', S['h2'])]
+# --- 3. row invariants ------------------------------------------------------
+story += [Paragraph('3 &nbsp;&middot;&nbsp; What a row must look like', S['h2'])]
+story += render_rowshape(rowshape_md)
+
+story += [Paragraph('4 &nbsp;&middot;&nbsp; Aggregation grain - the thing to settle with us', S['h2'])]
 story += note(
     'Of the %d built widget types, **%d currently send an aggregated query and %d '
     'ask for records.** That is not a recommendation, it is a report - and it needs '
@@ -283,7 +334,7 @@ story += note(
 story += blocks(re.sub(r'^Of the .*?ask for records\.\*\*\n\n', '', grain_md, flags=re.S))
 
 # --- 4. the tables -----------------------------------------------------------
-story += [Paragraph('4 &nbsp;&middot;&nbsp; Every widget, and what it asks for', S['h2'])]
+story += [Paragraph('5 &nbsp;&middot;&nbsp; Every widget, and what it asks for', S['h2'])]
 story += blocks(
     '**Needs** is what a Dataset must offer for the widget to be *offered* at all - '
     'the Field roles, and how many of each. A widget whose required slots cannot be '
@@ -346,7 +397,7 @@ for fam in families:
     story.append(Spacer(1, 7))
 
 # --- 5. roles ----------------------------------------------------------------
-story += [Paragraph('5 &nbsp;&middot;&nbsp; Field roles, for reference', S['h2'])]
+story += [Paragraph('6 &nbsp;&middot;&nbsp; Field roles, for reference', S['h2'])]
 rt = re.search(r'\| Role \|.*?\n\|[-|]+\|\n((?:\|.*\n)+)', roles_md)
 rdata = [[Paragraph('ROLE', S['th']), Paragraph('WHAT IT IS', S['th']), Paragraph('NOTES', S['th'])]]
 for line in rt.group(1).strip().split('\n'):
@@ -367,7 +418,7 @@ story += [rtab, Spacer(1, 9)]
 story += blocks(roles_md[rt.end():])
 
 # --- 6. not asking for ------------------------------------------------------
-story += [Paragraph('6 &nbsp;&middot;&nbsp; What we will not ask you for', S['h2'])]
+story += [Paragraph('7 &nbsp;&middot;&nbsp; What we will not ask you for', S['h2'])]
 story += blocks(never_md)
 
 doc.build(story)

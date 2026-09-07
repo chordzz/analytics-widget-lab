@@ -759,16 +759,98 @@ rather than one of the answers.
 \`kind: 'rows'\` with an empty \`rows\` array is treated as a **contract breach**
 and surfaced as a failure, not as \`empty\`. Send \`{ kind: 'empty' }\`.
 
-### Row shape
+---
 
-Flat objects, keyed by Field \`key\`. An aggregated Measure comes back under its
-own field name — ask for \`sum(revenue)\` and the key is \`revenue\`, not
-\`revenue_sum\`. Values are \`string\`, \`number\` or \`null\`; dates are ISO
-strings (\`2026-08-07\`, or \`2026-08\` at month grain).
+## 3. What a row must look like
+
+Your integration guide says the relayed body's *"shape must match frontend
+visualization requirements"* and then, reasonably, does not say what those are.
+This section is that half of the sentence.
+
+**Field names are yours, not ours.** This is the first thing to settle, because
+it is the thing teams most often expect us to dictate. We never need a field
+called \`value\`. Every visualisation takes its field references as
+configuration — a bar chart is handed \`valueKey: 'settlement_value'\`, and the
+name is bound once when an Author builds the Widget. So \`val\`, \`value\`,
+\`total_amount\` and \`settlement_value\` are all equally fine, and asking you to
+rename one would break every existing binding for no gain. What we need is that
+a declared name **matches the key you return** — which your guide already
+requires.
+
+What we do need is below. Each is an invariant rather than a preference, and
+each names the failure it avoids, because every one of these fails *silently*.
+
+### Values carry their declared type
+
+A Field declared \`number\` must arrive as a JSON number.
+
+\`\`\`json
+{ "region": "EMEA", "revenue": 1234.5 }     // yes
+{ "region": "EMEA", "revenue": "1,234.50" } // no
+\`\`\`
+
+A formatted string becomes \`NaN\` the moment we coerce it, and \`NaN\` in an SVG
+path renders as **nothing at all** — no error, no warning, an empty chart that
+looks like missing data. Our own test suite cannot catch this, because it tests
+our fixtures and those are well-formed by construction. Same for \`boolean\`:
+\`true\`, not \`"true"\` and not \`1\`.
+
+### Dates are ISO-8601, and one grain per Dataset
+
+\`2026-08-07\` for a day, \`2026-08\` for a month, \`2026\` for a year. Not
+\`07/08/2026\`, not a locale string, not epoch milliseconds.
+
+Date filtering compares these as strings, which is exact and fast for ISO-8601
+and wrong for everything else. \`07/08/2026\` would not throw — it would return
+the wrong rows, quietly, which is worse. Mixing grains inside one Dataset breaks
+the same comparison.
+
+### Absent means \`null\`, not a missing key and not \`""\`
+
+\`\`\`json
+{ "region": "EMEA", "revenue": null }  // yes — no value
+{ "region": "EMEA" }                   // no  — key omitted
+{ "region": "EMEA", "revenue": "" }    // no  — empty string
+\`\`\`
+
+An omitted key and an explicit \`null\` take different paths through several
+visualisations, and \`""\` coerces to \`0\` in a Measure — which draws a bar of
+height zero where there should be a gap. A zero and a nothing are different
+claims about the world.
+
+### One row grain, and say what it is
+
+A row should mean one thing for the whole Dataset: one row per day, or per
+region, or per transaction. Section 5 lists the volume each widget can usefully
+draw — a calendar heatmap wants about 365 rows, a stat card wants one — and that
+is guidance, not a limit for you to enforce.
+
+The thing to avoid is a Dataset whose grain shifts with its filters, because a
+widget bound to it is correct on one query and meaningless on the next.
+
+### Order, or tell us there is none
+
+Nine of the ${String(rows.length)} widget types need rows in order — every
+trend, the chronological pair, and the temporal ones. A line chart drawn from
+unordered rows is not untidy, it is wrong: the line doubles back on itself.
+
+Since the query carries no \`sort\`, we need one of two answers per Dataset.
+Either the endpoint returns a stable order and says so, or it does not and we
+sort in the browser. Both are workable; not knowing which is not.
+
+### A \`location\` Field should say which kind it is
+
+\`FieldType: 'location'\` covers two different things, and they feed different
+visualisations. A region name (\`"Kenya"\`) shades a choropleth; a coordinate
+(\`-1.29\`) places a point on a map, and a point needs *two* Fields that know
+which of them is latitude. Today nothing distinguishes them, so a point map can
+be offered a table of regional sales and plot revenue as a latitude. We have
+raised this upstream; until it is settled, please say in the Field's
+\`description\` which one you mean.
 
 ---
 
-## 3. Aggregation grain — the thing to settle with us
+## 4. Aggregation grain — the thing to settle with us
 
 Of the ${String(rows.length)} built widget types, **${String(byGrain('single aggregate').length)} currently send an aggregated
 query and ${String(byGrain('records').length)} ask for records.**
@@ -787,10 +869,10 @@ pull every transaction and group in the browser, which is both slow and the thin
 - The ${String(byGrain('single aggregate').length)} single-aggregate types are correct as they stand and safe against any volume.
 - For the rest, tell us where your data's grain sits. If a Dataset is already
   aggregated to the grain we draw, records are fine and the \`rows\` count in
-  §4 is what to expect. If it is raw, we need to send \`dimensions\` +
+  §5 is what to expect. If it is raw, we need to send \`dimensions\` +
   \`measures\` and we will fix the query — the mapping already carries the
   information, so it is our change, not yours.
-- The row counts in §4 are what our *fixtures* return. Treat them as the volume
+- The row counts in §5 are what our *fixtures* return. Treat them as the volume
   a widget can usefully draw, not as a limit you should enforce: a calendar
   heatmap wants 365 points and a stat card wants 1.
 
@@ -799,7 +881,7 @@ This is tracked on our side as divergences **D13** and **D14** in
 
 ---
 
-## 4. Every widget, and what it asks for
+## 5. Every widget, and what it asks for
 
 \`needs\` is what a Dataset must offer for the widget to be *offered* at all —
 the Field roles, and how many of each. A widget whose required slots cannot be
@@ -825,7 +907,7 @@ ${inFamily
 
 ---
 
-## 5. Field roles, for reference
+## 6. Field roles, for reference
 
 Three roles, and the distinction is load-bearing rather than cosmetic:
 
@@ -848,7 +930,7 @@ Two things a Dataset declares that change what we can offer:
 
 ---
 
-## 6. What we will not ask you for
+## 7. What we will not ask you for
 
 - **Writes.** Every widget is read-only, enforced by the props carrying no
   callback — there is nothing a widget *could* call to mutate.
