@@ -24,8 +24,47 @@
  * product lets a Viewer choose them, because nothing should.
  */
 
+import { useEffect, useState } from 'react'
 import { AnalyticsModule } from './analytics'
+import { SignInScreen } from './auth/SignInScreen'
+import { fakeSignInClient } from './auth/fake-sign-in'
+
+/*
+ * `#/sign-in` renders the sign-in screen against the fake client, so the copy
+ * and the states can be reviewed now.
+ *
+ * It is deliberately a route rather than a gate. There is no real token
+ * provider yet, so gating the whole app behind a fake sign-in would be theatre
+ * that everyone using the fixtures has to click through. The gate lands with
+ * `OtpTokenProvider` (integration plan, stage F) and replaces this route.
+ */
+const signInClient = fakeSignInClient()
 
 export default function App() {
+  const signingIn = useHashIs('#/sign-in')
+
+  if (signingIn) {
+    return (
+      <SignInScreen
+        client={signInClient}
+        onSignedIn={() => {
+          window.location.hash = '#/analytics'
+        }}
+      />
+    )
+  }
+
   return <AnalyticsModule />
+}
+
+function useHashIs(hash: string): boolean {
+  const [matches, setMatches] = useState(() => window.location.hash === hash)
+
+  useEffect(() => {
+    const onChange = () => setMatches(window.location.hash === hash)
+    window.addEventListener('hashchange', onChange)
+    return () => window.removeEventListener('hashchange', onChange)
+  }, [hash])
+
+  return matches
 }
