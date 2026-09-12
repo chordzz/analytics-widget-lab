@@ -486,10 +486,9 @@ Stage 6 landed too, so this list is much shorter than it was.
   aggregates over different windows of one query, and `Distribution` bins over
   every value. Both are registered as **D13** and **D14** with the
   `DatasetQuery` extension each would need.
-- **The HTTP adapters exist** — `catalogue/http-catalogue.ts` and
-  `retrieval/http-retrieval.ts`, over the real API. What is left on this line is
-  a `BoardStorePort`: boards still live in `localStorage`, not in
-  `/v1/dashboards`.
+- **The HTTP adapters exist** — `catalogue/http-catalogue.ts`,
+  `retrieval/http-retrieval.ts` and `dashboard/http-board-store.ts`, over the
+  real API. The fixtures remain behind `#/fixtures`.
 - **Six of the 42 Visualization Types have no renderer** (D6). Five are ordinary
   work; only the choropleth is blocked, and on the atlas decision rather than on
   anything in the model. `docs/DATA_SHAPES.md` states the reason per Type.
@@ -498,7 +497,7 @@ Stage 6 landed too, so this list is much shorter than it was.
 
 Every place this implementation does not match the FRD is numbered, with the
 clause, the reason and how long it is meant to last:
-[`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) — **20 open, 7 resolved**.
+[`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) — **18 open, 9 resolved**.
 
 It is generated from `src/contract-docs/divergences.ts` by `bun run docs`, and
 `src/contract-docs/render.test.ts` fails if the committed copy drifts. A scanner

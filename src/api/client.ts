@@ -35,7 +35,7 @@ export interface Envelope<T = unknown> {
 }
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   body?: unknown
   query?: Record<string, string | number | boolean | null | undefined>
   /**

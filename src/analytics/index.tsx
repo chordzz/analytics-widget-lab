@@ -16,6 +16,7 @@ import { ModuleShell } from './shell/ModuleShell'
 import { DEFAULT_SCREEN, pathForScreen, screenForPath, type ScreenId } from './shell/nav'
 import type { AnalyticsTheme } from './theme/tokens'
 import type { AnalyticsDataProviderProps } from './data/AnalyticsData'
+import type { BoardStorePort } from './builder/store'
 import './theme/module.css'
 
 export interface AnalyticsModuleProps {
@@ -39,6 +40,8 @@ export interface AnalyticsModuleProps {
   data?: Omit<AnalyticsDataProviderProps, 'children'>
   /** Rendered in the top bar. Where a host puts its own account control. */
   headerActions?: ReactNode
+  /** Where boards are kept. Omitted, they are kept in `localStorage`. */
+  boardStore?: BoardStorePort
 }
 
 export function AnalyticsModule({
@@ -50,6 +53,7 @@ export function AnalyticsModule({
   onToggleColorScheme,
   data,
   headerActions,
+  boardStore,
 }: AnalyticsModuleProps = {}) {
   const routed = useHashScreen(basePath, screen === undefined)
   const [ownScheme, setOwnScheme] = useState<'light' | 'dark'>('light')
@@ -77,6 +81,7 @@ export function AnalyticsModule({
         }
         data={data}
         headerActions={headerActions}
+        boardStore={boardStore}
       />
     </AnalyticsProvider>
   )

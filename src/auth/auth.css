@@ -257,3 +257,17 @@
   gap: var(--a-space-2);
   font-size: var(--a-text-sm);
 }
+
+/* A standing note, not an alert: the store retries on the next change, so this
+   says "behind" rather than "broken". Clicking dismisses it. */
+.a-unsaved {
+  font: inherit;
+  font-size: var(--a-text-xs);
+  color: var(--a-text);
+  background: var(--a-surface-sunken);
+  border: 1px solid var(--a-border);
+  border-left: 3px solid var(--a-status-warning);
+  border-radius: var(--a-radius-sm);
+  padding: 4px var(--a-space-2);
+  cursor: pointer;
+}

@@ -156,7 +156,7 @@ describe('where we differ, the register says so', () => {
   test('widgets are embedded, not referenced — D23', () => {
     const widgets = schemas.Dashboard.properties!.widgets as { items?: { $ref?: string } }
     expect(widgets.items?.$ref).toContain('Widget')
-    open('D23')
+    translated('D23')
   })
 
   test('filter parameters are declared apart from fields — D24', () => {
@@ -175,7 +175,7 @@ describe('where we differ, the register says so', () => {
       'role',
       'organization',
     ])
-    open('D25')
+    translated('D25')
   })
 
   test('grant targets are user and department — D26', () => {

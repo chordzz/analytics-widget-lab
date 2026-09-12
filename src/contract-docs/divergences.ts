@@ -380,8 +380,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema Dashboard.widgets',
     authority: 'api',
     divergence: 'A board references its Widgets by id; the API embeds them by value.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'dashboard/api-dashboard.ts - joined on the way out, split on the way in',
     findings: [20],
     where: 'analytics/builder/boards.ts',
     reason:
@@ -413,8 +413,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema DashboardScopeLevel',
     authority: 'api',
     divergence: 'Scope has three levels; the API has four, including `role`.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'dashboard/api-dashboard.ts - `role` folds into an organizational scope',
     findings: [21],
     where: 'domain/dashboard.ts',
     reason:

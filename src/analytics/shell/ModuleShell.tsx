@@ -17,6 +17,7 @@ import { CreateScreen } from '../screens/CreateScreen'
 import { DraftsScreen } from '../screens/DraftsScreen'
 import { AnalyticsDataProvider, type AnalyticsDataProviderProps } from '../data/AnalyticsData'
 import { BoardsProvider, useBoards } from '../builder/useBoards'
+import type { BoardStorePort } from '../builder/store'
 import { ComposeIntentProvider } from '../builder/useComposeIntent'
 import './shell.css'
 import '../builder/builder.css'
@@ -36,6 +37,7 @@ export function ModuleShell({
   onToggleTheme,
   headerActions,
   data,
+  boardStore,
 }: {
   screen: ScreenId
   onNavigate: (id: ScreenId) => void
@@ -44,13 +46,15 @@ export function ModuleShell({
   headerActions?: ReactNode
   /** Real adapters from a host. Omitted, the module runs on its fixtures. */
   data?: Omit<AnalyticsDataProviderProps, 'children'>
+  /** Where boards are kept. Omitted, they are kept in `localStorage`. */
+  boardStore?: BoardStorePort
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const current = NAV_ITEMS.find((item) => item.id === screen)
 
   return (
     <AnalyticsDataProvider {...data}>
-    <BoardsProvider>
+    <BoardsProvider store={boardStore}>
     <ComposeIntentProvider>
     <div className="a-shell">
       <Sidebar
