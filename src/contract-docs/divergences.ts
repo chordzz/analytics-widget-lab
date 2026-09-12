@@ -347,8 +347,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema Field.role',
     authority: 'api',
     divergence: 'A Field has three roles; the API has two, and time is a Field *type*.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'catalogue/api-dataset.ts - the role is reconstructed from `time_dimension_field`',
     findings: [18],
     where: 'domain/dataset.ts, analytics/builder/requirements.ts',
     reason:
@@ -363,8 +363,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: GET /v1/datasets/{datasetId}/query',
     authority: 'api',
     divergence: 'A query is flat filter parameters, not a `DatasetQuery`.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'retrieval/http-retrieval.ts - filters go upstream, ordering and reduction finish locally',
     findings: [19],
     where: 'analytics/data/query.ts',
     reason:
@@ -396,8 +396,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema FilterParameter',
     authority: 'api',
     divergence: 'A Field carries `filterable`; the API declares Filter Parameters separately.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'catalogue/api-dataset.ts - `filterable` is read from `filter_parameters`',
     where: 'domain/dataset.ts',
     reason:
       'The API keeps two lists. `fields` describes the *response* shape — and a Field name "must ' +
@@ -444,14 +444,17 @@ export const DIVERGENCES: Divergence[] = [
     authority: 'api',
     divergence: 'Every response is wrapped in `{ status, message, data }`; we read bodies directly.',
     status: 'temporary',
-    endedAt: 'the HTTP adapter',
-    where: 'analytics/data/adapters.ts',
+    endedAt: 'a Widget that shows `meta.partial` to the Viewer',
+    where: 'api/client.ts, retrieval/relayed-body.ts',
     reason:
       'A boolean `status`, a human `message`, and the payload under `data`. One unwrap in the ' +
       'adapter and nothing above it needs to know — which is the argument for the adapter existing ' +
       'at all. Recorded because the envelope also carries the partial-result marker: a Source System ' +
       'may answer `200` with `meta.partial` and a reason, and a widget that ignores that shows a ' +
-      'truncated series as if it were the whole one.',
+      'truncated series as if it were the whole one. Half of this is done: the client unwraps the ' +
+      'envelope once, and `relayed-body.ts` finds the marker under either of the two readings the ' +
+      'spec admits, reporting which arrived. What remains is the half a Viewer can see - nothing ' +
+      'on a card yet says the series is incomplete, so the entry stays open.',
   },
   {
     id: 'D28',
@@ -476,8 +479,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema Aggregation',
     authority: 'api',
     divergence: 'Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'catalogue/api-dataset.ts - a translation table, and an unknown name is dropped',
     where: 'domain/dataset.ts, analytics/data/adapters.ts',
     reason:
       'Both enumerate the same six — sum, average, count, the two extremes, and a distinct count — ' +

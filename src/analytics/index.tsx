@@ -10,11 +10,12 @@
  *   - the token types — so a host's theme object is type-checked
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { AnalyticsProvider } from './theme/AnalyticsProvider'
 import { ModuleShell } from './shell/ModuleShell'
 import { DEFAULT_SCREEN, pathForScreen, screenForPath, type ScreenId } from './shell/nav'
 import type { AnalyticsTheme } from './theme/tokens'
+import type { AnalyticsDataProviderProps } from './data/AnalyticsData'
 import './theme/module.css'
 
 export interface AnalyticsModuleProps {
@@ -31,6 +32,13 @@ export interface AnalyticsModuleProps {
   /** Host-controlled colour scheme. Omit to let the module manage it. */
   colorScheme?: 'light' | 'dark'
   onToggleColorScheme?: () => void
+  /**
+   * Real adapters. Omitted, the module runs on its fixtures — which is what
+   * keeps every screen reachable without a backend.
+   */
+  data?: Omit<AnalyticsDataProviderProps, 'children'>
+  /** Rendered in the top bar. Where a host puts its own account control. */
+  headerActions?: ReactNode
 }
 
 export function AnalyticsModule({
@@ -40,6 +48,8 @@ export function AnalyticsModule({
   onNavigate,
   colorScheme,
   onToggleColorScheme,
+  data,
+  headerActions,
 }: AnalyticsModuleProps = {}) {
   const routed = useHashScreen(basePath, screen === undefined)
   const [ownScheme, setOwnScheme] = useState<'light' | 'dark'>('light')
@@ -65,6 +75,8 @@ export function AnalyticsModule({
         onToggleTheme={
           onToggleColorScheme ?? (() => setOwnScheme((value) => (value === 'light' ? 'dark' : 'light')))
         }
+        data={data}
+        headerActions={headerActions}
       />
     </AnalyticsProvider>
   )

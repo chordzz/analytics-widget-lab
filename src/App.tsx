@@ -26,36 +26,49 @@
 
 import { useEffect, useState } from 'react'
 import { AnalyticsModule } from './analytics'
+import { AuthProvider } from './auth/AuthProvider'
+import { SessionGate } from './auth/SessionGate'
 import { SignInScreen } from './auth/SignInScreen'
 import { fakeSignInClient } from './auth/fake-sign-in'
 
 /*
- * `#/sign-in` renders the sign-in screen against the fake client, so the copy
- * and the states can be reviewed now.
+ * The application is signed-in by default and talks to the real API.
  *
- * It is deliberately a route rather than a gate. There is no real token
- * provider yet, so gating the whole app behind a fake sign-in would be theatre
- * that everyone using the fixtures has to click through. The gate lands with
- * `OtpTokenProvider` (integration plan, stage F) and replaces this route.
+ * `#/fixtures` keeps the old behaviour — every screen, no backend, no sign-in.
+ * It is not a debug flag to be embarrassed about: the fixtures are how the
+ * whole module was built and they remain the only way to reach states a live
+ * API will not produce on demand, like a withdrawn Dataset. A hash rather than
+ * a build-time variable so switching costs nothing.
+ *
+ * `#/sign-in-preview` is there for the same reason, one level down: the sign-in
+ * screen is mostly error handling, and the live API will not return a 503 or a
+ * rejected code to order. The fake will.
  */
-const signInClient = fakeSignInClient()
-
 export default function App() {
-  const signingIn = useHashIs('#/sign-in')
+  const onFixtures = useHashIs('#/fixtures')
+  const previewingSignIn = useHashIs('#/sign-in-preview')
 
-  if (signingIn) {
+  if (onFixtures) return <AnalyticsModule />
+
+  if (previewingSignIn) {
     return (
       <SignInScreen
-        client={signInClient}
+        client={previewClient}
         onSignedIn={() => {
-          window.location.hash = '#/analytics'
+          window.location.hash = '#/fixtures'
         }}
       />
     )
   }
 
-  return <AnalyticsModule />
+  return (
+    <AuthProvider>
+      <SessionGate />
+    </AuthProvider>
+  )
 }
+
+const previewClient = fakeSignInClient()
 
 function useHashIs(hash: string): boolean {
   const [matches, setMatches] = useState(() => window.location.hash === hash)

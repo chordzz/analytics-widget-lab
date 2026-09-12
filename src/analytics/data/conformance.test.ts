@@ -27,12 +27,38 @@ const enumOf = (name: string): string[] => {
 }
 const propsOf = (name: string): string[] => Object.keys(schemas[name]?.properties ?? {})
 
-/** A divergence exists, is open, and answers to the API. */
+/**
+ * Every test below asserts a shape the API still has. What changes as work lands
+ * is not the API but our relationship to it, so a cited entry is checked against
+ * one of two claims rather than one.
+ */
 const registered = (id: string) => {
   const entry = DIVERGENCES.find((candidate) => candidate.id === id)
   expect(entry, `${id} is cited here but missing from the register`).toBeDefined()
-  expect(entry!.status).not.toBe('resolved')
   return entry!
+}
+
+/** Still a difference we have not absorbed. */
+const open = (id: string) => {
+  const entry = registered(id)
+  expect(entry.status, `${id} is cited as open but the register calls it resolved`).not.toBe(
+    'resolved',
+  )
+  return entry
+}
+
+/**
+ * The API still differs and we no longer do: an adapter translates it.
+ *
+ * Worth asserting rather than dropping the citation. The API's shape is exactly
+ * as it was — these tests still guard it — and a resolved entry has to say where
+ * the translation lives, or "resolved" is just a word.
+ */
+const translated = (id: string) => {
+  const entry = registered(id)
+  expect(entry.status, `${id} is cited as translated but is not resolved`).toBe('resolved')
+  expect(entry.endedAt, `${id} is resolved but does not say where`).toBeTruthy()
+  return entry
 }
 
 describe('the snapshot is the version we reviewed', () => {
@@ -110,7 +136,7 @@ describe('where we differ, the register says so', () => {
 
     // Ours adds `time-dimension`, following FR-DP-06.
     expect(theirs).not.toContain('time-dimension')
-    expect(registered('D21').authority).toBe('api')
+    expect(translated('D21').authority).toBe('api')
 
     // And their way of naming the temporal axis is on the Dataset.
     expect(propsOf('Dataset')).toContain('time_dimension_field')
@@ -119,7 +145,7 @@ describe('where we differ, the register says so', () => {
   test('the query takes filter parameters and nothing else — D22', () => {
     const query = spec.paths['/v1/datasets/{datasetId}/query'].get
     expect(query.summary).toBeTruthy()
-    registered('D22')
+    translated('D22')
 
     // Nothing in their schema set describes a query body, because there is no
     // body: filters are flat query parameters. A `DatasetQuery` schema
@@ -130,7 +156,7 @@ describe('where we differ, the register says so', () => {
   test('widgets are embedded, not referenced — D23', () => {
     const widgets = schemas.Dashboard.properties!.widgets as { items?: { $ref?: string } }
     expect(widgets.items?.$ref).toContain('Widget')
-    registered('D23')
+    open('D23')
   })
 
   test('filter parameters are declared apart from fields — D24', () => {
@@ -139,7 +165,7 @@ describe('where we differ, the register says so', () => {
     // And a Field has no `filterable`; it has operators instead.
     expect(propsOf('Field')).not.toContain('filterable')
     expect(propsOf('Field')).toContain('filter_operators')
-    registered('D24')
+    translated('D24')
   })
 
   test('scope has four levels — D25', () => {
@@ -149,17 +175,17 @@ describe('where we differ, the register says so', () => {
       'role',
       'organization',
     ])
-    registered('D25')
+    open('D25')
   })
 
   test('grant targets are user and department — D26', () => {
     expect(enumOf('ShareGrantTarget')).toEqual(['user', 'department'])
-    registered('D26')
+    open('D26')
   })
 
   test('every response is enveloped — D27', () => {
     expect(propsOf('Envelope').sort()).toEqual(['data', 'message', 'status'])
-    registered('D27')
+    open('D27')
   })
 
   test('the two extremes are abbreviated — D29', () => {
@@ -167,7 +193,7 @@ describe('where we differ, the register says so', () => {
     expect(theirs).toContain('min')
     expect(theirs).toContain('max')
     expect(theirs).not.toContain('minimum')
-    registered('D29')
+    translated('D29')
   })
 
   test('the same six operations, whatever they are called — D29', () => {

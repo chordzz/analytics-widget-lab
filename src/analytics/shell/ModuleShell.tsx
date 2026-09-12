@@ -15,7 +15,7 @@ import { GalleryScreen } from '../screens/GalleryScreen'
 import { DataScreen } from '../screens/DataScreen'
 import { CreateScreen } from '../screens/CreateScreen'
 import { DraftsScreen } from '../screens/DraftsScreen'
-import { AnalyticsDataProvider } from '../data/AnalyticsData'
+import { AnalyticsDataProvider, type AnalyticsDataProviderProps } from '../data/AnalyticsData'
 import { BoardsProvider, useBoards } from '../builder/useBoards'
 import { ComposeIntentProvider } from '../builder/useComposeIntent'
 import './shell.css'
@@ -35,18 +35,21 @@ export function ModuleShell({
   theme,
   onToggleTheme,
   headerActions,
+  data,
 }: {
   screen: ScreenId
   onNavigate: (id: ScreenId) => void
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   headerActions?: ReactNode
+  /** Real adapters from a host. Omitted, the module runs on its fixtures. */
+  data?: Omit<AnalyticsDataProviderProps, 'children'>
 }) {
   const [collapsed, setCollapsed] = useState(false)
   const current = NAV_ITEMS.find((item) => item.id === screen)
 
   return (
-    <AnalyticsDataProvider>
+    <AnalyticsDataProvider {...data}>
     <BoardsProvider>
     <ComposeIntentProvider>
     <div className="a-shell">
