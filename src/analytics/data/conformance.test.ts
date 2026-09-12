@@ -185,7 +185,7 @@ describe('where we differ, the register says so', () => {
 
   test('every response is enveloped — D27', () => {
     expect(propsOf('Envelope').sort()).toEqual(['data', 'message', 'status'])
-    open('D27')
+    translated('D27')
   })
 
   test('the two extremes are abbreviated — D29', () => {

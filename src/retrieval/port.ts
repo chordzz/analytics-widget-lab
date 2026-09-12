@@ -32,9 +32,33 @@ export interface ViewerIdentity {
   organizationalScopeIds?: string[]
 }
 
+/**
+ * A publisher saying this answer is not the whole answer.
+ *
+ * Not a seventh outcome. It rides on the two that carry data because it is a
+ * qualifier on an answer, not an answer of its own — the retrieval succeeded and
+ * the Viewer is authorized; there is simply less here than they asked for.
+ *
+ * The integration guide requires Source Systems to set `meta.partial` when
+ * retention cut a range short or a shard was unavailable, and is blunt about the
+ * alternative: *"a chart missing half its data and not saying so is the worst
+ * outcome available."* Carrying it this far and stopping would reproduce exactly
+ * that, since an unread marker and an absent one are the same picture.
+ */
+export interface PartialResult {
+  /** The publisher's words, when they gave any. */
+  reason: string | null
+}
+
 export type RetrievalOutcome =
-  | { kind: 'rows'; rows: DatasetRow[]; totalCount: number }
-  | { kind: 'empty' }
+  | { kind: 'rows'; rows: DatasetRow[]; totalCount: number; partial?: PartialResult }
+  /**
+   * Empty can be partial too, and that pairing is the sharpest case: the source
+   * served none of what was asked for. Drawn as a plain empty state it reads as
+   * "there is nothing here", which is a claim about the data rather than about
+   * the request.
+   */
+  | { kind: 'empty'; partial?: PartialResult }
   | { kind: 'denied' }
   | { kind: 'withdrawn' }
 

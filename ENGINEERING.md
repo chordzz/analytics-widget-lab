@@ -497,7 +497,7 @@ Stage 6 landed too, so this list is much shorter than it was.
 
 Every place this implementation does not match the FRD is numbered, with the
 clause, the reason and how long it is meant to last:
-[`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) — **18 open, 9 resolved**.
+[`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) — **17 open, 10 resolved**.
 
 It is generated from `src/contract-docs/divergences.ts` by `bun run docs`, and
 `src/contract-docs/render.test.ts` fails if the committed copy drifts. A scanner
@@ -569,6 +569,20 @@ guessing — because the rows would fail loudly at the wrong depth but
 falsy, which means *not partial*, so a chart missing half its data renders as
 though it were whole. `SessionGate.tsx` logs the shape once per session, so the
 first real board settles it.
+
+### A seventh thing that is not a seventh state
+
+`meta.partial` reaches the card. It rides on `ready` and on `empty` as a
+qualifier rather than becoming a status, because it qualifies an answer instead
+of replacing one — the chart still draws, with a note under it saying it is not
+all of the data. It is never behind a hover: a tooltip is invisible on a
+touchscreen, on a wall display, and in a screenshot, which are three of the ways
+a wrong number travels. `WIDGET_RENDER_STATUSES` is still six, and a test says
+so.
+
+The Gallery's state switcher has **Partial** and **Partial, empty** alongside the
+six. A treatment nobody can put on screen is a treatment nobody designs, and a
+live API will not return a truncated result to order.
 
 ## 6. Enforced invariants
 

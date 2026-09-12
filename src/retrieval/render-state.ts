@@ -8,13 +8,19 @@
  */
 
 import type { DatasetRow } from '../domain/query'
-import type { RetrievalOutcome } from './port'
+import type { PartialResult, RetrievalOutcome } from './port'
 
 export type WidgetRenderState =
   | { status: 'loading' }
-  | { status: 'ready'; rows: DatasetRow[] }
+  /**
+   * `partial` is a qualifier, not a status. It says the rows are real and
+   * incomplete — which is why it rides here rather than becoming a seventh
+   * state: the card still draws the picture, with a note that it is not all of
+   * it.
+   */
+  | { status: 'ready'; rows: DatasetRow[]; partial?: PartialResult }
   /** FR-VZ-10 — must not look like a failure. */
-  | { status: 'empty' }
+  | { status: 'empty'; partial?: PartialResult }
   /** FR-DA-10, FR-DA-11 — must not look like an error or like absence of data. */
   | { status: 'denied' }
   /** FR-DP-14 — must not present stale data as current. */
@@ -39,10 +45,10 @@ export function resolveRenderState(outcome: RetrievalOutcome): WidgetRenderState
       // the Source System, not an empty Dataset. Surface it rather than
       // quietly rendering a chart of nothing.
       return outcome.rows.length > 0
-        ? { status: 'ready', rows: outcome.rows }
+        ? { status: 'ready', rows: outcome.rows, partial: outcome.partial }
         : { status: 'failed', message: 'Retrieval reported rows but returned none.' }
     case 'empty':
-      return { status: 'empty' }
+      return { status: 'empty', partial: outcome.partial }
     case 'denied':
       return { status: 'denied' }
     case 'withdrawn':

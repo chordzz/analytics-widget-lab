@@ -23,18 +23,41 @@ const SIZES = [
   { id: 'lg', label: 'Large', span: 6, height: 320 },
 ] as const
 
-const STATES: { id: WidgetState | 'auto'; label: string }[] = [
+/**
+ * The six, plus one that is not a seventh.
+ *
+ * `partial` qualifies an answer rather than replacing one — the chart still
+ * draws — so it cannot be a `WidgetState` and still needs a way to be looked at.
+ * It belongs here for the same reason the other five do: a treatment nobody can
+ * put on screen is a treatment nobody designs.
+ */
+type GalleryState = WidgetState | 'auto' | 'partial' | 'partial-empty'
+
+const STATES: { id: GalleryState; label: string }[] = [
   { id: 'auto', label: 'Ready' },
   { id: 'loading', label: 'Loading' },
   { id: 'empty', label: 'Empty' },
   { id: 'denied', label: 'Denied' },
   { id: 'withdrawn', label: 'Withdrawn' },
   { id: 'failed', label: 'Failed' },
+  { id: 'partial', label: 'Partial' },
+  { id: 'partial-empty', label: 'Partial, empty' },
 ]
+
+/** A publisher's reason, of the length one realistically arrives at. */
+const SAMPLE_PARTIAL = {
+  reason: 'date range exceeds retention; returned 2026-05-01 onward',
+}
+
+const overrideFor = (state: GalleryState): WidgetState | undefined => {
+  if (state === 'auto' || state === 'partial') return undefined
+  if (state === 'partial-empty') return 'empty'
+  return state
+}
 
 export function GalleryScreen() {
   const [size, setSize] = useState<(typeof SIZES)[number]['id']>('md')
-  const [state, setState] = useState<WidgetState | 'auto'>('auto')
+  const [state, setState] = useState<GalleryState>('auto')
 
   const active = SIZES.find((option) => option.id === size)!
   const stats = coverage()
@@ -100,7 +123,8 @@ export function GalleryScreen() {
                     <div style={{ height: heightFor(type.family, active.height) }}>
                       <Widget
                         spec={{ id: `gallery-${type.id}`, typeId: type.id, ...sample }}
-                        state={state === 'auto' ? undefined : state}
+                        state={overrideFor(state)}
+                        partial={state.startsWith('partial') ? SAMPLE_PARTIAL : undefined}
                       />
                     </div>
                     <p

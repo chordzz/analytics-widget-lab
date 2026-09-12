@@ -443,9 +443,9 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema Envelope',
     authority: 'api',
     divergence: 'Every response is wrapped in `{ status, message, data }`; we read bodies directly.',
-    status: 'temporary',
-    endedAt: 'a Widget that shows `meta.partial` to the Viewer',
-    where: 'api/client.ts, retrieval/relayed-body.ts',
+    status: 'resolved',
+    endedAt: 'widgets/WidgetCard.tsx - the note under the figure it qualifies',
+    where: 'api/client.ts, retrieval/relayed-body.ts, analytics/widgets/WidgetCard.tsx',
     reason:
       'A boolean `status`, a human `message`, and the payload under `data`. One unwrap in the ' +
       'adapter and nothing above it needs to know — which is the argument for the adapter existing ' +
@@ -453,8 +453,11 @@ export const DIVERGENCES: Divergence[] = [
       'may answer `200` with `meta.partial` and a reason, and a widget that ignores that shows a ' +
       'truncated series as if it were the whole one. Half of this is done: the client unwraps the ' +
       'envelope once, and `relayed-body.ts` finds the marker under either of the two readings the ' +
-      'spec admits, reporting which arrived. What remains is the half a Viewer can see - nothing ' +
-      'on a card yet says the series is incomplete, so the entry stays open.',
+      'spec admits. It now reaches the card: a note under the figure it qualifies, shown on ' +
+      '`ready` and on `empty`, on a bare stat tile as well as a chart, and never behind a hover ' +
+      '- a tooltip is invisible to a touchscreen, a wall display, and a screenshot, which are ' +
+      'three of the ways a wrong number travels. It is not a seventh render state: it qualifies ' +
+      'an answer rather than replacing one, so the picture is still drawn.',
   },
   {
     id: 'D28',

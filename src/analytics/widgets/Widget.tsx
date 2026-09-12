@@ -16,6 +16,7 @@ import { WidgetFilters } from './WidgetFilters'
 import { singleValueOf } from '../data/query'
 import type { ViewerChoices } from '../data/query'
 import type { QueryContribution } from '../../composition/correspondence'
+import type { PartialResult } from '../../retrieval/port'
 import { fieldOf } from '../data/types'
 import {
   ActivityFeed,
@@ -107,6 +108,12 @@ export interface WidgetProps {
   spec: WidgetSpec
   /** Overrides the resolved state. Used by the gallery to show loading and error. */
   state?: WidgetState
+  /**
+   * Overrides the resolved partial marker. Same slot as `state`, and needed
+   * separately because partial is a qualifier rather than a status — a gallery
+   * that could only override the six could never show this one.
+   */
+  partial?: PartialResult
   actions?: WidgetAction[]
   selected?: boolean
   onSelect?: () => void
@@ -149,6 +156,7 @@ export function WidgetView({
   onSelect,
   height,
   errorMessage,
+  partial,
   controls,
 }: WidgetViewProps) {
   const type = widgetType(spec.typeId)
@@ -191,6 +199,7 @@ export function WidgetView({
       subtitle={spec.subtitle}
       state={state}
       errorMessage={errorMessage}
+      partial={partial}
       actions={actions}
       selected={selected}
       onSelect={onSelect}
@@ -223,6 +232,7 @@ export function Widget({
   onSelect,
   height,
   contribution,
+  partial: partialOverride,
 }: WidgetProps) {
   const { dataset, loading: describing } = useDataset(spec.datasetId)
 
@@ -257,6 +267,7 @@ export function Widget({
         dataset={dataset}
         rows={retrieved.status === 'ready' ? retrieved.rows : []}
         state={override}
+        partial={partialOverride}
         controls={controls}
         actions={actions}
         selected={selected}
@@ -275,12 +286,25 @@ export function Widget({
       ? 'withdrawn'
       : retrieved.status
 
+  /*
+   * Only while the state it qualifies is actually on screen. A withdrawn
+   * Dataset whose last retrieval happened to be partial must not carry the note
+   * into a panel that is deliberately withholding figures.
+   */
+  const partial =
+    partialOverride ??
+    (state === retrieved.status &&
+    (retrieved.status === 'ready' || retrieved.status === 'empty')
+      ? retrieved.partial
+      : undefined)
+
   return (
     <WidgetView
       spec={spec}
       dataset={dataset}
       rows={retrieved.status === 'ready' ? retrieved.rows : []}
       state={state}
+      partial={partial}
       errorMessage={retrieved.status === 'failed' ? retrieved.message : undefined}
       controls={controls}
       actions={actions}

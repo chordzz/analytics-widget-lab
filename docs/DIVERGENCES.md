@@ -24,7 +24,7 @@ them. Where the two are related the entry says so.
 | Temporary | Conformance deferred, with a stage that ends it. |
 | Resolved | Was one of the above; no longer diverges. Kept for the record. |
 
-## Open — 18
+## Open — 17
 
 | # | Answers to | Clause | Divergence | Status |
 | --- | --- | --- | --- | --- |
@@ -44,10 +44,9 @@ them. Where the two are related the entry says so.
 | **D19** | FRD | `FR-CO-07` | A Section carries its starting row; membership is derived, not stored. | Deliberate deviation |
 | **D20** | FRD | `FR-VZ-03, §4.2` | The Status Family requires none of its mapping slots, because its Data Shape is a disjunction. | Proposed extension |
 | **D26** | API | `API: schema ShareGrantTarget` | A Share Grant targets an individual or a group; the API says user or department. | Temporary — the HTTP adapter |
-| **D27** | API | `API: schema Envelope` | Every response is wrapped in `{ status, message, data }`; we read bodies directly. | Temporary — a Widget that shows `meta.partial` to the Viewer |
 | **D28** | API | `API: schema Widget.visualization_type` | Visualization Type ids may be a third vocabulary, neither ours nor the FRD's. | Temporary — confirmation against a live Dataset |
 
-## Resolved — 9
+## Resolved — 10
 
 | # | Answers to | Clause | Divergence | Status |
 | --- | --- | --- | --- | --- |
@@ -59,6 +58,7 @@ them. Where the two are related the entry says so.
 | **D23** | API | `API: schema Dashboard.widgets` | A board references its Widgets by id; the API embeds them by value. | Resolved — dashboard/api-dashboard.ts - joined on the way out, split on the way in |
 | **D24** | API | `API: schema FilterParameter` | A Field carries `filterable`; the API declares Filter Parameters separately. | Resolved — catalogue/api-dataset.ts - `filterable` is read from `filter_parameters` |
 | **D25** | API | `API: schema DashboardScopeLevel` | Scope has three levels; the API has four, including `role`. | Resolved — dashboard/api-dashboard.ts - `role` folds into an organizational scope |
+| **D27** | API | `API: schema Envelope` | Every response is wrapped in `{ status, message, data }`; we read bodies directly. | Resolved — widgets/WidgetCard.tsx - the note under the figure it qualifies |
 | **D29** | API | `API: schema Aggregation` | Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`. | Resolved — catalogue/api-dataset.ts - a translation table, and an unknown name is dropped |
 
 ---
@@ -200,14 +200,6 @@ The same gap D4 closed for Placement: a Container required to organize Widgets *
 
 Ours is `individual | group` with a `recipientLabel`; the API is `user | department` with a `target_ref`. The same idea under different names, and the rename is the whole of the fix. Worth recording only because `group` is the broader word and the API deliberately is not: a department is an IAM concept it holds a reference to, not an arbitrary set.
 
-### D27 — Every response is wrapped in `{ status, message, data }`; we read bodies directly.
-
-**Answers to:** API — `API: schema Envelope`  
-**Status:** Temporary (a Widget that shows `meta.partial` to the Viewer)  
-**Where:** `api/client.ts, retrieval/relayed-body.ts`  
-
-A boolean `status`, a human `message`, and the payload under `data`. One unwrap in the adapter and nothing above it needs to know — which is the argument for the adapter existing at all. Recorded because the envelope also carries the partial-result marker: a Source System may answer `200` with `meta.partial` and a reason, and a widget that ignores that shows a truncated series as if it were the whole one. Half of this is done: the client unwraps the envelope once, and `relayed-body.ts` finds the marker under either of the two readings the spec admits, reporting which arrived. What remains is the half a Viewer can see - nothing on a card yet says the series is incomplete, so the entry stays open.
-
 ### D28 — Visualization Type ids may be a third vocabulary, neither ours nor the FRD's.
 
 **Answers to:** API — `API: schema Widget.visualization_type`  
@@ -289,6 +281,14 @@ The API keeps two lists. `fields` describes the *response* shape — and a Field
 **Where:** `domain/dashboard.ts`  
 
 The API's levels are `personal | department | role | organization`, and the reference field is `scope_organizational_ref`. We modelled three, leaving role-based Scope out because Frontend Plan §8 recorded the naming hazard around it. The API added it, and its own note says a `role` scope "currently admits only the creator and Administrators" — so the level exists and does not yet mean what it says. Finding 21 carries that.
+
+### D27 — Every response is wrapped in `{ status, message, data }`; we read bodies directly.
+
+**Answers to:** API — `API: schema Envelope`  
+**Status:** Resolved (widgets/WidgetCard.tsx - the note under the figure it qualifies)  
+**Where:** `api/client.ts, retrieval/relayed-body.ts, analytics/widgets/WidgetCard.tsx`  
+
+A boolean `status`, a human `message`, and the payload under `data`. One unwrap in the adapter and nothing above it needs to know — which is the argument for the adapter existing at all. Recorded because the envelope also carries the partial-result marker: a Source System may answer `200` with `meta.partial` and a reason, and a widget that ignores that shows a truncated series as if it were the whole one. Half of this is done: the client unwraps the envelope once, and `relayed-body.ts` finds the marker under either of the two readings the spec admits. It now reaches the card: a note under the figure it qualifies, shown on `ready` and on `empty`, on a bare stat tile as well as a chart, and never behind a hover - a tooltip is invisible to a touchscreen, a wall display, and a screenshot, which are three of the ways a wrong number travels. It is not a seventh render state: it qualifies an answer rather than replacing one, so the picture is still drawn.
 
 ### D29 — Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`.
 

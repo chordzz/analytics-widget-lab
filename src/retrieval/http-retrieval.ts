@@ -67,13 +67,22 @@ export function httpRetrieval(api: ApiClient, { onRelay }: HttpRetrievalOptions 
         reason: relayed.partialReason,
       })
 
-      if (relayed.rows.length === 0) return { kind: 'empty' }
+      /*
+       * The marker travels with the answer rather than only to the log. An
+       * unread `meta.partial` and an absent one draw the same chart, which is
+       * the outcome the integration guide calls the worst available.
+       */
+      const partial = relayed.partial ? { reason: relayed.partialReason } : undefined
+
+      if (relayed.rows.length === 0) return { kind: 'empty', partial }
 
       // Filters are re-applied deliberately. Upstream has already narrowed by
       // the parameters it publishes; re-applying is idempotent and covers the
       // ones it does not.
       const rows = executeQuery(relayed.rows, query)
-      return rows.length === 0 ? { kind: 'empty' } : { kind: 'rows', rows, totalCount: rows.length }
+      return rows.length === 0
+        ? { kind: 'empty', partial }
+        : { kind: 'rows', rows, totalCount: rows.length, partial }
     },
 
     async listFilterValues(datasetId, field): Promise<(string | number)[]> {

@@ -45,10 +45,16 @@ import { fakeSignInClient } from './auth/fake-sign-in'
  * rejected code to order. The fake will.
  */
 export default function App() {
-  const onFixtures = useHashIs('#/fixtures')
-  const previewingSignIn = useHashIs('#/sign-in-preview')
+  const hash = useHash()
+  const previewingSignIn = hash === '#/sign-in-preview'
+  /*
+   * A prefix, not an equality. The module routes itself by appending to its
+   * base path, so an exact match meant the first click on any nav item left
+   * fixtures mode and landed back on the sign-in screen.
+   */
+  const onFixtures = hash === '#/fixtures' || hash.startsWith('#/fixtures/')
 
-  if (onFixtures) return <AnalyticsModule />
+  if (onFixtures) return <AnalyticsModule basePath="#/fixtures" />
 
   if (previewingSignIn) {
     return (
@@ -70,14 +76,14 @@ export default function App() {
 
 const previewClient = fakeSignInClient()
 
-function useHashIs(hash: string): boolean {
-  const [matches, setMatches] = useState(() => window.location.hash === hash)
+function useHash(): string {
+  const [hash, setHash] = useState(() => window.location.hash)
 
   useEffect(() => {
-    const onChange = () => setMatches(window.location.hash === hash)
+    const onChange = () => setHash(window.location.hash)
     window.addEventListener('hashchange', onChange)
     return () => window.removeEventListener('hashchange', onChange)
-  }, [hash])
+  }, [])
 
-  return matches
+  return hash
 }

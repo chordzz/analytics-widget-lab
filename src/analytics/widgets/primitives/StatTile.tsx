@@ -53,7 +53,13 @@ export function StatTile({
   return (
     <div
       className={className}
-      style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 0 }}
+      /*
+       * `safe center`: centred content that outgrows its box overflows both
+       * ways, and the first thing clipped is the top — the label saying what
+       * the number is. `safe` falls back to start-alignment when it would
+       * overflow, so a tight tile loses the sparkline rather than the label.
+       */
+      style={{ display: 'flex', flexDirection: 'column', justifyContent: 'safe center', minHeight: 0 }}
     >
       <p
         style={{

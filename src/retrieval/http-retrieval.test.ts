@@ -107,6 +107,34 @@ describe('a partial result survives both readings', () => {
     expect(relays[0]).toMatchObject({ partial: true, reason: 'shard down' })
   })
 
+  test('and it travels on the outcome, not only to the log', async () => {
+    /*
+     * D27's second half depends on this. A marker that reaches a console and
+     * stops draws exactly the same chart as one that was never sent — which is
+     * the outcome the integration guide calls the worst available.
+     */
+    const { port } = retrievalWith(flat(rows, { partial: true, reason: 'retention' }))
+    expect(await port.retrieve('d', {}, viewer())).toMatchObject({
+      kind: 'rows',
+      partial: { reason: 'retention' },
+    })
+  })
+
+  test('an empty answer that was truncated carries it too', async () => {
+    // The sharpest pairing: the source served none of what was asked for, which
+    // drawn as a plain empty state reads as "there is nothing here".
+    const { port } = retrievalWith(flat([], { partial: true, reason: 'shard down' }))
+    expect(await port.retrieve('d', {}, viewer())).toEqual({
+      kind: 'empty',
+      partial: { reason: 'shard down' },
+    })
+  })
+
+  test('a complete answer carries no marker', async () => {
+    const { port } = retrievalWith(flat(rows))
+    expect(await port.retrieve('d', {}, viewer())).toMatchObject({ partial: undefined })
+  })
+
   test('and a complete result says so', async () => {
     const { port, relays } = retrievalWith(flat(rows))
     await port.retrieve('d', {}, viewer())

@@ -126,7 +126,16 @@ export function StatusTile({
       style={{
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center',
+/*
+         * `safe center` rather than `center`.
+         *
+         * Centred content that outgrows its box overflows equally in both
+         * directions, so the first thing clipped is the top — which here is the
+         * label saying what the number is. `safe` falls back to start-alignment
+         * the moment it would overflow, so a tile that runs out of room loses
+         * the least important row instead of the most.
+         */
+        justifyContent: 'safe center',
         gap: 'var(--a-space-2)',
         minHeight: 0,
       }}
