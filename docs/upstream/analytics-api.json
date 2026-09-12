@@ -5,6 +5,38 @@
     "version": "2.0.0"
   },
   "paths": {
+    "/auth/refresh": {
+      "post": {
+        "summary": "Refresh an access token",
+        "responses": [
+          "200",
+          "400",
+          "401",
+          "503"
+        ]
+      }
+    },
+    "/auth/request-otp": {
+      "post": {
+        "summary": "Request an email sign-in code",
+        "responses": [
+          "200",
+          "400",
+          "503"
+        ]
+      }
+    },
+    "/auth/verify-otp": {
+      "post": {
+        "summary": "Verify an email code and receive tokens",
+        "responses": [
+          "200",
+          "400",
+          "401",
+          "503"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "summary": "Liveness probe",
@@ -685,6 +717,12 @@
             ],
             "type": "string"
           },
+          "iam": {
+            "enum": [
+              "configured"
+            ],
+            "type": "string"
+          },
           "redis": {
             "enum": [
               "ok",
@@ -857,6 +895,28 @@
           "name",
           "iam_product_id"
         ],
+        "type": "object"
+      },
+      "TokenBundle": {
+        "description": "An IAM access token plus its refresh token.",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer"
+          },
+          "refresh_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "example": "Bearer",
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "Violation": {
