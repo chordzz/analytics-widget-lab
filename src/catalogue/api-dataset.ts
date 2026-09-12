@@ -1,0 +1,171 @@
+/**
+ * The API's Dataset declaration, translated into ours.
+ *
+ * This is where divergences D21, D24 and D29 are paid off. Each was recorded
+ * with `endedAt: 'the HTTP adapter'`, and this is that adapter: the API's wire
+ * format wins, and the translation lives in our repo rather than in a contract
+ * other teams have already read.
+ *
+ * Three of the four translations lose something, and each says what:
+ *
+ *   - **Role.** The API has two (`dimension | measure`) and names the temporal
+ *     one separately in `time_dimension_field`. We have three. Reconstructing
+ *     the third is exact, because the API names exactly one.
+ *   - **Filterability.** The API keeps two lists — `fields` describes what comes
+ *     back, `filter_parameters` describes what may be sent. We collapse the
+ *     second into a boolean on the first, which cannot express a parameter that
+ *     is not also a returned column. That is D24, and it is the one place their
+ *     model is plainly richer than ours.
+ *   - **Classification.** Four levels against three, and the two vocabularies
+ *     are not nested. See `CLASSIFICATION` below.
+ */
+
+import type {
+  Aggregation,
+  DataClassification,
+  Dataset,
+  Field,
+  Measure,
+} from '../domain/dataset'
+
+/** `Dataset` as the API declares it. Only the parts we read. */
+export interface ApiDataset {
+  id: string
+  name: string
+  description?: string
+  source_system_id: string
+  service_id?: string
+  path?: string
+  status?: 'published' | 'withdrawn'
+  classification?: string
+  time_dimension_field?: string | null
+  fields: ApiField[]
+  filter_parameters?: ApiFilterParameter[]
+  required_permission_key?: string
+  deleted?: boolean
+}
+
+export interface ApiField {
+  name: string
+  type: string
+  role: 'dimension' | 'measure'
+  description?: string
+  aggregations?: string[]
+  filter_operators?: string[]
+  sortable?: boolean
+}
+
+export interface ApiFilterParameter {
+  name: string
+  type: string
+  required?: boolean
+  description?: string
+  allowed_values?: string[]
+}
+
+/**
+ * D29 — the same six operations, two of them abbreviated.
+ *
+ * Worth a table rather than a cast. An aggregation we do not recognise looks
+ * exactly like an empty column: it falls through the reducer's switch to a
+ * silent zero rather than failing, so a board ends up showing 0 where it should
+ * show a minimum.
+ */
+const AGGREGATIONS: Record<string, Aggregation> = {
+  sum: 'sum',
+  average: 'average',
+  count: 'count',
+  min: 'minimum',
+  max: 'maximum',
+  minimum: 'minimum',
+  maximum: 'maximum',
+  'distinct-count': 'distinct-count',
+}
+
+/**
+ * Their three sensitivity tags against our four.
+ *
+ * The vocabularies are not nested, so this is a judgement rather than a lookup
+ * and it errs upward on purpose. `pii` becomes our most restrictive level
+ * because their own note says it may never be lowered — data already went out
+ * under that label. `financial` becomes `confidential`. Our `public` has no
+ * counterpart and is simply unreachable from the API, which is the safe
+ * direction for a mapping to be lossy in.
+ */
+const CLASSIFICATION: Record<string, DataClassification> = {
+  internal: 'internal',
+  financial: 'confidential',
+  pii: 'restricted',
+}
+
+export function datasetFrom(api: ApiDataset): Dataset {
+  const filterable = new Set((api.filter_parameters ?? []).map((parameter) => parameter.name))
+  const timeField = api.time_dimension_field ?? null
+
+  return {
+    id: api.id,
+    name: api.name,
+    description: api.description ?? '',
+    sourceSystem: api.source_system_id,
+    classification: CLASSIFICATION[api.classification ?? ''] ?? 'internal',
+    // FR-DP-07 drives the access record (FR-DA-14), and `pii` is the only tag
+    // the API has that asserts personal data.
+    exposesPersonalData: api.classification === 'pii',
+    fields: api.fields.map((field) => fieldFrom(field, timeField, filterable)),
+  }
+}
+
+function fieldFrom(api: ApiField, timeField: string | null, filterable: Set<string>): Field {
+  const base = {
+    key: api.name,
+    // The API declares no label — `name` is the key the Source System returns,
+    // and it is the only human-facing string we have. Humanising it here beats
+    // showing `total_amount` in a picker, and a publisher who wants better can
+    // write a `description`.
+    label: labelFor(api.name),
+    description: api.description,
+    filterable: filterable.has(api.name),
+    sortable: api.sortable ?? false,
+  }
+
+  if (api.role === 'measure') {
+    return {
+      ...base,
+      role: 'measure',
+      aggregations: mapAggregations(api.aggregations),
+    } satisfies Measure
+  }
+
+  // D21 — the third role, reconstructed. The API names exactly one temporal
+  // Field per Dataset, so this is exact rather than a heuristic on `type`.
+  return { ...base, role: api.name === timeField ? 'time-dimension' : 'dimension' }
+}
+
+/**
+ * An unrecognised aggregation is dropped rather than passed through.
+ *
+ * Offering an Author an aggregation our reducer does not implement produces a
+ * column of zeroes with no error — the failure D29 was written about. Dropping
+ * it makes the option absent, which is visible.
+ */
+function mapAggregations(declared: string[] | undefined): Aggregation[] {
+  const mapped = (declared ?? [])
+    .map((name) => AGGREGATIONS[name])
+    .filter((name): name is Aggregation => name !== undefined)
+
+  // A Measure with no usable aggregation can still be counted, and a Measure
+  // with an empty list fails every Visualization Family's satisfaction check —
+  // which would hide the Field rather than explain it.
+  return mapped.length > 0 ? mapped : ['sum']
+}
+
+/** `total_amount` → `Total amount`. */
+export function labelFor(name: string): string {
+  const words = name.replace(/[_-]+/g, ' ').replace(/([a-z\d])([A-Z])/g, '$1 $2').trim()
+  if (words === '') return name
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase()
+}
+
+/** FR-DP-13 — a withdrawn Dataset leaves the Catalogue. */
+export const isPublished = (api: ApiDataset): boolean =>
+  api.deleted !== true && api.status !== 'withdrawn'

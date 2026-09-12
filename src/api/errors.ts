@@ -12,8 +12,14 @@
  */
 
 export type ApiErrorKind =
-  /** 401 twice — a refresh did not save it. Rises past the Widget layer. */
+  /** 401 twice on an authenticated route — a refresh did not save it. Rises past the Widget layer. */
   | 'session-expired'
+  /**
+   * 401 on a route that carries no session to refresh — the three `/auth`
+   * endpoints. There is nothing to renew here: the credential presented was
+   * simply refused, which on `/auth/verify-otp` means the code was wrong.
+   */
+  | 'unauthorized'
   /** 403 — the viewer lacks the Dataset's permission key. One Widget, not the board. */
   | 'denied'
   /** 410 — the publisher withdrew the Dataset. */
@@ -81,14 +87,19 @@ export const isSessionExpired = (error: unknown): boolean =>
  * HTTP status to kind.
  *
  * Straight from the API's own documentation of the query endpoint, which is the
- * most fully specified route and the only data-bearing one. 401 is absent
- * deliberately — the client handles it before it reaches here, because a first
- * 401 is an instruction to refresh rather than a failure.
+ * most fully specified route and the only data-bearing one.
+ *
+ * 401 reaches here only on an unauthenticated route. On an authenticated one the
+ * client intercepts it first, because a first 401 is an instruction to refresh
+ * rather than a failure — and it raises `session-expired` itself if the retry is
+ * refused too.
  */
 export function kindForStatus(status: number): ApiErrorKind {
   switch (status) {
     case 400:
       return 'validation'
+    case 401:
+      return 'unauthorized'
     case 403:
       return 'denied'
     case 404:
