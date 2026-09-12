@@ -53,11 +53,17 @@ export function PivotTable({
   height,
   className,
 }: PivotTableProps) {
-  // No data draws nothing. Axes and gridlines around an empty set read as a
-  // broken chart, and whatever wraps this — a card, a page — is better placed
-  // to say why it is empty.
-  if (data.length === 0) return null
-
+  /*
+   * The reduction runs before the empty check, not after it.
+   *
+   * It used to sit below an `if (data.length === 0) return null`, which made
+   * the hook conditional: a render with no rows called none and a render with
+   * rows called one, and React counts hooks per instance. Nothing reaches it
+   * that way today — `WidgetView` only renders a primitive once the state is
+   * `ready`, and `ready` means rows exist — so this was a latent trap rather
+   * than a live crash. It stops being either here, and the work on an empty set
+   * is two loops over nothing.
+   */
   const { rows, columns, cells, rowTotals, columnTotals, grandTotal, peak } = useMemo(() => {
     const rowNames = [...new Set(data.map((row) => String(row[rowKey])))].sort()
     const columnNames = [...new Set(data.map((row) => String(row[columnKey])))].sort()
@@ -114,6 +120,11 @@ export function PivotTable({
       peak: Math.max(...cellValues.values(), 1),
     }
   }, [data, rowKey, columnKey, valueKey, aggregation])
+
+  // No data draws nothing. Axes and gridlines around an empty set read as a
+  // broken chart, and whatever wraps this — a card, a page — is better placed
+  // to say why it is empty.
+  if (rows.length === 0) return null
 
   const headCell: React.CSSProperties = {
     fontWeight: 500,
