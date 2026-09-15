@@ -149,7 +149,7 @@ export const DIVERGENCES: Divergence[] = [
     id: 'D6',
     clause: 'FR-VZ-01',
     authority: 'frd',
-    divergence: 'Six of the 42 Visualization Types have no renderer.',
+    divergence: 'One of the 42 Visualization Types has no renderer.',
     status: 'temporary',
     where: 'analytics/widgets/catalog.ts',
     reason:
@@ -429,8 +429,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema ShareGrantTarget',
     authority: 'api',
     divergence: 'A Share Grant targets an individual or a group; the API says user or department.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'dashboard/api-dashboard.ts - `grantInputFrom`',
     where: 'domain/dashboard.ts',
     reason:
       'Ours is `individual | group` with a `recipientLabel`; the API is `user | department` with a ' +

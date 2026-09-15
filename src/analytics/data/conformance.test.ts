@@ -38,15 +38,6 @@ const registered = (id: string) => {
   return entry!
 }
 
-/** Still a difference we have not absorbed. */
-const open = (id: string) => {
-  const entry = registered(id)
-  expect(entry.status, `${id} is cited as open but the register calls it resolved`).not.toBe(
-    'resolved',
-  )
-  return entry
-}
-
 /**
  * The API still differs and we no longer do: an adapter translates it.
  *
@@ -180,7 +171,7 @@ describe('where we differ, the register says so', () => {
 
   test('grant targets are user and department — D26', () => {
     expect(enumOf('ShareGrantTarget')).toEqual(['user', 'department'])
-    open('D26')
+    translated('D26')
   })
 
   test('every response is enveloped — D27', () => {

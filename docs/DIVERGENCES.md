@@ -24,7 +24,7 @@ them. Where the two are related the entry says so.
 | Temporary | Conformance deferred, with a stage that ends it. |
 | Resolved | Was one of the above; no longer diverges. Kept for the record. |
 
-## Open — 19
+## Open — 18
 
 | # | Answers to | Clause | Divergence | Status |
 | --- | --- | --- | --- | --- |
@@ -33,7 +33,7 @@ them. Where the two are related the entry says so.
 | **D3** | FRD | `FR-VZ-03` | Mapping slots are declared per Visualization Type as well as per Family. | Deliberate deviation |
 | **D4** | FRD | `FR-CO-02` | A Placement is `{x, y, w, h}`, not a span and an ordinal. | Deliberate deviation |
 | **D5** | FRD | `FR-VZ-05` | `Dataset.suits` promotes the Visualization Types a publisher intends. | Deliberate deviation |
-| **D6** | FRD | `FR-VZ-01` | Six of the 42 Visualization Types have no renderer. | Temporary |
+| **D6** | FRD | `FR-VZ-01` | One of the 42 Visualization Types has no renderer. | Temporary |
 | **D7** | FRD | `FR-VZ-01` | `status-list` is a 43rd Visualization Type. | Proposed extension |
 | **D9** | FRD | `FR-DA-12` | Aggregation happened in the browser. | Deliberate deviation |
 | **D12** | FRD | `FR-DP-03` | A Field carries a `format`. | Proposed extension |
@@ -43,12 +43,11 @@ them. Where the two are related the entry says so.
 | **D18** | FRD | `FR-VZ-02, §4.2` | `timeline-chart` does not satisfy its Family's Data Shape. | Deliberate deviation |
 | **D19** | FRD | `FR-CO-07` | A Section carries its starting row; membership is derived, not stored. | Deliberate deviation |
 | **D20** | FRD | `FR-VZ-03, §4.2` | The Status Family requires none of its mapping slots, because its Data Shape is a disjunction. | Proposed extension |
-| **D26** | API | `API: schema ShareGrantTarget` | A Share Grant targets an individual or a group; the API says user or department. | Temporary — the HTTP adapter |
 | **D28** | API | `API: schema Widget.visualization_type` | Visualization Type ids may be a third vocabulary, neither ours nor the FRD's. | Temporary — confirmation against a live Dataset |
 | **D30** | API | `API: schema Dataset` | A Dataset declares what one row represents; the API has nowhere to put it. | Proposed extension |
 | **D31** | API | `API: schema FilterParameter` | Enumerable Filter Parameters must publish their accepted values; the API leaves it optional. | Proposed extension |
 
-## Resolved — 10
+## Resolved — 11
 
 | # | Answers to | Clause | Divergence | Status |
 | --- | --- | --- | --- | --- |
@@ -60,6 +59,7 @@ them. Where the two are related the entry says so.
 | **D23** | API | `API: schema Dashboard.widgets` | A board references its Widgets by id; the API embeds them by value. | Resolved — dashboard/api-dashboard.ts - joined on the way out, split on the way in |
 | **D24** | API | `API: schema FilterParameter` | A Field carries `filterable`; the API declares Filter Parameters separately. | Resolved — catalogue/api-dataset.ts - `filterable` is read from `filter_parameters` |
 | **D25** | API | `API: schema DashboardScopeLevel` | Scope has three levels; the API has four, including `role`. | Resolved — dashboard/api-dashboard.ts - `role` folds into an organizational scope |
+| **D26** | API | `API: schema ShareGrantTarget` | A Share Grant targets an individual or a group; the API says user or department. | Resolved — dashboard/api-dashboard.ts - `grantInputFrom` |
 | **D27** | API | `API: schema Envelope` | Every response is wrapped in `{ status, message, data }`; we read bodies directly. | Resolved — widgets/WidgetCard.tsx - the note under the figure it qualifies |
 | **D29** | API | `API: schema Aggregation` | Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`. | Resolved — catalogue/api-dataset.ts - a translation table, and an unknown name is dropped |
 
@@ -109,7 +109,7 @@ Per Family is right for eligibility and too coarse for rendering: `line-chart` a
 
 The invariant holds — nothing is excluded by it and every Type whose Family the Dataset satisfies stays on offer; it only reorders the picker. It exists because role is not meaning: any table with a Dimension and a Measure satisfies a funnel, one of them is *about* funnels, and the only party who knows which is the publisher. Inferring it from names was tried and matches "Service health" for a *stat* card.
 
-### D6 — Six of the 42 Visualization Types have no renderer.
+### D6 — One of the 42 Visualization Types has no renderer.
 
 **Answers to:** FRD — `FR-VZ-01`  
 **Status:** Temporary  
@@ -193,14 +193,6 @@ The same gap D4 closed for Placement: a Container required to organize Widgets *
 **Where:** `visualization/mapping-slots.ts, analytics/builder/refinement.test.ts`  
 
 §4.2 gives Status two alternative shapes — "one Measure with a threshold, *or* one state Dimension" — and the two need different slots: a threshold indicator takes a Measure and no Dimension, a status tile takes a state Dimension. A per-Family slot table can only express a conjunction, so requiring either slot asserts something the Family does not require and makes the other route unrepresentable. Surfaced by porting the threshold route in §2: D3's refinement guard rejected both new Types, correctly. The eligibility guarantee is not lost — the disjunction is modelled properly in the Data Shape clause, which is what FR-VZ-05 evaluates — and a counterpart guard now asserts every built Type still requires at least one slot of its own, so "the Family requires nothing" cannot become "a Type may require nothing".
-
-### D26 — A Share Grant targets an individual or a group; the API says user or department.
-
-**Answers to:** API — `API: schema ShareGrantTarget`  
-**Status:** Temporary (the HTTP adapter)  
-**Where:** `domain/dashboard.ts`  
-
-Ours is `individual | group` with a `recipientLabel`; the API is `user | department` with a `target_ref`. The same idea under different names, and the rename is the whole of the fix. Worth recording only because `group` is the broader word and the API deliberately is not: a department is an IAM concept it holds a reference to, not an arbitrary set.
 
 ### D28 — Visualization Type ids may be a third vocabulary, neither ours nor the FRD's.
 
@@ -300,6 +292,14 @@ The API keeps two lists. `fields` describes the *response* shape — and a Field
 **Where:** `domain/dashboard.ts`  
 
 The API's levels are `personal | department | role | organization`, and the reference field is `scope_organizational_ref`. We modelled three, leaving role-based Scope out because Frontend Plan §8 recorded the naming hazard around it. The API added it, and its own note says a `role` scope "currently admits only the creator and Administrators" — so the level exists and does not yet mean what it says. Finding 21 carries that.
+
+### D26 — A Share Grant targets an individual or a group; the API says user or department.
+
+**Answers to:** API — `API: schema ShareGrantTarget`  
+**Status:** Resolved (dashboard/api-dashboard.ts - `grantInputFrom`)  
+**Where:** `domain/dashboard.ts`  
+
+Ours is `individual | group` with a `recipientLabel`; the API is `user | department` with a `target_ref`. The same idea under different names, and the rename is the whole of the fix. Worth recording only because `group` is the broader word and the API deliberately is not: a department is an IAM concept it holds a reference to, not an arbitrary set.
 
 ### D27 — Every response is wrapped in `{ status, message, data }`; we read bodies directly.
 
