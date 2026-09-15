@@ -17,8 +17,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { AnalyticsDataProvider } from '../data/AnalyticsData'
 import { AccessRecordPanel } from './AccessRecordPanel'
 import { ApiError } from '../../api/errors'
-import { CatalogueProblem, NoDatasets, sampleNote } from './DataScreen'
+import { sampleNote } from './DataScreen'
+import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
 import { WIDGET_RENDER_STATUSES } from '../../retrieval/render-state'
+import { WidgetComposer } from '../builder/WidgetComposer'
+import type { CataloguePort } from '../../catalogue/port'
 import { catalogueFailure } from '../data/AnalyticsData'
 import type { DatasetRetrievalPort } from '../../retrieval/port'
 
@@ -119,7 +122,14 @@ describe('the Catalogue failing is told apart from the Catalogue being empty', (
   })
 
   test('and says who publishes one, since it is not the reader', () => {
-    expect(words(renderToStaticMarkup(<NoDatasets />))).toContain('product teams')
+    /*
+     * The part a reader cannot work out and the part that decides what they do
+     * next. "No data sources" alone invites someone to go hunting for a setting
+     * they do not have.
+     */
+    const said = words(renderToStaticMarkup(<NoDatasets />))
+    expect(said).toContain('product team that owns it')
+    expect(said).toContain('Ask the team')
   })
 })
 
@@ -178,5 +188,39 @@ describe('the sample says which of the six it hit', () => {
     // the one duplicate permitted.
     const distinct = new Set(said.filter((_, index) => WIDGET_RENDER_STATUSES[index] !== 'ready'))
     expect(distinct.size).toBe(WIDGET_RENDER_STATUSES.length - 1)
+  })
+})
+
+describe('step 1 of the composer answers the same question', () => {
+  /*
+   * The worse of the two surfaces, and the one that prompted this: a numbered
+   * step with a blank area beneath it reads as a page that failed to finish
+   * rendering, not as an answer. Both screens ask the Catalogue the same
+   * question, so they give the same three answers.
+   */
+  const emptyCatalogue: CataloguePort = { browse: async () => [], describe: async () => null }
+
+  const composer = () =>
+    renderToStaticMarkup(
+      <AnalyticsDataProvider catalogue={emptyCatalogue}>
+        <WidgetComposer onCommit={() => {}} onCancel={() => {}} />
+      </AnalyticsDataProvider>,
+    )
+
+  test('it does not render a bare step while it is still asking', () => {
+    // The first paint is the loading branch, not an empty list.
+    expect(words(composer())).toContain('Loading data sources')
+  })
+
+  test('the empty message says a widget cannot be built without one', () => {
+    // This is the end of the road on this screen, unlike the Data sources
+    // listing where it is merely nothing to read.
+    const said = words(renderToStaticMarkup(
+      <NoDatasets>
+        <p>A widget is built from a data source, so there is nothing to compose until one exists.</p>
+      </NoDatasets>,
+    ))
+    expect(said).toContain('nothing to compose')
+    expect(said).toContain('Ask the team')
   })
 })

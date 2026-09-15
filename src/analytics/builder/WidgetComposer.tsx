@@ -23,6 +23,7 @@ import { Widget, type WidgetMapping, type WidgetSpec } from '../widgets/Widget'
 import { FAMILIES, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
 import { useDatasets } from '../data/AnalyticsData'
+import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
 import { FieldMapper, fieldSummary } from './FieldMapper'
 import {
   autoMap,
@@ -72,7 +73,7 @@ export function WidgetComposer({
   onCommit: (draft: ComposerDraft) => void
   onCancel: () => void
 }) {
-  const { datasets } = useDatasets()
+  const { datasets, loading: loadingDatasets, failure: catalogueFailure } = useDatasets()
   const byId = (id: string) => datasets.find((entry) => entry.id === id)
 
   const [datasetId, setDatasetId] = useState(initial?.datasetId ?? startWith?.datasetId ?? '')
@@ -189,6 +190,23 @@ export function WidgetComposer({
                 Change
               </button>
             </div>
+          ) : loadingDatasets ? (
+            <p className="a-muted">Loading data sources…</p>
+          ) : catalogueFailure ? (
+            <CatalogueProblem failure={catalogueFailure} />
+          ) : datasets.length === 0 ? (
+            /*
+             * Step 1 with nothing under it was a blank area beneath a numbered
+             * heading — which reads as a page that failed to finish rendering
+             * rather than as an answer. A widget cannot be built without a
+             * source, so this is the end of the road here and it says so.
+             */
+            <NoDatasets>
+              <p style={{ margin: 'var(--a-space-2) 0 0' }}>
+                A widget is built from a data source, so there is nothing to compose until
+                one exists.
+              </p>
+            </NoDatasets>
           ) : (
             <div className="a-dataset-list">
               {datasets.map((entry) => (
