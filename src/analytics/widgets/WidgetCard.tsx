@@ -51,6 +51,15 @@ export interface WidgetCardProps {
   state?: WidgetState
   errorMessage?: string
   emptyMessage?: string
+  /**
+   * The publisher said this answer is not the whole answer.
+   *
+   * A qualifier on `ready` and `empty`, never a state of its own — the picture
+   * is real and it is not all of the picture. Drawn below the body rather than
+   * as a header badge for two reasons: a bare card has no header, and a note
+   * that sits under the figure is read by someone who has just read the figure.
+   */
+  partial?: { reason: string | null }
   /** Rendered under the content, e.g. a legend or a footnote. */
   footer?: ReactNode
   /**
@@ -86,6 +95,7 @@ export const WidgetCard = forwardRef<
     state = 'ready',
     errorMessage,
     emptyMessage,
+    partial,
     footer,
     controls,
     bare = false,
@@ -133,9 +143,22 @@ export const WidgetCard = forwardRef<
         {state === 'ready' && children}
         {state === 'loading' && <LoadingState />}
         {state !== 'ready' && state !== 'loading' && (
-          <StatePanel state={state} emptyMessage={emptyMessage} errorMessage={errorMessage} />
+          <StatePanel
+            state={state}
+            emptyMessage={emptyMessage}
+            errorMessage={errorMessage}
+            partial={state === 'empty' ? partial : undefined}
+          />
         )}
       </div>
+
+      {/*
+        Only alongside a picture. An empty card has one message slot and the
+        panel already fills it — showing both gave "No data for this selection"
+        directly above "None of this range could be served", which is two
+        different accounts of the same card.
+      */}
+      {partial && state === 'ready' && <PartialNote reason={partial.reason} />}
 
       {footer && state === 'ready' && <footer className="a-card__foot">{footer}</footer>}
     </section>
@@ -191,6 +214,56 @@ function ActionsMenu({ actions }: { actions: WidgetAction[] }) {
   )
 }
 
+/**
+ * "Part of the data — retention cut the range short."
+ *
+ * Always shown, never behind a hover: a tooltip is invisible to anyone reading a
+ * dashboard on a touchscreen, glancing at it on a wall display, or screenshotting
+ * a figure into a deck — which are three of the ways a wrong number travels.
+ *
+ * `role="status"` rather than `alert`: nothing is broken and nothing needs
+ * interrupting. But it is announced, because the whole point is that the figure
+ * above cannot be read at face value, and a sighted reader gets that from the
+ * rule down the side.
+ *
+ * The empty case gets different words on purpose. "Nothing here" is a claim
+ * about the data; a partial empty means the source served *none* of what was
+ * asked for, which is a claim about the request — and telling someone their
+ * range is empty when the truth is that it was refused sends them looking in the
+ * wrong place.
+ */
+function PartialNote({ reason }: { reason: string | null }) {
+  const sentence = partialSentence(reason, false)
+  return (
+    /*
+     * `title` carries the full sentence because the visible one is line-clamped
+     * on a narrow card. The clamp is visual only — the text stays whole in the
+     * DOM, so nothing is lost to a screen reader, and what a sighted reader
+     * loses is the publisher's *reason*, never the fact that the figure is
+     * incomplete.
+     */
+    <p className="a-card__partial" role="status" title={sentence}>
+      <span className="a-card__partial-mark" aria-hidden="true">
+        !
+      </span>
+      <span className="a-card__partial-text">{sentence}</span>
+    </p>
+  )
+}
+
+/**
+ * The empty case gets different words on purpose.
+ *
+ * "No data for this selection" is a claim about the data. A partial empty means
+ * the source served *none* of what was asked for, which is a claim about the
+ * request — and telling someone their range is empty when it was actually
+ * refused sends them looking in the wrong place.
+ */
+export function partialSentence(reason: string | null, empty: boolean): string {
+  const lead = empty ? 'None of this range could be served' : 'Part of the data'
+  return reason ? `${lead} — ${reason}` : `${lead}. The source gave no reason.`
+}
+
 /** Shaped like a chart rather than a generic block, so the layout doesn't jump on load. */
 function LoadingState() {
   return (
@@ -215,17 +288,26 @@ function StatePanel({
   state,
   emptyMessage,
   errorMessage,
+  partial,
 }: {
   state: Exclude<WidgetState, 'ready' | 'loading'>
   emptyMessage?: string
   errorMessage?: string
+  partial?: { reason: string | null }
 }) {
   const panel = {
     empty: {
-      tone: 'muted' as const,
+      /*
+       * An empty that was truncated is warned rather than muted. Muted is the
+       * right tone for "there is genuinely nothing here" and the wrong one for
+       * "the source refused the range" — the second is something to act on.
+       */
+      tone: partial ? ('warning' as const) : ('muted' as const),
       icon: <BarsIcon />,
       heading: undefined,
-      body: emptyMessage ?? 'No data for this selection.',
+      body: partial
+        ? partialSentence(partial.reason, true)
+        : (emptyMessage ?? 'No data for this selection.'),
     },
     denied: {
       tone: 'neutral' as const,
@@ -249,7 +331,9 @@ function StatePanel({
 
   return (
     <div className={`a-placeholder a-placeholder--${panel.tone}`} role="status">
-      <span aria-hidden="true">{panel.icon}</span>
+      <span className="a-placeholder__icon" aria-hidden="true">
+        {panel.icon}
+      </span>
       {panel.heading && <p className="a-placeholder__heading">{panel.heading}</p>}
       <p>{panel.body}</p>
     </div>

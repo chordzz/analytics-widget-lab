@@ -9,13 +9,27 @@
  * The state switcher matters as much as the size one. Loading, empty and error
  * are what a widget spends a meaningful fraction of its life in, and they are
  * the states that get designed last and worst.
+ *
+ * **Nothing here retrieves anything.** A gallery is a catalogue of widget
+ * *types*, not of data: a type is bound to a Dataset when an Author places it on
+ * a board, and not before. So every card draws from the local sample fixtures,
+ * synchronously, through `WidgetView` — the pure half that takes rows already in
+ * hand.
+ *
+ * It used to use `Widget`, which fetches its own. That was harmless while the
+ * module ran on fixtures and wrong the moment it did not: the samples name
+ * fixture Datasets, a real Catalogue has never heard of them, and `Widget`
+ * reads "no such Dataset" as a withdrawal — correctly, for a board, where the
+ * binding existed once. In a gallery nothing was ever bound, so the whole
+ * screen rendered as forty withdrawn cards. A showcase that depends on a
+ * network is not a showcase.
  */
 
 import { useState } from 'react'
-import { Widget } from '../widgets/Widget'
 import type { WidgetState } from '../widgets/WidgetCard'
 import { FAMILIES, WIDGET_TYPES, coverage, typesInFamily } from '../widgets/catalog'
 import { SAMPLES } from '../widgets/samples'
+import { SampleWidget } from '../data/SampleWidget'
 
 const SIZES = [
   { id: 'sm', label: 'Small', span: 3, height: 200 },
@@ -23,18 +37,41 @@ const SIZES = [
   { id: 'lg', label: 'Large', span: 6, height: 320 },
 ] as const
 
-const STATES: { id: WidgetState | 'auto'; label: string }[] = [
+/**
+ * The six, plus one that is not a seventh.
+ *
+ * `partial` qualifies an answer rather than replacing one — the chart still
+ * draws — so it cannot be a `WidgetState` and still needs a way to be looked at.
+ * It belongs here for the same reason the other five do: a treatment nobody can
+ * put on screen is a treatment nobody designs.
+ */
+type GalleryState = WidgetState | 'auto' | 'partial' | 'partial-empty'
+
+const STATES: { id: GalleryState; label: string }[] = [
   { id: 'auto', label: 'Ready' },
   { id: 'loading', label: 'Loading' },
   { id: 'empty', label: 'Empty' },
   { id: 'denied', label: 'Denied' },
   { id: 'withdrawn', label: 'Withdrawn' },
   { id: 'failed', label: 'Failed' },
+  { id: 'partial', label: 'Partial' },
+  { id: 'partial-empty', label: 'Partial, empty' },
 ]
+
+/** A publisher's reason, of the length one realistically arrives at. */
+const SAMPLE_PARTIAL = {
+  reason: 'date range exceeds retention; returned 2026-05-01 onward',
+}
+
+const overrideFor = (state: GalleryState): WidgetState | undefined => {
+  if (state === 'auto' || state === 'partial') return undefined
+  if (state === 'partial-empty') return 'empty'
+  return state
+}
 
 export function GalleryScreen() {
   const [size, setSize] = useState<(typeof SIZES)[number]['id']>('md')
-  const [state, setState] = useState<WidgetState | 'auto'>('auto')
+  const [state, setState] = useState<GalleryState>('auto')
 
   const active = SIZES.find((option) => option.id === size)!
   const stats = coverage()
@@ -98,9 +135,10 @@ export function GalleryScreen() {
                     style={{ gridColumn: `span ${spanFor(type.defaultSpan, active.span)}` }}
                   >
                     <div style={{ height: heightFor(type.family, active.height) }}>
-                      <Widget
-                        spec={{ id: `gallery-${type.id}`, typeId: type.id, ...sample }}
-                        state={state === 'auto' ? undefined : state}
+                      <SampleWidget
+                        typeId={type.id}
+                        state={overrideFor(state) ?? 'ready'}
+                        partial={state.startsWith('partial') ? SAMPLE_PARTIAL : undefined}
                       />
                     </div>
                     <p
@@ -208,3 +246,4 @@ function Segmented({
     </span>
   )
 }
+

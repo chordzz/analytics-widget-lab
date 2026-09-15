@@ -24,7 +24,7 @@ them. Where the two are related the entry says so.
 | Temporary | Conformance deferred, with a stage that ends it. |
 | Resolved | Was one of the above; no longer diverges. Kept for the record. |
 
-## Open — 24
+## Open — 16
 
 | # | Answers to | Clause | Divergence | Status |
 | --- | --- | --- | --- | --- |
@@ -33,7 +33,7 @@ them. Where the two are related the entry says so.
 | **D3** | FRD | `FR-VZ-03` | Mapping slots are declared per Visualization Type as well as per Family. | Deliberate deviation |
 | **D4** | FRD | `FR-CO-02` | A Placement is `{x, y, w, h}`, not a span and an ordinal. | Deliberate deviation |
 | **D5** | FRD | `FR-VZ-05` | `Dataset.suits` promotes the Visualization Types a publisher intends. | Deliberate deviation |
-| **D6** | FRD | `FR-VZ-01` | Six of the 42 Visualization Types have no renderer. | Temporary |
+| **D6** | FRD | `FR-VZ-01` | One of the 42 Visualization Types has no renderer. | Temporary |
 | **D7** | FRD | `FR-VZ-01` | `status-list` is a 43rd Visualization Type. | Proposed extension |
 | **D9** | FRD | `FR-DA-12` | Aggregation happened in the browser. | Deliberate deviation |
 | **D12** | FRD | `FR-DP-03` | A Field carries a `format`. | Proposed extension |
@@ -43,23 +43,25 @@ them. Where the two are related the entry says so.
 | **D18** | FRD | `FR-VZ-02, §4.2` | `timeline-chart` does not satisfy its Family's Data Shape. | Deliberate deviation |
 | **D19** | FRD | `FR-CO-07` | A Section carries its starting row; membership is derived, not stored. | Deliberate deviation |
 | **D20** | FRD | `FR-VZ-03, §4.2` | The Status Family requires none of its mapping slots, because its Data Shape is a disjunction. | Proposed extension |
-| **D21** | API | `API: schema Field.role` | A Field has three roles; the API has two, and time is a Field *type*. | Temporary — the HTTP adapter |
-| **D22** | API | `API: GET /v1/datasets/{datasetId}/query` | A query is flat filter parameters, not a `DatasetQuery`. | Temporary — the HTTP adapter |
-| **D23** | API | `API: schema Dashboard.widgets` | A board references its Widgets by id; the API embeds them by value. | Temporary — the HTTP adapter |
-| **D24** | API | `API: schema FilterParameter` | A Field carries `filterable`; the API declares Filter Parameters separately. | Temporary — the HTTP adapter |
-| **D25** | API | `API: schema DashboardScopeLevel` | Scope has three levels; the API has four, including `role`. | Temporary — the HTTP adapter |
-| **D26** | API | `API: schema ShareGrantTarget` | A Share Grant targets an individual or a group; the API says user or department. | Temporary — the HTTP adapter |
-| **D27** | API | `API: schema Envelope` | Every response is wrapped in `{ status, message, data }`; we read bodies directly. | Temporary — the HTTP adapter |
-| **D28** | API | `API: schema Widget.visualization_type` | Visualization Type ids may be a third vocabulary, neither ours nor the FRD's. | Temporary — confirmation against a live Dataset |
-| **D29** | API | `API: schema Aggregation` | Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`. | Temporary — the HTTP adapter |
+| **D31** | API | `API: schema FilterParameter` | Enumerable Filter Parameters must publish their accepted values; the API leaves it optional. | Proposed extension |
 
-## Resolved — 3
+## Resolved — 13
 
 | # | Answers to | Clause | Divergence | Status |
 | --- | --- | --- | --- | --- |
 | **D8** | FRD | `FR-DA-09 — FR-DA-12` | Authorization was absent; the module had no Viewer. | Resolved — Stage 5 |
 | **D10** | FRD | `FR-VZ-09` | A board embedded its Widgets by value. | Resolved — Stage 6.2 |
 | **D11** | FRD | `FR-CO-05 — FR-CO-08` | The module had no Controls, Containers or exposed filters. | Resolved — Stage 6 |
+| **D21** | API | `API: schema Field.role` | A Field has three roles; the API has two, and time is a Field *type*. | Resolved — catalogue/api-dataset.ts - the role is reconstructed from `time_dimension_field` |
+| **D22** | API | `API: GET /v1/datasets/{datasetId}/query` | A query is flat filter parameters, not a `DatasetQuery`. | Resolved — retrieval/http-retrieval.ts - filters go upstream, ordering and reduction finish locally |
+| **D23** | API | `API: schema Dashboard.widgets` | A board references its Widgets by id; the API embeds them by value. | Resolved — dashboard/api-dashboard.ts - joined on the way out, split on the way in |
+| **D24** | API | `API: schema FilterParameter` | A Field carries `filterable`; the API declares Filter Parameters separately. | Resolved — catalogue/api-dataset.ts - `filterable` is read from `filter_parameters` |
+| **D25** | API | `API: schema DashboardScopeLevel` | Scope has three levels; the API has four, including `role`. | Resolved — dashboard/api-dashboard.ts - `role` folds into an organizational scope |
+| **D26** | API | `API: schema ShareGrantTarget` | A Share Grant targets an individual or a group; the API says user or department. | Resolved — dashboard/api-dashboard.ts - `grantInputFrom` |
+| **D27** | API | `API: schema Envelope` | Every response is wrapped in `{ status, message, data }`; we read bodies directly. | Resolved — widgets/WidgetCard.tsx - the note under the figure it qualifies |
+| **D28** | API | `API: schema Widget.visualization_type` | Visualization Type ids may be a third vocabulary, neither ours nor the FRD's. | Resolved — the API adopted §4.2 on 15 September 2026 |
+| **D29** | API | `API: schema Aggregation` | Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`. | Resolved — catalogue/api-dataset.ts - a translation table, and an unknown name is dropped |
+| **D30** | API | `API: schema Dataset` | A Dataset declares what one row represents; the API has nowhere to put it. | Resolved — `Dataset.grain`, added by the API on 15 September 2026 |
 
 ---
 
@@ -107,7 +109,7 @@ Per Family is right for eligibility and too coarse for rendering: `line-chart` a
 
 The invariant holds — nothing is excluded by it and every Type whose Family the Dataset satisfies stays on offer; it only reorders the picker. It exists because role is not meaning: any table with a Dimension and a Measure satisfies a funnel, one of them is *about* funnels, and the only party who knows which is the publisher. Inferring it from names was tried and matches "Service health" for a *stat* card.
 
-### D6 — Six of the 42 Visualization Types have no renderer.
+### D6 — One of the 42 Visualization Types has no renderer.
 
 **Answers to:** FRD — `FR-VZ-01`  
 **Status:** Temporary  
@@ -192,82 +194,14 @@ The same gap D4 closed for Placement: a Container required to organize Widgets *
 
 §4.2 gives Status two alternative shapes — "one Measure with a threshold, *or* one state Dimension" — and the two need different slots: a threshold indicator takes a Measure and no Dimension, a status tile takes a state Dimension. A per-Family slot table can only express a conjunction, so requiring either slot asserts something the Family does not require and makes the other route unrepresentable. Surfaced by porting the threshold route in §2: D3's refinement guard rejected both new Types, correctly. The eligibility guarantee is not lost — the disjunction is modelled properly in the Data Shape clause, which is what FR-VZ-05 evaluates — and a counterpart guard now asserts every built Type still requires at least one slot of its own, so "the Family requires nothing" cannot become "a Type may require nothing".
 
-### D21 — A Field has three roles; the API has two, and time is a Field *type*.
-
-**Answers to:** API — `API: schema Field.role`  
-**Status:** Temporary (the HTTP adapter)  
-**Findings:** Finding 18  
-**Where:** `domain/dataset.ts, analytics/builder/requirements.ts`  
-
-The API's `FieldRole` is `dimension | measure`. A date is `type: 'date'`, and the Dataset names one of them in `time_dimension_field`. We followed FR-DP-06 and made Time Dimension a third role, which every slot that accepts a temporal axis then depends on. The API wins: it is shared across products and already published to integrators, and the translation is an adapter in our repo rather than a change to a contract other teams have read.
-
-### D22 — A query is flat filter parameters, not a `DatasetQuery`.
-
-**Answers to:** API — `API: GET /v1/datasets/{datasetId}/query`  
-**Status:** Temporary (the HTTP adapter)  
-**Findings:** Finding 19  
-**Where:** `analytics/data/query.ts`  
-
-The endpoint accepts the Dataset's published Filter Parameters "and nothing else". There is no `dimensions`, no `measures`, no `sort` and no `limit`, because Analytics stores nothing and computes nothing: it forwards to the Source System and relays the answer byte-for-byte. Measured against our 37 built types, this costs less than it sounds — 25 emit an empty query already, which is exactly a bare GET. Nine emit `sort` and three emit `measures`, and those twelve are the whole of the work.
-
-### D23 — A board references its Widgets by id; the API embeds them by value.
-
-**Answers to:** API — `API: schema Dashboard.widgets`  
-**Status:** Temporary (the HTTP adapter)  
-**Findings:** Finding 20  
-**Where:** `analytics/builder/boards.ts`  
-
-`Dashboard.widgets` is an array of Widgets, each with an id "assigned on save when absent". A Widget therefore has no identity independent of the Dashboard holding it. We moved the other way at Stage 6.2 on Finding 4's advice, which read FR-VZ-09's Widget Library as implying references. The API contradicts that, so this is a straight revert of one of our own decisions — and Finding 20 asks the FRD authors which of the two is intended.
-
-### D24 — A Field carries `filterable`; the API declares Filter Parameters separately.
+### D31 — Enumerable Filter Parameters must publish their accepted values; the API leaves it optional.
 
 **Answers to:** API — `API: schema FilterParameter`  
-**Status:** Temporary (the HTTP adapter)  
-**Where:** `domain/dataset.ts`  
+**Status:** Proposed extension  
+**Findings:** Finding 8  
+**Where:** `domain/publication-contract.ts (PC-09), analytics/data/AnalyticsData.tsx`  
 
-The API keeps two lists. `fields` describes the *response* shape — and a Field name "must match the field name the Source System returns", which is the promise that lets us render generically at all. `filter_parameters` describes the *accepted query inputs*, each with its own type, `required` flag and optional `allowed_values`. We collapsed both into a boolean on the Field, which cannot express a parameter that is not also a returned column, nor an enumerated value list. This is the one API divergence where their model is plainly richer than ours rather than merely different.
-
-### D25 — Scope has three levels; the API has four, including `role`.
-
-**Answers to:** API — `API: schema DashboardScopeLevel`  
-**Status:** Temporary (the HTTP adapter)  
-**Findings:** Finding 21  
-**Where:** `domain/dashboard.ts`  
-
-The API's levels are `personal | department | role | organization`, and the reference field is `scope_organizational_ref`. We modelled three, leaving role-based Scope out because Frontend Plan §8 recorded the naming hazard around it. The API added it, and its own note says a `role` scope "currently admits only the creator and Administrators" — so the level exists and does not yet mean what it says. Finding 21 carries that.
-
-### D26 — A Share Grant targets an individual or a group; the API says user or department.
-
-**Answers to:** API — `API: schema ShareGrantTarget`  
-**Status:** Temporary (the HTTP adapter)  
-**Where:** `domain/dashboard.ts`  
-
-Ours is `individual | group` with a `recipientLabel`; the API is `user | department` with a `target_ref`. The same idea under different names, and the rename is the whole of the fix. Worth recording only because `group` is the broader word and the API deliberately is not: a department is an IAM concept it holds a reference to, not an arbitrary set.
-
-### D27 — Every response is wrapped in `{ status, message, data }`; we read bodies directly.
-
-**Answers to:** API — `API: schema Envelope`  
-**Status:** Temporary (the HTTP adapter)  
-**Where:** `analytics/data/adapters.ts`  
-
-A boolean `status`, a human `message`, and the payload under `data`. One unwrap in the adapter and nothing above it needs to know — which is the argument for the adapter existing at all. Recorded because the envelope also carries the partial-result marker: a Source System may answer `200` with `meta.partial` and a reason, and a widget that ignores that shows a truncated series as if it were the whole one.
-
-### D28 — Visualization Type ids may be a third vocabulary, neither ours nor the FRD's.
-
-**Answers to:** API — `API: schema Widget.visualization_type`  
-**Status:** Temporary (confirmation against a live Dataset)  
-**Findings:** Finding 22  
-**Where:** `analytics/widgets/catalog.ts, analytics/widgets/taxonomy.test.ts`  
-
-`visualization_type` is a bare string that Analytics *validates* against the Families the bound Dataset's Data Shape satisfies, so the API is the authority for those strings. It publishes no enum: they are discovered at runtime from `/presentation`. Its examples read `family: "trend-over-time"` and `types: ["line", "area"]` where Stage 1 renamed us to the FRD's `trend`, `line-chart` and `area-chart`. Examples are not a contract and may simply be loose, so this is unconfirmed — one authenticated call settles it. If it holds, Stage 1 needs doing again, and `taxonomy.test.ts` should assert against the API rather than a local manifest.
-
-### D29 — Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`.
-
-**Answers to:** API — `API: schema Aggregation`  
-**Status:** Temporary (the HTTP adapter)  
-**Where:** `domain/dataset.ts, analytics/data/adapters.ts`  
-
-Both enumerate the same six — sum, average, count, the two extremes, and a distinct count — and differ only on whether the extremes are abbreviated. Found by the type-checker while writing the reduction for D22, which is the useful part: a declared `min` would have fallen through our switch to a silent zero rather than failing, because an aggregation we do not recognise looks exactly like an empty column. Two names for one operation is also how a board ends up averaging a count, so the translation belongs in one place.
+`allowed_values` exists on the API and is optional, so a publisher may omit it and still pass validation — at which point a Viewer is offered a filter control with nothing in it. Deriving the list from returned rows is the obvious substitute and the wrong one: the options would then change as other filters changed, and a control that narrows itself is worse than an empty one. Whether values are enumerable is the publisher's judgement and cannot be checked from here — 365 dates are not a dropdown — so PC-09 states the obligation and checks what it can, that a declared list is not empty. Narrows Finding 8 to the filters a declaration genuinely cannot enumerate.
 
 ---
 
@@ -297,3 +231,88 @@ A Widget saved to a Widget Library and reused across Dashboards has identity ind
 **Where:** `analytics/builder/BoardControls.tsx, analytics/builder/sections.ts`  
 
 Exposed filters and sorts (6.1), Controls with their reach reported (6.3) and Sections as bands (6.4) are all present. A Control still names no Widgets: correspondence is computed per Widget from its bound Dataset, so adding a Widget brings it under an existing Control.
+
+### D21 — A Field has three roles; the API has two, and time is a Field *type*.
+
+**Answers to:** API — `API: schema Field.role`  
+**Status:** Resolved (catalogue/api-dataset.ts - the role is reconstructed from `time_dimension_field`)  
+**Findings:** Finding 18  
+**Where:** `domain/dataset.ts, analytics/builder/requirements.ts`  
+
+The API's `FieldRole` is `dimension | measure`. A date is `type: 'date'`, and the Dataset names one of them in `time_dimension_field`. We followed FR-DP-06 and made Time Dimension a third role, which every slot that accepts a temporal axis then depends on. The API wins: it is shared across products and already published to integrators, and the translation is an adapter in our repo rather than a change to a contract other teams have read.
+
+### D22 — A query is flat filter parameters, not a `DatasetQuery`.
+
+**Answers to:** API — `API: GET /v1/datasets/{datasetId}/query`  
+**Status:** Resolved (retrieval/http-retrieval.ts - filters go upstream, ordering and reduction finish locally)  
+**Findings:** Finding 19  
+**Where:** `analytics/data/query.ts`  
+
+The endpoint accepts the Dataset's published Filter Parameters "and nothing else". There is no `dimensions`, no `measures`, no `sort` and no `limit`, because Analytics stores nothing and computes nothing: it forwards to the Source System and relays the answer byte-for-byte. Measured against our 37 built types, this costs less than it sounds — 25 emit an empty query already, which is exactly a bare GET. Nine emit `sort` and three emit `measures`, and those twelve are the whole of the work.
+
+### D23 — A board references its Widgets by id; the API embeds them by value.
+
+**Answers to:** API — `API: schema Dashboard.widgets`  
+**Status:** Resolved (dashboard/api-dashboard.ts - joined on the way out, split on the way in)  
+**Findings:** Finding 20  
+**Where:** `analytics/builder/boards.ts`  
+
+`Dashboard.widgets` is an array of Widgets, each with an id "assigned on save when absent". A Widget therefore has no identity independent of the Dashboard holding it. We moved the other way at Stage 6.2 on Finding 4's advice, which read FR-VZ-09's Widget Library as implying references. The API contradicts that, so this is a straight revert of one of our own decisions — and Finding 20 asks the FRD authors which of the two is intended.
+
+### D24 — A Field carries `filterable`; the API declares Filter Parameters separately.
+
+**Answers to:** API — `API: schema FilterParameter`  
+**Status:** Resolved (catalogue/api-dataset.ts - `filterable` is read from `filter_parameters`)  
+**Where:** `domain/dataset.ts`  
+
+The API keeps two lists. `fields` describes the *response* shape — and a Field name "must match the field name the Source System returns", which is the promise that lets us render generically at all. `filter_parameters` describes the *accepted query inputs*, each with its own type, `required` flag and optional `allowed_values`. We collapsed both into a boolean on the Field, which cannot express a parameter that is not also a returned column, nor an enumerated value list. This is the one API divergence where their model is plainly richer than ours rather than merely different.
+
+### D25 — Scope has three levels; the API has four, including `role`.
+
+**Answers to:** API — `API: schema DashboardScopeLevel`  
+**Status:** Resolved (dashboard/api-dashboard.ts - `role` folds into an organizational scope)  
+**Findings:** Finding 21  
+**Where:** `domain/dashboard.ts`  
+
+The API's levels are `personal | department | role | organization`, and the reference field is `scope_organizational_ref`. We modelled three, leaving role-based Scope out because Frontend Plan §8 recorded the naming hazard around it. The API added it, and its own note says a `role` scope "currently admits only the creator and Administrators" — so the level exists and does not yet mean what it says. Finding 21 carries that.
+
+### D26 — A Share Grant targets an individual or a group; the API says user or department.
+
+**Answers to:** API — `API: schema ShareGrantTarget`  
+**Status:** Resolved (dashboard/api-dashboard.ts - `grantInputFrom`)  
+**Where:** `domain/dashboard.ts`  
+
+Ours is `individual | group` with a `recipientLabel`; the API is `user | department` with a `target_ref`. The same idea under different names, and the rename is the whole of the fix. Worth recording only because `group` is the broader word and the API deliberately is not: a department is an IAM concept it holds a reference to, not an arbitrary set.
+
+### D27 — Every response is wrapped in `{ status, message, data }`; we read bodies directly.
+
+**Answers to:** API — `API: schema Envelope`  
+**Status:** Resolved (widgets/WidgetCard.tsx - the note under the figure it qualifies)  
+**Where:** `api/client.ts, retrieval/relayed-body.ts, analytics/widgets/WidgetCard.tsx`  
+
+A boolean `status`, a human `message`, and the payload under `data`. One unwrap in the adapter and nothing above it needs to know — which is the argument for the adapter existing at all. Recorded because the envelope also carries the partial-result marker: a Source System may answer `200` with `meta.partial` and a reason, and a widget that ignores that shows a truncated series as if it were the whole one. Half of this is done: the client unwraps the envelope once, and `relayed-body.ts` finds the marker under either of the two readings the spec admits. It now reaches the card: a note under the figure it qualifies, shown on `ready` and on `empty`, on a bare stat tile as well as a chart, and never behind a hover - a tooltip is invisible to a touchscreen, a wall display, and a screenshot, which are three of the ways a wrong number travels. It is not a seventh render state: it qualifies an answer rather than replacing one, so the picture is still drawn.
+
+### D28 — Visualization Type ids may be a third vocabulary, neither ours nor the FRD's.
+
+**Answers to:** API — `API: schema Widget.visualization_type`  
+**Status:** Resolved (the API adopted §4.2 on 15 September 2026)  
+**Findings:** Finding 22  
+**Where:** `analytics/widgets/catalog.ts, analytics/widgets/taxonomy.test.ts`  
+
+`visualization_type` is a bare string that Analytics *validates* against the Families the bound Dataset's Data Shape satisfies, so the API is the authority for those strings. It publishes no enum: they are discovered at runtime from `/presentation`. Its examples read `family: "trend-over-time"` and `types: ["line", "area"]` where Stage 1 renamed us to the FRD's `trend`, `line-chart` and `area-chart`. Examples are not a contract and may simply be loose, so this is unconfirmed — one authenticated call settles it. If it holds, Stage 1 needs doing again, and `taxonomy.test.ts` should assert against the API rather than a local manifest.
+
+### D29 — Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`.
+
+**Answers to:** API — `API: schema Aggregation`  
+**Status:** Resolved (catalogue/api-dataset.ts - a translation table, and an unknown name is dropped)  
+**Where:** `domain/dataset.ts, analytics/data/adapters.ts`  
+
+Both enumerate the same six — sum, average, count, the two extremes, and a distinct count — and differ only on whether the extremes are abbreviated. Found by the type-checker while writing the reduction for D22, which is the useful part: a declared `min` would have fallen through our switch to a silent zero rather than failing, because an aggregation we do not recognise looks exactly like an empty column. Two names for one operation is also how a board ends up averaging a count, so the translation belongs in one place.
+
+### D30 — A Dataset declares what one row represents; the API has nowhere to put it.
+
+**Answers to:** API — `API: schema Dataset`  
+**Status:** Resolved (`Dataset.grain`, added by the API on 15 September 2026)  
+**Where:** `domain/dataset.ts, domain/publication-contract.ts (PC-08)`  
+
+A declaration lists the columns and never says how many rows to expect. Two Datasets can declare identically — same Fields, same roles, same aggregations — while one returns a single summary row and the other one row per corridor per day, and those feed almost disjoint sets of Visualization Types. An Author picking for a stat card cannot tell them apart, and FR-DP-11 exists precisely so they do not have to retrieve the data to find out. Worse, `aggregations` is the only aggregation-shaped field in a declaration, so it reads like the answer and is not: it says what could meaningfully be done to a figure, never what was. PC-08 requires the grain; the API carrying it is the ask.

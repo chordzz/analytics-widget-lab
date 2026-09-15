@@ -59,7 +59,7 @@ export function WidgetFilters({
       {filterFields.map((field) => (
         <FilterSelect
           key={field!.key}
-          datasetId={dataset.id}
+          dataset={dataset}
           fieldKey={field!.key}
           label={field!.label}
           value={choices.filters?.[field!.key]}
@@ -96,20 +96,20 @@ export function WidgetFilters({
 }
 
 function FilterSelect({
-  datasetId,
+  dataset,
   fieldKey,
   label,
   value,
   onChange,
 }: {
-  datasetId: string
+  dataset: Dataset
   fieldKey: string
   label: string
   value: string | number | undefined
   onChange: (value: string | number) => void
 }) {
   const id = useId()
-  const values = useFilterValues(datasetId, fieldKey)
+  const values = useFilterValues(dataset, fieldKey)
 
   return (
     <label className="a-filters__field" htmlFor={id}>

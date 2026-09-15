@@ -19,6 +19,8 @@ const valid = () => ({
       sortable: true,
     },
   ],
+  rowGrain: { dimensions: ['occurred_at'] },
+  filterParameters: [{ name: 'occurred_at', label: 'Occurred at', required: false }],
 })
 
 const detailsOf = (candidate: unknown) =>
@@ -95,8 +97,19 @@ describe('FR-DP-08 — rejection identifies what is missing', () => {
   })
 
   test('every violation cites the requirement it enforces', () => {
+    /*
+     * Two shapes, and the second has to be distinguishable from the first.
+     *
+     * Most rules transcribe an FRD clause. Two are ours — the row grain and the
+     * Filter Parameter declarations the published model has nowhere to put — and
+     * a rule we invented must say so rather than borrowing the FRD's authority
+     * for a requirement the FRD does not make. Each names the divergence
+     * carrying the argument for it.
+     */
     for (const violation of validatePublication({}).violations) {
-      expect(violation.requirement).toMatch(/^(FR-DP-\d\d|Definitions)/)
+      expect(violation.requirement).toMatch(
+        /^(FR-DP-\d\d|Definitions|Proposed extension — D\d+$)/,
+      )
       expect(violation.detail.length).toBeGreaterThan(0)
     }
   })
@@ -114,6 +127,11 @@ describe('publication is independent of visualization', () => {
       classification: 'public',
       exposesPersonalData: false,
       fields: [{ key: 'corridor', label: 'Corridor', role: 'dimension', filterable: true, sortable: true }],
+      // One row per corridor. A reference list has a grain like anything else,
+      // and declaring it is what stops an Author binding it to a stat card
+      // expecting one number.
+      rowGrain: { dimensions: ['corridor'] },
+      filterParameters: [{ name: 'corridor', label: 'Corridor', required: false }],
     }
     expect(validatePublication(sparse).accepted).toBe(true)
   })

@@ -25,7 +25,7 @@ import type { CataloguePort, DatasetSummary } from '../../catalogue/port'
 import type { DatasetRetrievalPort, ViewerIdentity } from '../../retrieval/port'
 import type { AuthorizationPort } from '../../access/port'
 import { resolveFailure, resolveRenderState, type WidgetRenderState } from '../../retrieval/render-state'
-import type { Dataset } from '../../domain/dataset'
+import { allowedValuesFor, type Dataset } from '../../domain/dataset'
 import { InMemoryAccessRecorder } from '../../access/fake-access-recorder'
 import type { AccessRecorderPort } from '../../access/port'
 import {
@@ -38,7 +38,8 @@ import {
 import { queryFor, type ViewerChoices } from './query'
 import type { QueryContribution } from '../../composition/correspondence'
 import type { WidgetSpec } from '../widgets/Widget'
-import type { Row } from './types'
+import { decide, type Permission } from '../../auth/permissions'
+import { isApiError } from '../../api/errors'
 
 interface AnalyticsDataValue {
   catalogue: CataloguePort
@@ -46,8 +47,31 @@ interface AnalyticsDataValue {
   /** FR-DA-02 — FR-DA-08. Who may see which board, and who a Grant names. */
   authorization: AuthorizationPort
   viewer: ViewerIdentity
+  /**
+   * What the caller may do, from `/v1/me`.
+   *
+   * Carried beside the viewer rather than on it: `ViewerIdentity` belongs to the
+   * retrieval port and is about *who is asking*, while this is about what the UI
+   * should offer. Absent means unknown — see `auth/permissions.ts`, where the
+   * whole point is that unknown is not denied.
+   */
+  permissions?: Record<string, boolean>
   /** FR-DA-14 — the access record, for a surface that shows it. */
   recorder: AccessRecorderPort
+  /**
+   * Whether that record accounts for every retrieval, or only the ones this
+   * module made.
+   *
+   * The recorder is fed by the *retrieval adapter*, and only the fixture one
+   * feeds it. When a host supplies its own, retrievals go straight past and the
+   * log stays empty — which is not the same claim as "nobody read anything",
+   * and a panel that cannot tell them apart makes the second one silently.
+   *
+   * Derived rather than declared on the port: the provider is what knows which
+   * adapter is in play, and asking the recorder to know would be asking it
+   * about something it cannot see.
+   */
+  accessRecordIsComplete: boolean
 }
 
 const AnalyticsDataContext = createContext<AnalyticsDataValue | null>(null)
@@ -59,6 +83,8 @@ export interface AnalyticsDataProviderProps {
   retrieval?: DatasetRetrievalPort
   authorization?: AuthorizationPort
   viewer?: ViewerIdentity
+  /** Omit to offer everything — which is what an unknown permission set means. */
+  permissions?: Record<string, boolean>
   /** Fixture-only: force an outcome per Dataset, so every state is reachable. */
   scenarios?: Record<string, Scenario>
   /** Fixture-only latency, so the loading state is designed rather than glimpsed. */
@@ -73,6 +99,7 @@ export function AnalyticsDataProvider({
   retrieval,
   authorization,
   viewer = LOCAL_VIEWER,
+  permissions,
   scenarios,
   latencyMs = 0,
   accessRecorder,
@@ -92,12 +119,14 @@ export function AnalyticsDataProvider({
   const value = useMemo<AnalyticsDataValue>(
     () => ({
       viewer,
+      permissions,
       recorder,
+      accessRecordIsComplete: retrieval === undefined,
       catalogue: catalogue ?? new FixtureCatalogue({ scenarios, latencyMs }),
       retrieval: retrieval ?? new FixtureRetrieval({ scenarios, latencyMs }, recorder),
       authorization: authorization ?? new LocalAuthorization(),
     }),
-    [catalogue, retrieval, authorization, viewer, scenarios, latencyMs, recorder],
+    [catalogue, retrieval, authorization, viewer, permissions, scenarios, latencyMs, recorder],
   )
 
   return <AnalyticsDataContext.Provider value={value}>{children}</AnalyticsDataContext.Provider>
@@ -109,39 +138,77 @@ export function useAnalyticsData(): AnalyticsDataValue {
   return value
 }
 
-/** The Catalogue's listing. Descriptions only — this cannot pull records. */
-export function useCatalogue(): { summaries: DatasetSummary[]; loading: boolean } {
+/**
+ * The Catalogue's listing. Descriptions only — this cannot pull records.
+ *
+ * One request for the whole screen. `useDatasets` below asks again per Dataset
+ * for the full Field list, which is right when every Field is about to be drawn
+ * and wasteful when only a summary is.
+ */
+export function useCatalogue(): {
+  summaries: DatasetSummary[]
+  loading: boolean
+  /** Null when the Catalogue answered — including when it answered with nothing. */
+  failure: CatalogueFailure | null
+} {
   const { catalogue, viewer } = useAnalyticsData()
   const [summaries, setSummaries] = useState<DatasetSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [failure, setFailure] = useState<CatalogueFailure | null>(null)
 
   useEffect(() => {
     let live = true
     setLoading(true)
     catalogue
       .browse(viewer)
-      .then((result) => live && (setSummaries(result), setLoading(false)))
-      .catch(() => live && (setSummaries([]), setLoading(false)))
+      .then((result) => {
+        if (!live) return
+        setSummaries(result)
+        setFailure(null)
+        setLoading(false)
+      })
+      .catch((error) => {
+        // Same reasoning as `useDatasets`: the list is cleared, because stale
+        // entries are worse than none, but the reason travels with it.
+        if (!live) return
+        setSummaries([])
+        setFailure(catalogueFailure(error))
+        setLoading(false)
+      })
     return () => {
       live = false
     }
   }, [catalogue, viewer])
 
-  return { summaries, loading }
+  return { summaries, loading, failure }
 }
 
-/** One Dataset's full Field description. Still no records. */
+/**
+ * One Dataset's full Field description. Still no records.
+ *
+ * **`null` and "could not ask" are different answers**, and the caller cannot
+ * afford to confuse them. A `null` means the Catalogue answered and has no such
+ * Dataset — which, for a Widget already bound to one, reads as a withdrawal: it
+ * was bound once, so it existed once. A rejection means the Catalogue did not
+ * answer, and saying "the source system has withdrawn this dataset" because IAM
+ * was briefly unreachable states something about a publisher's actions that is
+ * simply untrue.
+ */
 export function useDataset(datasetId: string | undefined): {
   dataset: Dataset | null
   loading: boolean
+  /** Null when the Catalogue answered — including when it answered `null`. */
+  failure: CatalogueFailure | null
 } {
   const { catalogue, viewer } = useAnalyticsData()
   const [dataset, setDataset] = useState<Dataset | null>(null)
   const [loading, setLoading] = useState(datasetId !== undefined)
+  const [failure, setFailure] = useState<CatalogueFailure | null>(null)
 
   useEffect(() => {
     if (datasetId === undefined) {
       setDataset(null)
+      setFailure(null)
       setLoading(false)
       return
     }
@@ -150,14 +217,24 @@ export function useDataset(datasetId: string | undefined): {
     setLoading(true)
     catalogue
       .describe(datasetId, viewer)
-      .then((result) => live && (setDataset(result), setLoading(false)))
-      .catch(() => live && (setDataset(null), setLoading(false)))
+      .then((result) => {
+        if (!live) return
+        setDataset(result)
+        setFailure(null)
+        setLoading(false)
+      })
+      .catch((error) => {
+        if (!live) return
+        setDataset(null)
+        setFailure(catalogueFailure(error))
+        setLoading(false)
+      })
     return () => {
       live = false
     }
   }, [catalogue, viewer, datasetId])
 
-  return { dataset, loading }
+  return { dataset, loading, failure }
 }
 
 /**
@@ -216,10 +293,47 @@ export function useWidgetRows(
  * `Promise.all` rather than a describe-per-card as the list renders: the
  * sequential version is an N+1 that a real Catalogue would feel.
  */
-export function useDatasets(): { datasets: Dataset[]; loading: boolean } {
+/**
+ * Why the Catalogue has nothing to show.
+ *
+ * Three situations that a bare empty list cannot tell apart, and they call for
+ * three different actions: ask for access, wait and retry, or publish a Dataset.
+ * This is the same distinction the six render states protect for a Widget —
+ * *denied* must not read as *empty*, and neither may read as *broken* — applied
+ * to the screen someone opens first when they want to know whether the backend
+ * is working at all.
+ */
+export interface CatalogueFailure {
+  kind: 'denied' | 'unavailable' | 'failed'
+  message: string
+}
+
+/** Exported for its own test: the mapping is the part worth pinning. */
+export function catalogueFailure(error: unknown): CatalogueFailure {
+  if (isApiError(error)) {
+    if (error.kind === 'denied') {
+      return { kind: 'denied', message: 'You do not have permission to browse data sources.' }
+    }
+    if (error.kind === 'unavailable' || error.kind === 'timeout' || error.kind === 'transport') {
+      return { kind: 'unavailable', message: error.message }
+    }
+  }
+  return {
+    kind: 'failed',
+    message: error instanceof Error ? error.message : 'The catalogue could not be loaded.',
+  }
+}
+
+export function useDatasets(): {
+  datasets: Dataset[]
+  loading: boolean
+  /** Null when the Catalogue answered — including when it answered with nothing. */
+  failure: CatalogueFailure | null
+} {
   const { catalogue, viewer } = useAnalyticsData()
   const [described, setDescribed] = useState<Dataset[]>([])
   const [loading, setLoading] = useState(true)
+  const [failure, setFailure] = useState<CatalogueFailure | null>(null)
 
   useEffect(() => {
     let live = true
@@ -233,16 +347,28 @@ export function useDatasets(): { datasets: Dataset[]; loading: boolean } {
       .then((results) => {
         if (!live) return
         setDescribed(results.filter((entry): entry is Dataset => entry !== null))
+        setFailure(null)
         setLoading(false)
       })
-      .catch(() => live && (setDescribed([]), setLoading(false)))
+      .catch((error) => {
+        /*
+         * This used to be `setDescribed([])` and nothing else, which turned a
+         * `403`, a `503` and an empty Catalogue into the same screen. The list
+         * is still cleared — stale Datasets from a previous answer would be
+         * worse than none — but the reason travels with it now.
+         */
+        if (!live) return
+        setDescribed([])
+        setFailure(catalogueFailure(error))
+        setLoading(false)
+      })
 
     return () => {
       live = false
     }
   }, [catalogue, viewer])
 
-  return { datasets: described, loading }
+  return { datasets: described, loading, failure }
 }
 
 /**
@@ -252,48 +378,76 @@ export function useDatasets(): { datasets: Dataset[]; loading: boolean } {
  * the same port for the same reason a widget does: a Viewer who may not consume
  * a Dataset must not see its records because they opened a different screen.
  */
-export function useRows(datasetId: string | undefined, limit = 20): Row[] {
+export function useRows(datasetId: string | undefined, limit = 20): WidgetRenderState {
   const { retrieval, viewer } = useAnalyticsData()
-  const [rows, setRows] = useState<Row[]>([])
+  const [state, setState] = useState<WidgetRenderState>({ status: 'loading' })
 
   useEffect(() => {
     if (!datasetId) {
-      setRows([])
+      setState({ status: 'empty' })
       return
     }
 
     let live = true
+    setState({ status: 'loading' })
     retrieval
       .retrieve(datasetId, { limit }, viewer)
-      .then((outcome) => live && setRows(outcome.kind === 'rows' ? outcome.rows : []))
-      .catch(() => live && setRows([]))
+      /*
+       * Through the same resolver a Widget uses, rather than a second reading of
+       * the same four outcomes. This used to be `outcome.kind === 'rows' ?
+       * rows : []`, which turned *denied* and *withdrawn* into "no records" —
+       * FR-DA-11's exact prohibition, arrived at by a ternary.
+       */
+      .then((outcome) => live && setState(resolveRenderState(outcome)))
+      .catch((error) => live && setState(resolveFailure(error)))
 
     return () => {
       live = false
     }
   }, [retrieval, viewer, datasetId, limit])
 
-  return rows
+  return state
 }
 
 /**
  * The values a Viewer may choose from for one exposed filter.
  *
- * Finding 8: the FRD lets an Author expose a filter and never says how a Viewer
- * discovers what they can pick. The listing has to be scoped to the Viewer's
- * authorization or the dropdown itself discloses values from data they could not
- * otherwise obtain — which FR-DA-12 forbids just as firmly as returning the rows
- * would.
+ * **The declaration answers first.** A Filter Parameter may publish
+ * `allowedValues`, and where it does those are authoritative: they are what the
+ * Source System will accept, they arrive with the Catalogue, and they cost no
+ * request. Asking the network for something we were already told is both slower
+ * and less correct — a derived list can only ever report what the current query
+ * happened to return.
+ *
+ * **The port answers for the rest.** Finding 8: the FRD lets an Author expose a
+ * filter and never says how a Viewer discovers what they can pick, and a
+ * parameter whose values are open-ended has no declared answer. That listing has
+ * to be scoped to the Viewer's authorization or the dropdown itself discloses
+ * values from data they could not otherwise obtain — FR-DA-12 forbids that as
+ * firmly as returning the rows would.
+ *
+ * So Finding 8 is now narrower rather than closed: it covers the filters a
+ * declaration cannot enumerate, and nothing else.
  */
 export function useFilterValues(
-  datasetId: string | undefined,
+  dataset: Dataset | undefined,
   field: string | undefined,
 ): (string | number)[] {
   const { retrieval, viewer } = useAnalyticsData()
   const [values, setValues] = useState<(string | number)[]>([])
+  const datasetId = dataset?.id
+
+  // The Dataset itself rather than its id: every caller already holds it — a
+  // filter control cannot be drawn without knowing which Fields are filterable —
+  // and looking it up again would mean a describe per control.
+  const declared = dataset && field ? allowedValuesFor(dataset, field) : undefined
 
   useEffect(() => {
-    if (!datasetId || !field) {
+    // `undefined` and `[]` are different answers. A publisher who declared an
+    // empty list has declared that nothing is selectable — a broken declaration,
+    // but theirs to make — and asking the port to second-guess it would put
+    // values in a control the Source System will refuse.
+    if (!datasetId || !field || declared !== undefined) {
       setValues([])
       return
     }
@@ -307,7 +461,27 @@ export function useFilterValues(
     return () => {
       live = false
     }
-  }, [retrieval, viewer, datasetId, field])
+  }, [retrieval, viewer, datasetId, field, declared])
 
-  return values
+  return declared ?? values
+}
+
+/**
+ * Whether to offer an action — FR-DA-13's spirit, from the caller's own
+ * permissions.
+ *
+ * Returns `true` when the answer is unknown, which is the deliberate asymmetry:
+ * an action wrongly offered costs a `403` the caller can read, and one wrongly
+ * hidden costs them the product with nothing on screen to explain it. The API
+ * enforces either way — this only decides what is worth showing.
+ */
+export function useMay(permission: Permission): boolean {
+  const { permissions } = useAnalyticsData()
+  return decide(permissions, permission) !== 'denied'
+}
+
+/** For copy that should appear only when the restriction is certain. */
+export function useIsDenied(permission: Permission): boolean {
+  const { permissions } = useAnalyticsData()
+  return decide(permissions, permission) === 'denied'
 }

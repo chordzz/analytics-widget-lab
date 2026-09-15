@@ -23,6 +23,7 @@ import { Widget, type WidgetMapping, type WidgetSpec } from '../widgets/Widget'
 import { FAMILIES, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
 import { useDatasets } from '../data/AnalyticsData'
+import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
 import { FieldMapper, fieldSummary } from './FieldMapper'
 import {
   autoMap,
@@ -30,9 +31,11 @@ import {
   satisfies,
   suggestedTypesFor,
   typesFor,
+  unavailableTypesFor,
   unfilledSlots,
 } from './requirements'
 import { WIDGET_TYPES } from '../widgets/catalog'
+import { requiredParameters } from '../../domain/dataset'
 import type { Dataset } from '../data/types'
 
 export interface ComposerDraft {
@@ -45,6 +48,8 @@ export interface ComposerDraft {
   /** FR-VZ-06 — Fields a Viewer may filter on and reorder by. */
   exposedFilters: string[]
   exposedSorts: string[]
+  /** D24 — values the Author fixed for the Dataset's Filter Parameters. */
+  parameterBindings: Record<string, string | number>
 }
 
 const BUILT_COUNT = WIDGET_TYPES.filter((type) => type.built).length
@@ -68,7 +73,10 @@ export function WidgetComposer({
   onCommit: (draft: ComposerDraft) => void
   onCancel: () => void
 }) {
-  const { datasets } = useDatasets()
+  const { datasets, loading: loadingDatasets, failure: catalogueFailure } = useDatasets()
+  // Still asking is not the same as none: prompting either way beats telling
+  // someone there is nothing here a moment before the list arrives.
+  const hasSources = loadingDatasets || catalogueFailure !== null || datasets.length > 0
   const byId = (id: string) => datasets.find((entry) => entry.id === id)
 
   const [datasetId, setDatasetId] = useState(initial?.datasetId ?? startWith?.datasetId ?? '')
@@ -104,6 +112,9 @@ export function WidgetComposer({
   }, [datasets, startWith, titled])
   const [span, setSpan] = useState(initial?.span ?? 0)
   const [exposedFilters, setExposedFilters] = useState<string[]>(initial?.exposedFilters ?? [])
+  const [parameterBindings, setParameterBindings] = useState<Record<string, string | number>>(
+    initial?.parameterBindings ?? {},
+  )
   const [exposedSorts, setExposedSorts] = useState<string[]>(initial?.exposedSorts ?? [])
   const [query, setQuery] = useState('')
 
@@ -139,7 +150,15 @@ export function WidgetComposer({
     if (!titled) setTitle(dataset.name)
   }
 
-  const complete = Boolean(dataset && type) && isComplete(typeId, mapping)
+  /*
+   * A required Filter Parameter is not an unset filter — it is a query the
+   * Source System will refuse. So an unbound one blocks the commit exactly as a
+   * missing mapping slot does, rather than producing a Widget that can only
+   * ever fail with a validation error nobody can trace back to here.
+   */
+  const unbound = dataset ? requiredParameters(dataset).filter((p) => !bindingOf(parameterBindings, p.name)) : []
+
+  const complete = Boolean(dataset && type) && isComplete(typeId, mapping) && unbound.length === 0
   const missing = typeId ? unfilledSlots(typeId, mapping) : []
 
   const preview: WidgetSpec | null =
@@ -154,6 +173,7 @@ export function WidgetComposer({
           // Author is composing rather than describing it in prose.
           exposedFilters,
           exposedSorts,
+          parameterBindings,
         }
       : null
 
@@ -173,6 +193,23 @@ export function WidgetComposer({
                 Change
               </button>
             </div>
+          ) : loadingDatasets ? (
+            <p className="a-muted">Loading data sources…</p>
+          ) : catalogueFailure ? (
+            <CatalogueProblem failure={catalogueFailure} />
+          ) : datasets.length === 0 ? (
+            /*
+             * Step 1 with nothing under it was a blank area beneath a numbered
+             * heading — which reads as a page that failed to finish rendering
+             * rather than as an answer. A widget cannot be built without a
+             * source, so this is the end of the road here and it says so.
+             */
+            <NoDatasets>
+              <p style={{ margin: 'var(--a-space-2) 0 0' }}>
+                A widget is built from a data source, so there is nothing to compose until
+                one exists.
+              </p>
+            </NoDatasets>
           ) : (
             <div className="a-dataset-list">
               {datasets.map((entry) => (
@@ -248,6 +285,14 @@ export function WidgetComposer({
             <SpanControl span={span} onChange={setSpan} />
 
             {dataset && (
+              <RequiredParameters
+                dataset={dataset}
+                bindings={parameterBindings}
+                onChange={setParameterBindings}
+              />
+            )}
+
+            {dataset && (
               <ExposeControl
                 dataset={dataset}
                 filters={exposedFilters}
@@ -272,13 +317,27 @@ export function WidgetComposer({
           </div>
         ) : (
           <div className="a-empty a-empty--inline">
-            <p>{dataset ? 'Pick a widget to see it here.' : 'Choose a data source to begin.'}</p>
+            {/*
+              * Quiet when there is nothing to choose from.
+              *
+              * "Choose a data source to begin" is the right prompt while sources
+              * exist and one has not been picked. With an empty Catalogue it
+              * instructs someone to do something impossible, next to a panel on
+              * the left already explaining why they cannot — so the preview
+              * stops asking and says only what it is.
+              */}
+            <p>{previewPrompt({ hasDataset: Boolean(dataset), hasSources })}</p>
           </div>
         )}
 
-        {missing.length > 0 && (
+        {(missing.length > 0 || unbound.length > 0) && (
           <p className="a-composer__missing">
-            Still needed: {missing.map((slot) => slot.label.toLowerCase()).join(', ')}.
+            Still needed:{' '}
+            {[
+              ...missing.map((slot) => slot.label.toLowerCase()),
+              ...unbound.map((parameter) => parameter.label.toLowerCase()),
+            ].join(', ')}
+            .
           </p>
         )}
 
@@ -300,6 +359,7 @@ export function WidgetComposer({
                 span,
                 exposedFilters,
                 exposedSorts,
+                parameterBindings,
               })
             }
           >
@@ -411,7 +471,85 @@ function TypePicker({
           </div>
         )
       })}
+
+      <UnavailableTypes dataset={dataset} term={term} />
     </>
+  )
+}
+
+/**
+ * The widgets that are *not* on offer, and why.
+ *
+ * Collapsed, because the list a person came here to use is the one above it —
+ * but present, because the alternative is what this replaced: two thirds of the
+ * catalogue missing with nothing said, and an Author who came to build a funnel
+ * left wondering whether the product has one.
+ *
+ * Grouped by the kind of answer rather than by Family, since the kinds call for
+ * different actions. One is ours to fix with the Analytics team, one is the
+ * publisher's, and one is nobody's — it is simply the wrong data for that
+ * picture.
+ */
+function UnavailableTypes({ dataset, term }: { dataset: Dataset; term: string }) {
+  const [open, setOpen] = useState(false)
+  const all = unavailableTypesFor(dataset)
+
+  const entries = term
+    ? all.filter(
+        ({ type }) =>
+          type.label.toLowerCase().includes(term) || type.description.toLowerCase().includes(term),
+      )
+    : all
+
+  if (entries.length === 0) return null
+
+  const groups = [
+    {
+      kind: 'not-accepted' as const,
+      title: 'Not available yet',
+      note: 'Built and working here, but the Analytics API has no name for them. We have asked.',
+    },
+    {
+      kind: 'undeclared' as const,
+      title: 'Needs more from the publisher',
+      note: `${dataset.name} may suit these. Its declaration cannot say so yet.`,
+    },
+    {
+      kind: 'shape' as const,
+      title: 'Not for this data',
+      note: 'These need fields this data source does not have.',
+    },
+  ].filter((group) => entries.some((entry) => entry.reason.kind === group.kind))
+
+  return (
+    <div className="a-type-group">
+      <button
+        type="button"
+        className="a-unavailable__toggle"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        {open ? 'Hide' : 'Show'} the {entries.length} that cannot show {dataset.name}
+      </button>
+
+      {open &&
+        groups.map((group) => (
+          <div key={group.kind} className="a-unavailable__group">
+            <h5 className="a-unavailable__title">{group.title}</h5>
+            <p className="a-field__help">{group.note}</p>
+            <ul className="a-unavailable__list">
+              {entries
+                .filter((entry) => entry.reason.kind === group.kind)
+                .map(({ type, reason }) => (
+                  <li key={type.id} className="a-unavailable__item">
+                    <span className="a-unavailable__name">{type.label}</span>
+                    <span className="a-muted">{reason.because}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))}
+    </div>
   )
 }
 
@@ -463,6 +601,93 @@ function SpanControl({ span, onChange }: { span: number; onChange: (next: number
         ))}
       </div>
       <p className="a-field__help">How much of the board's width this widget takes.</p>
+    </div>
+  )
+}
+
+/** A binding counts only when it holds a value; `''` is an empty select. */
+const bindingOf = (bindings: Record<string, string | number>, name: string) => {
+  const value = bindings[name]
+  return value === '' || value === undefined ? undefined : value
+}
+
+/**
+ * Values the Author fixes for the Dataset's Filter Parameters — D24.
+ *
+ * Only the required ones are collected here. An optional parameter is better
+ * served by exposing it to Viewers, and offering an Author a form field for
+ * every parameter a Dataset publishes would bury the two that matter.
+ *
+ * This reads as a question rather than a setting because that is what it is:
+ * the Source System has said it cannot answer without this, so the Author is
+ * being asked to complete the query, not to configure a preference.
+ */
+function RequiredParameters({
+  dataset,
+  bindings,
+  onChange,
+}: {
+  dataset: Dataset
+  bindings: Record<string, string | number>
+  onChange: (next: Record<string, string | number>) => void
+}) {
+  const required = requiredParameters(dataset)
+  if (required.length === 0) return null
+
+  const set = (name: string, raw: string, allowed: (string | number)[] | undefined) => {
+    // A numeric parameter's values are compared against JSON numbers upstream,
+    // so the original is recovered from the declared list rather than left as
+    // the string the select handed back.
+    const original = allowed?.find((entry) => String(entry) === raw)
+    onChange({ ...bindings, [name]: original ?? raw })
+  }
+
+  return (
+    <div className="a-field">
+      <span className="a-field__label">This data source needs</span>
+      <p className="a-field__help">
+        {dataset.name} cannot answer without {required.length === 1 ? 'this' : 'these'}. Viewers do
+        not change {required.length === 1 ? 'it' : 'them'} — {required.length === 1 ? 'it is' : 'they are'} part
+        of what this widget asks for.
+      </p>
+
+      {required.map((parameter) => {
+        const value = bindings[parameter.name]
+        const current = value === undefined ? '' : String(value)
+
+        return (
+          <label key={parameter.name} className="a-filters__field">
+            <span className="a-filters__label">{parameter.label}</span>
+            {parameter.allowedValues && parameter.allowedValues.length > 0 ? (
+              <select
+                className="a-filters__select"
+                value={current}
+                onChange={(event) => set(parameter.name, event.target.value, parameter.allowedValues)}
+              >
+                <option value="">Choose one</option>
+                {parameter.allowedValues.map((entry) => (
+                  <option key={String(entry)} value={String(entry)}>
+                    {String(entry)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              /*
+               * No declared values, so no list to offer. The publisher knows what
+               * this accepts and has not said — Finding 8 — and a free field is
+               * the honest fallback rather than a guess drawn from returned rows.
+               */
+              <input
+                type="text"
+                className="a-filters__select"
+                value={current}
+                onChange={(event) => set(parameter.name, event.target.value, undefined)}
+                placeholder={parameter.description ?? 'Required'}
+              />
+            )}
+          </label>
+        )
+      })}
     </div>
   )
 }
@@ -537,4 +762,24 @@ function ExposeControl({
       )}
     </div>
   )
+}
+
+/**
+ * What the preview says before there is anything to draw.
+ *
+ * Three states rather than two. The prompt to choose a source is only useful
+ * when there is one to choose — with an empty Catalogue it asks for something
+ * impossible, beside a panel already explaining why, which reads as the screen
+ * disagreeing with itself.
+ */
+export function previewPrompt({
+  hasDataset,
+  hasSources,
+}: {
+  hasDataset: boolean
+  hasSources: boolean
+}): string {
+  if (hasDataset) return 'Pick a widget to see it here.'
+  if (!hasSources) return 'Nothing to preview yet.'
+  return 'Choose a data source to begin.'
 }

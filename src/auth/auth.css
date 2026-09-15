@@ -1,0 +1,282 @@
+/**
+ * Sign in.
+ *
+ * Uses the module's own tokens rather than a palette of its own, so the screen
+ * someone sees before the dashboard looks like the dashboard — including in dark
+ * mode, which comes free because nothing here names a colour.
+ */
+
+/*
+ * The module's stylesheet is not loaded on this route — only the tokens are —
+ * so the two things a full-page screen needs are declared here rather than
+ * inherited. Both are the kind of omission that only shows up on a narrow
+ * viewport, which is exactly where nobody looks first.
+ */
+.a-auth,
+.a-auth *,
+.a-auth *::before,
+.a-auth *::after {
+  box-sizing: border-box;
+}
+
+/*
+ * Fixed rather than `min-height: 100vh`, because the document has no margin
+ * reset and the UA's 8px on `body` would otherwise inset the whole page and
+ * push a scrollbar onto every screen.
+ */
+.a-auth {
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  display: flex;
+  padding: var(--a-space-5);
+  background: var(--a-bg);
+  color: var(--a-text);
+  font-family: var(--a-font);
+}
+
+/*
+ * `margin: auto` rather than `place-items: center`: a centred grid or flex item
+ * that grows taller than its scroll container has its overflowing top clipped
+ * and unreachable. Adding one error message on a short screen is enough to hit
+ * that, and the thing clipped would be the message.
+ */
+.a-auth__card {
+  margin: auto;
+  width: 100%;
+  max-width: 380px;
+  display: grid;
+  gap: var(--a-space-5);
+  padding: var(--a-space-6);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-lg);
+  box-shadow: var(--a-shadow-raised);
+}
+
+.a-auth__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+}
+
+.a-auth__mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--a-radius-sm);
+  background: var(--a-accent);
+  color: var(--a-text-inverse);
+}
+
+.a-auth__wordmark {
+  font-size: var(--a-text-sm);
+  font-weight: 600;
+}
+
+.a-auth__form {
+  display: grid;
+  gap: var(--a-space-4);
+}
+
+.a-auth__head {
+  display: grid;
+  gap: var(--a-space-1);
+}
+
+.a-auth__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.a-auth__lede {
+  margin: 0;
+  font-size: var(--a-text-sm);
+  color: var(--a-text-secondary);
+  line-height: 1.5;
+}
+
+/* An address is long and arbitrary; it must not push the card wider. */
+.a-auth__email {
+  font-weight: 600;
+  color: var(--a-text);
+  overflow-wrap: anywhere;
+}
+
+.a-auth__field {
+  display: grid;
+  gap: var(--a-space-2);
+}
+
+.a-auth__label {
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+.a-auth__input {
+  font: inherit;
+  font-size: var(--a-text-sm);
+  color: var(--a-text);
+  background: var(--a-surface);
+  border: 1px solid var(--a-border-strong);
+  border-radius: var(--a-radius-sm);
+  padding: 9px var(--a-space-3);
+  width: 100%;
+}
+
+.a-auth__input:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 1px;
+}
+
+.a-auth__input:disabled {
+  color: var(--a-text-muted);
+  background: var(--a-surface-sunken);
+}
+
+/* A code is read back character by character; spacing it out helps. */
+.a-auth__input--code {
+  font-family: var(--a-font-mono);
+  font-size: 18px;
+  letter-spacing: 0.3em;
+}
+
+.a-auth__submit {
+  justify-content: center;
+  padding: 9px var(--a-space-4);
+  font-size: var(--a-text-sm);
+}
+
+.a-auth__submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.a-auth__expiry {
+  margin: calc(var(--a-space-3) * -1) 0 0;
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+.a-auth__notice {
+  margin: 0;
+  padding: var(--a-space-3);
+  font-size: var(--a-text-sm);
+  line-height: 1.45;
+  border: 1px solid var(--a-border);
+  border-left: 3px solid var(--a-status-warning);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface-sunken);
+  color: var(--a-text-secondary);
+}
+
+/*
+ * Coloured text is not the error signal here — the left rule and the wording
+ * are. `--a-status-critical` is a vivid red that sits near 3:1 against the light
+ * surface, which is fine for a 3px rule and too thin for a sentence, so the
+ * sentence stays in body text and stays readable in both themes.
+ */
+.a-auth__error {
+  margin: 0;
+  padding: var(--a-space-3);
+  font-size: var(--a-text-sm);
+  line-height: 1.45;
+  border: 1px solid var(--a-border);
+  border-left: 3px solid var(--a-status-critical);
+  border-radius: var(--a-radius-sm);
+  background: var(--a-surface-sunken);
+  color: var(--a-text);
+}
+
+.a-auth__alternatives {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--a-space-2);
+  font-size: var(--a-text-xs);
+}
+
+.a-auth__link {
+  font: inherit;
+  font-size: var(--a-text-xs);
+  color: var(--a-accent);
+  background: none;
+  border: 0;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.a-auth__link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.a-auth__link:disabled {
+  color: var(--a-text-muted);
+  cursor: default;
+}
+
+.a-auth__link:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--a-radius-sm);
+}
+
+.a-auth__dot {
+  color: var(--a-text-muted);
+}
+
+/* Boot: the stored token is being checked. Empty on purpose — a sign-in form
+   flashed at someone who is signed in is worse than a beat of nothing. */
+.a-auth--booting {
+  background: var(--a-bg);
+}
+
+.a-session-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--a-space-3);
+  flex-wrap: wrap;
+  padding: var(--a-space-3) var(--a-space-4);
+  font-family: var(--a-font);
+  font-size: var(--a-text-sm);
+  color: var(--a-text);
+  background: var(--a-surface-sunken);
+  border-bottom: 1px solid var(--a-border);
+  box-shadow: inset 3px 0 0 var(--a-status-critical);
+}
+
+.a-session-who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  font-size: var(--a-text-sm);
+}
+
+/* A standing note, not an alert: the store retries on the next change, so this
+   says "behind" rather than "broken". Clicking dismisses it. */
+.a-unsaved {
+  font: inherit;
+  font-size: var(--a-text-xs);
+  color: var(--a-text);
+  background: var(--a-surface-sunken);
+  border: 1px solid var(--a-border);
+  border-left: 3px solid var(--a-status-warning);
+  border-radius: var(--a-radius-sm);
+  padding: 4px var(--a-space-2);
+  cursor: pointer;
+}
+
+/*
+ * A share that could not be revoked is not the same severity as a save that is
+ * retrying. One resolves itself; this one is a standing fact about who can see
+ * the board, so it takes the critical rule rather than the warning one.
+ */
+.a-unsaved--warning {
+  border-left-color: var(--a-status-critical);
+}

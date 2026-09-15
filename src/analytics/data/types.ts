@@ -32,6 +32,7 @@ export type {
   Field,
   FieldRole,
   FieldSemantic,
+  FilterParameter,
   Measure,
   TimeDimension,
   ValueFormat,

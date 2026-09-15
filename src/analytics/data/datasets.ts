@@ -18,6 +18,7 @@ import type {
   Field,
   FieldRole,
   FieldSemantic,
+  FilterParameter,
   Row,
   ValueFormat,
 } from './types'
@@ -45,6 +46,15 @@ interface DraftField {
 
 interface Draft {
   id: string
+  /**
+   * Parameters the endpoint refuses to answer without, by Field key.
+   *
+   * Fixture-only, and deliberately used by exactly one Dataset. A required
+   * parameter is a state a live API will not produce on demand, and the
+   * fixtures exist to reach exactly those — the same argument that keeps
+   * `denied`, `withdrawn` and `partial` reachable here.
+   */
+  requires?: string[]
   name: string
   description: string
   /** Becomes `sourceSystem`. */
@@ -107,7 +117,8 @@ function publishField(draft: DraftField, rows: Row[]): Field {
  * type stopped allowing it.
  */
 function publish(draft: Draft): { dataset: Dataset; rows: Row[] } {
-  const { rows, source, classification, exposesPersonalData, fields, ...rest } = draft
+  const { rows, source, classification, exposesPersonalData, fields, requires, ...rest } = draft
+  const published = fields.map((field) => publishField(field, rows))
 
   return {
     rows,
@@ -118,10 +129,68 @@ function publish(draft: Draft): { dataset: Dataset; rows: Row[] } {
       exposesPersonalData: exposesPersonalData ?? false,
       recordCount: rows.length,
       recordVolume: rows.length >= 50 ? 'many' : 'few',
-      fields: fields.map((field) => publishField(field, rows)),
+      fields: published,
+      rowGrain: { dimensions: grainOf(published) },
+      filterParameters: filterParametersFor(published, rows, requires ?? []),
     },
   }
 }
+
+/**
+ * What one row of a fixture represents — PC-08.
+ *
+ * The non-Measure Fields. A row in an aggregated table is keyed by its
+ * Dimensions and its Time Dimension; the Measures are what that key resolves to.
+ * `grain.test.ts` checks the combination is actually unique per fixture, which
+ * is the claim this makes and the one a publisher would be making too.
+ *
+ * A Dataset whose endpoint returns a single summary row declares `[]` — that is
+ * a grain, and a meaningful one, rather than an omission.
+ */
+const grainOf = (fields: Field[]): string[] =>
+  fields.filter((field) => field.role !== 'measure').map((field) => field.key)
+
+/**
+ * How many distinct values still counts as a list someone can choose from.
+ *
+ * Above this a publisher would not enumerate — 365 dates is not a dropdown —
+ * and declaring them would be worse than declaring nothing, because it turns a
+ * control the Viewer can use into one they have to scroll. The judgement is the
+ * publisher's in a real declaration; the fixtures have to make it themselves.
+ */
+const ENUMERABLE_LIMIT = 25
+
+/**
+ * Filter Parameters, as a well-declared Source System would publish them.
+ *
+ * One per filterable Field, carrying the values when they are enumerable. This
+ * is the fixtures modelling the contract rather than modelling the API's current
+ * behaviour — the API accepts a declaration without `allowed_values`, and a
+ * Dataset that omits them renders an empty control, which is the failure the
+ * contract rule exists to prevent.
+ */
+function filterParametersFor(fields: Field[], rows: Row[], requires: string[]): FilterParameter[] {
+  return fields
+    .filter((field) => field.filterable)
+    .map((field) => {
+      const distinct = [...new Set(rows.map((row) => row[field.key]))]
+        .filter((value): value is string | number => value !== null && value !== undefined)
+        .sort(compareValues)
+
+      return {
+        name: field.key,
+        label: field.label,
+        required: requires.includes(field.key),
+        ...(distinct.length > 0 && distinct.length <= ENUMERABLE_LIMIT
+          ? { allowedValues: distinct }
+          : {}),
+      }
+    })
+}
+
+/** Numbers numerically, everything else as text — `10` must not sort before `9`. */
+const compareValues = (a: string | number, b: string | number): number =>
+  typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b))
 
 const TODAY = '2026-08-07'
 
@@ -382,6 +451,18 @@ const transactions = (): Draft => {
     classification: 'confidential',
     exposesPersonalData: true,
     source: 'Payments',
+    /*
+     * The one fixture with a required parameter, and it is required for the
+     * reason a real one would be: this Dataset is at record grain over personal
+     * financial data, so an endpoint serving it should refuse to answer "all of
+     * them". Narrowing is a condition of asking, not an option.
+     *
+     * It is here so the composition flow has something to satisfy. Without a
+     * Dataset that demands a binding, the code that collects one is unreachable
+     * and untestable until a live Dataset happens to declare one — which is
+     * exactly when we would least want to discover it missing.
+     */
+    requires: ['channel'],
     fields: [
       { key: 'id', label: 'Transaction', role: 'dimension' },
       { key: 'channel', label: 'Channel', role: 'dimension' },

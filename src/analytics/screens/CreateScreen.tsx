@@ -15,6 +15,7 @@ import { SharePanel } from '../builder/SharePanel'
 import { BoardControls } from '../builder/BoardControls'
 import { useBoardControls } from '../builder/useBoardControls'
 import { WidgetComposer, type ComposerDraft } from '../builder/WidgetComposer'
+import { useMay } from '../data/AnalyticsData'
 import { useBoards } from '../builder/useBoards'
 import { useComposeIntent } from '../builder/useComposeIntent'
 import { placedWidgets, widgetCountOf, type PlacedWidget } from '../builder/boards'
@@ -22,6 +23,7 @@ import type { ScreenId } from '../shell/nav'
 
 export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const boards = useBoards()
+  const mayPublish = useMay('dashboard.publish')
   const { editing } = boards
   const controls = useBoardControls(editing)
 
@@ -74,6 +76,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           mapping: draft.mapping,
           exposedFilters: draft.exposedFilters,
           exposedSorts: draft.exposedSorts,
+          parameterBindings: draft.parameterBindings,
         },
         { w: draft.span },
       )
@@ -88,6 +91,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           mapping: draft.mapping,
           exposedFilters: draft.exposedFilters,
           exposedSorts: draft.exposedSorts,
+          parameterBindings: draft.parameterBindings,
         },
         draft.span,
       )
@@ -108,6 +112,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
                 span: composing.w,
                 exposedFilters: composing.exposedFilters ?? [],
                 exposedSorts: composing.exposedSorts ?? [],
+                parameterBindings: composing.parameterBindings ?? {},
               }
             : undefined
         }
@@ -156,7 +161,14 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
             <button
               type="button"
               className="a-button a-button--primary"
-              disabled={widgetCountOf(editing) === 0}
+              /*
+               * Two reasons this can be off, and they are told apart on purpose.
+               * An empty board is something the Author can fix in the next
+               * minute; a missing permission is not, and offering "add a widget"
+               * as the implied remedy for it would waste their time.
+               */
+              disabled={widgetCountOf(editing) === 0 || !mayPublish}
+              title={mayPublish ? undefined : 'You do not have permission to publish dashboards.'}
               onClick={() => {
                 boards.publishBoard(editing.id)
                 onNavigate('dashboards')
@@ -168,6 +180,8 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
             <button
               type="button"
               className="a-button"
+              disabled={!mayPublish}
+              title={mayPublish ? undefined : 'You do not have permission to publish dashboards.'}
               onClick={() => boards.unpublishBoard(editing.id)}
             >
               Unpublish

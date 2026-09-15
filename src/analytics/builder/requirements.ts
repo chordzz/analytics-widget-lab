@@ -21,6 +21,7 @@
  * drawing. The mapper is then for changing your mind, not for getting started.
  */
 
+import { acceptedByApi } from '../../dashboard/api-taxonomy'
 import { WIDGET_TYPES, widgetType } from '../widgets/catalog'
 import type { WidgetType } from '../widgets/catalog'
 import {
@@ -357,6 +358,133 @@ export function satisfies(typeId: string, dataset: Dataset): boolean {
  */
 export const typesFor = (dataset: Dataset): WidgetType[] =>
   WIDGET_TYPES.filter((type) => type.built && satisfies(type.id, dataset))
+
+/**
+ * Why a widget type is not on offer, in the Author's terms.
+ *
+ * The composer's rule has been that an unbuildable widget is simply absent —
+ * nothing greyed out, nothing failing after you pick it. That is right when the
+ * absence is obvious (no time dimension, no trend lines) and wrong when it is
+ * not: two thirds of the catalogue can be missing for a reason nobody can see,
+ * and an Author who came to build a funnel is left wondering whether the product
+ * has one.
+ *
+ * So the absences are explained rather than merely correct. Three kinds, and
+ * they are genuinely different situations:
+ *
+ *   - **the backend will not accept it.** Nothing about this Dataset. Ours to
+ *     fix with the Analytics team, and temporary.
+ *   - **the publisher has not said enough.** The Dataset may well suit it; the
+ *     declaration cannot establish that, which is a gap in the publication
+ *     contract rather than a property of the data.
+ *   - **the data is the wrong shape.** The honest, permanent answer: this
+ *     Dataset has one Measure and a scatter plot needs two.
+ */
+export type UnavailableReason =
+  | { kind: 'not-accepted'; because: string }
+  | { kind: 'undeclared'; because: string }
+  | { kind: 'shape'; because: string }
+
+export interface UnavailableType {
+  type: WidgetType
+  reason: UnavailableReason
+}
+
+/**
+ * Every built type this Dataset cannot currently show, with why.
+ *
+ * Ordered by how actionable the answer is: what we can fix first, then what the
+ * publisher can, then what nothing can.
+ */
+export function unavailableTypesFor(dataset: Dataset): UnavailableType[] {
+  const offered = new Set(typesFor(dataset).map((type) => type.id))
+
+  const entries = WIDGET_TYPES.filter((type) => type.built).flatMap<UnavailableType>((type) => {
+    if (!acceptedByApi(type.id)) {
+      return [
+        {
+          type,
+          reason: {
+            kind: 'not-accepted',
+            because: 'The Analytics API has no name for this widget type yet.',
+          },
+        },
+      ]
+    }
+    if (offered.has(type.id)) return []
+    return [{ type, reason: reasonFor(type.id, dataset) }]
+  })
+
+  const rank = { 'not-accepted': 0, undeclared: 1, shape: 2 }
+  return entries.sort((a, b) => rank[a.reason.kind] - rank[b.reason.kind])
+}
+
+/**
+ * The first slot this Dataset cannot fill, said as a shortfall.
+ *
+ * First rather than all of them: a widget needing two things it does not have is
+ * not twice as unavailable, and the leading reason is the one an Author would
+ * act on.
+ */
+function reasonFor(typeId: string, dataset: Dataset): UnavailableReason {
+  const claimed = new Set<string>()
+
+  for (const entry of slotsFor(typeId)) {
+    if (entry.min === 0) continue
+    const available = candidatesFor(dataset, entry).filter((field) => !claimed.has(field.key))
+
+    if (available.length >= entry.min) {
+      available.slice(0, entry.min).forEach((field) => claimed.add(field.key))
+      continue
+    }
+
+    /*
+     * A geographic slot is the one case where the shortfall may not be real.
+     * Nothing in the deployed API can say a Measure is a latitude, so a Dataset
+     * that genuinely holds coordinates looks identical to one that does not —
+     * and telling the Author their data is the wrong shape would be a guess
+     * stated as a fact.
+     */
+    if (entry.geo) {
+      /*
+       * Named by what the slot wants rather than by the first thing missing.
+       * A point map's place slot failing is not the whole story — it also needs
+       * a latitude and a longitude — and an Author told only about the first
+       * would go and fix something that still would not finish.
+       */
+      const wants =
+        entry.id === 'lat' || entry.id === 'lng'
+          ? 'Fields declared as a latitude and a longitude'
+          : 'a Field declared as a place'
+
+      return {
+        kind: 'undeclared',
+        because: `Needs ${wants} — something the publication contract cannot express yet.`,
+      }
+    }
+
+    return { kind: 'shape', because: shortfall(entry, available.length) }
+  }
+
+  // Every slot fills, so the type was excluded for a reason the slot table does
+  // not model. Saying so beats inventing one.
+  return { kind: 'shape', because: `${dataset.name} does not suit this widget type.` }
+}
+
+function shortfall(entry: Slot, has: number): string {
+  const roles = entry.accepts.map(roleWord).join(' or ')
+  const need = entry.min === 1 ? `a ${roles}` : `${String(entry.min)} ${roles}s`
+  const got = has === 0 ? 'none' : `only ${String(has)}`
+  /*
+   * The slot label keeps its own capital. Lower-cased, Sankey's `To` reads as a
+   * preposition — "needs a dimension for to" — and the sentence falls apart.
+   * Capitalised it is plainly the name of a slot.
+   */
+  return `Needs ${need} for ${entry.label}; this data has ${got}.`
+}
+
+const roleWord = (role: FieldRole): string =>
+  role === 'time-dimension' ? 'time dimension' : role
 
 /**
  * The widgets this dataset says it is *for*.

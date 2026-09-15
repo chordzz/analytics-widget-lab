@@ -24,6 +24,44 @@ import type { AccessRecord } from '../../access/port'
 
 export function AccessRecordPanel() {
   const entries = useAccessRecord()
+  const { accessRecordIsComplete } = useAnalyticsData()
+
+  /*
+   * Withheld rather than shown empty when nothing feeds it.
+   *
+   * The recorder is fed by the retrieval adapter, and only the fixture one does.
+   * Against a real Source System every retrieval goes straight past, so the log
+   * would sit at zero for ever — under a heading promising "every retrieval of a
+   * source that carries personal data". That does not read as *not wired up*, it
+   * reads as *nobody has read any personal data*, which is an assertion, and a
+   * false one.
+   *
+   * There is nothing to fetch instead: FR-DA-14 binds the Source System — the
+   * publication contract lists it under retrieval obligations — and the API
+   * publishes no endpoint for reading such a log. So this says where the record
+   * actually lives and stops claiming to be it.
+   */
+  if (!accessRecordIsComplete) {
+    return (
+      <section className="a-panel" aria-labelledby="access-record-heading">
+        <header className="a-panel__head">
+          <div>
+            <h3 id="access-record-heading" className="a-panel__title">
+              Access record
+            </h3>
+            <p className="a-panel__note">
+              Kept by the product that owns the data, not here.
+            </p>
+          </div>
+        </header>
+        <p className="a-muted">
+          Retrievals are recorded by each Source System as it serves them (FR-DA-14).
+          Analytics forwards the viewer&rsquo;s own token and holds no log of its own, so
+          there is nothing for this panel to show.
+        </p>
+      </section>
+    )
+  }
 
   return (
     <section className="a-panel" aria-labelledby="access-record-heading">

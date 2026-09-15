@@ -30,7 +30,8 @@ import {
   type ControlSubject,
   type QueryContribution,
 } from '../../composition/correspondence'
-import type { Aggregation, Dataset } from '../../domain/dataset'
+import { requiredParameters } from '../../domain/dataset'
+import type { Aggregation, Dataset, FilterParameter } from '../../domain/dataset'
 import type { DatasetQuery, MeasureSelection } from '../../domain/query'
 import type { WidgetSpec } from '../widgets/Widget'
 import { rowsFor } from './datasets'
@@ -165,6 +166,43 @@ export interface ViewerChoices {
 }
 
 /**
+ * The Author's bindings, reduced to parameters the publisher actually declared.
+ *
+ * Same enforcement pattern as `permitted`, and for the same reason: the form
+ * that collected the value and the query that sends it are different code, and
+ * only one of them is the enforcement point. A binding naming a parameter the
+ * Dataset does not publish is dropped rather than sent — the API refuses
+ * undeclared parameters before the request leaves, so passing one on would fail
+ * the whole query rather than the one filter.
+ */
+export function boundParameters(
+  spec: WidgetSpec,
+  dataset: Dataset,
+): Record<string, string | number> {
+  const declared = new Set((dataset.filterParameters ?? []).map((parameter) => parameter.name))
+  const bound: Record<string, string | number> = {}
+
+  for (const [name, value] of Object.entries(spec.parameterBindings ?? {})) {
+    if (value === '' || value === undefined) continue
+    if (declared.has(name)) bound[name] = value
+  }
+
+  return bound
+}
+
+/**
+ * Required parameters this Widget has not bound.
+ *
+ * Empty means the Widget can be composed. Anything else is a query the Source
+ * System will refuse, and the composer's job is to make that impossible to
+ * commit rather than to discover when the card fails.
+ */
+export function unboundRequirements(spec: WidgetSpec, dataset: Dataset): FilterParameter[] {
+  const bound = boundParameters(spec, dataset)
+  return requiredParameters(dataset).filter((parameter) => bound[parameter.name] === undefined)
+}
+
+/**
  * The Viewer's choices, reduced to what the publisher actually permits.
  *
  * Applied here rather than trusted from the UI, for the same reason
@@ -237,13 +275,22 @@ export function queryFor(
   const override = typeof options.aggregation === 'string' ? options.aggregation : undefined
   const timeKey = timeKeyOf(dataset, mapping)
   const chosen = permitted(spec, dataset, choices)
+  const bound = boundParameters(spec, dataset)
 
   // A Viewer's sort replaces the widget's own ordering; their filters narrow
   // whatever it would otherwise have asked for.
   const withChoices = (base: DatasetQuery): DatasetQuery => {
+    /*
+     * Three layers, narrowest last. The Author's parameter bindings are the
+     * floor — a required one must survive every other choice, or the query is
+     * refused — and a Viewer narrowing the same Field on top of it still
+     * supplies a value, so the parameter is never lost by being overridden.
+     */
+    const filters = { ...bound, ...base.filters, ...chosen.filters }
+
     const own: DatasetQuery = {
       ...base,
-      ...(chosen.filters ? { filters: chosen.filters } : {}),
+      ...(Object.keys(filters).length > 0 ? { filters } : {}),
       ...(chosen.sort ? { sort: chosen.sort } : {}),
     }
 

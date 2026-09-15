@@ -27,12 +27,29 @@ const enumOf = (name: string): string[] => {
 }
 const propsOf = (name: string): string[] => Object.keys(schemas[name]?.properties ?? {})
 
-/** A divergence exists, is open, and answers to the API. */
+/**
+ * Every test below asserts a shape the API still has. What changes as work lands
+ * is not the API but our relationship to it, so a cited entry is checked against
+ * one of two claims rather than one.
+ */
 const registered = (id: string) => {
   const entry = DIVERGENCES.find((candidate) => candidate.id === id)
   expect(entry, `${id} is cited here but missing from the register`).toBeDefined()
-  expect(entry!.status).not.toBe('resolved')
   return entry!
+}
+
+/**
+ * The API still differs and we no longer do: an adapter translates it.
+ *
+ * Worth asserting rather than dropping the citation. The API's shape is exactly
+ * as it was — these tests still guard it — and a resolved entry has to say where
+ * the translation lives, or "resolved" is just a word.
+ */
+const translated = (id: string) => {
+  const entry = registered(id)
+  expect(entry.status, `${id} is cited as translated but is not resolved`).toBe('resolved')
+  expect(entry.endedAt, `${id} is resolved but does not say where`).toBeTruthy()
+  return entry
 }
 
 describe('the snapshot is the version we reviewed', () => {
@@ -110,7 +127,7 @@ describe('where we differ, the register says so', () => {
 
     // Ours adds `time-dimension`, following FR-DP-06.
     expect(theirs).not.toContain('time-dimension')
-    expect(registered('D21').authority).toBe('api')
+    expect(translated('D21').authority).toBe('api')
 
     // And their way of naming the temporal axis is on the Dataset.
     expect(propsOf('Dataset')).toContain('time_dimension_field')
@@ -119,7 +136,7 @@ describe('where we differ, the register says so', () => {
   test('the query takes filter parameters and nothing else — D22', () => {
     const query = spec.paths['/v1/datasets/{datasetId}/query'].get
     expect(query.summary).toBeTruthy()
-    registered('D22')
+    translated('D22')
 
     // Nothing in their schema set describes a query body, because there is no
     // body: filters are flat query parameters. A `DatasetQuery` schema
@@ -130,16 +147,42 @@ describe('where we differ, the register says so', () => {
   test('widgets are embedded, not referenced — D23', () => {
     const widgets = schemas.Dashboard.properties!.widgets as { items?: { $ref?: string } }
     expect(widgets.items?.$ref).toContain('Widget')
-    registered('D23')
+    translated('D23')
   })
 
   test('filter parameters are declared apart from fields — D24', () => {
+    /*
+     * Two lists, still. What changed on 15 September is that a Field now states
+     * its own `filterable` rather than leaving us to infer it from whether a
+     * Parameter of the same name exists — so the lists are no longer collapsed
+     * by us, which is the half of D24 that was ours.
+     */
     expect(propsOf('Dataset')).toContain('filter_parameters')
     expect(propsOf('FilterParameter')).toContain('allowed_values')
-    // And a Field has no `filterable`; it has operators instead.
-    expect(propsOf('Field')).not.toContain('filterable')
+    expect(propsOf('Field')).toContain('filterable')
     expect(propsOf('Field')).toContain('filter_operators')
-    registered('D24')
+    translated('D24')
+  })
+
+  test('a Field carries its own key and label — the 15 September shape', () => {
+    /*
+     * The rename that would have broken everything silently. `name` became
+     * `key`, and an adapter reading the old name gets `undefined` for every
+     * Field key — no error, just Datasets with no usable columns.
+     */
+    expect(propsOf('Field')).toContain('key')
+    expect(propsOf('Field')).toContain('label')
+    expect(propsOf('Field')).toContain('orderable')
+    expect(propsOf('Field')).not.toContain('name')
+    expect(propsOf('Field')).not.toContain('sortable')
+  })
+
+  test('a Dataset declares its row grain and its personal data — BE-2, D30', () => {
+    // Asked for, and granted. `grain` is the fact an Author could not previously
+    // get; `exposes_personal_data` is kept apart from `classification` because a
+    // Dataset can be financial *and* personal.
+    expect(propsOf('Dataset')).toContain('grain')
+    expect(propsOf('Dataset')).toContain('exposes_personal_data')
   })
 
   test('scope has four levels — D25', () => {
@@ -149,25 +192,31 @@ describe('where we differ, the register says so', () => {
       'role',
       'organization',
     ])
-    registered('D25')
+    translated('D25')
   })
 
   test('grant targets are user and department — D26', () => {
     expect(enumOf('ShareGrantTarget')).toEqual(['user', 'department'])
-    registered('D26')
+    translated('D26')
   })
 
   test('every response is enveloped — D27', () => {
     expect(propsOf('Envelope').sort()).toEqual(['data', 'message', 'status'])
-    registered('D27')
+    translated('D27')
   })
 
-  test('the two extremes are abbreviated — D29', () => {
+  test('the two extremes are spelled out now — D29 closed', () => {
+    /*
+     * This asserted the opposite until 15 September, when the API adopted
+     * `minimum` and `maximum`. Worth keeping rather than deleting: an
+     * aggregation we do not recognise falls through the reducer to a silent
+     * zero, which looks exactly like an empty column, so the day this changes
+     * again is a day to find out from a test.
+     */
     const theirs = enumOf('Aggregation')
-    expect(theirs).toContain('min')
-    expect(theirs).toContain('max')
-    expect(theirs).not.toContain('minimum')
-    registered('D29')
+    expect(theirs).toContain('minimum')
+    expect(theirs).toContain('maximum')
+    expect(theirs).not.toContain('min')
   })
 
   test('the same six operations, whatever they are called — D29', () => {
