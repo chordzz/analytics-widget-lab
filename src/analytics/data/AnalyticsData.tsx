@@ -138,25 +138,49 @@ export function useAnalyticsData(): AnalyticsDataValue {
   return value
 }
 
-/** The Catalogue's listing. Descriptions only — this cannot pull records. */
-export function useCatalogue(): { summaries: DatasetSummary[]; loading: boolean } {
+/**
+ * The Catalogue's listing. Descriptions only — this cannot pull records.
+ *
+ * One request for the whole screen. `useDatasets` below asks again per Dataset
+ * for the full Field list, which is right when every Field is about to be drawn
+ * and wasteful when only a summary is.
+ */
+export function useCatalogue(): {
+  summaries: DatasetSummary[]
+  loading: boolean
+  /** Null when the Catalogue answered — including when it answered with nothing. */
+  failure: CatalogueFailure | null
+} {
   const { catalogue, viewer } = useAnalyticsData()
   const [summaries, setSummaries] = useState<DatasetSummary[]>([])
   const [loading, setLoading] = useState(true)
+  const [failure, setFailure] = useState<CatalogueFailure | null>(null)
 
   useEffect(() => {
     let live = true
     setLoading(true)
     catalogue
       .browse(viewer)
-      .then((result) => live && (setSummaries(result), setLoading(false)))
-      .catch(() => live && (setSummaries([]), setLoading(false)))
+      .then((result) => {
+        if (!live) return
+        setSummaries(result)
+        setFailure(null)
+        setLoading(false)
+      })
+      .catch((error) => {
+        // Same reasoning as `useDatasets`: the list is cleared, because stale
+        // entries are worse than none, but the reason travels with it.
+        if (!live) return
+        setSummaries([])
+        setFailure(catalogueFailure(error))
+        setLoading(false)
+      })
     return () => {
       live = false
     }
   }, [catalogue, viewer])
 
-  return { summaries, loading }
+  return { summaries, loading, failure }
 }
 
 /**
