@@ -38,7 +38,6 @@ import {
 import { queryFor, type ViewerChoices } from './query'
 import type { QueryContribution } from '../../composition/correspondence'
 import type { WidgetSpec } from '../widgets/Widget'
-import type { Row } from './types'
 import { decide, type Permission } from '../../auth/permissions'
 import { isApiError } from '../../api/errors'
 
@@ -355,28 +354,35 @@ export function useDatasets(): {
  * the same port for the same reason a widget does: a Viewer who may not consume
  * a Dataset must not see its records because they opened a different screen.
  */
-export function useRows(datasetId: string | undefined, limit = 20): Row[] {
+export function useRows(datasetId: string | undefined, limit = 20): WidgetRenderState {
   const { retrieval, viewer } = useAnalyticsData()
-  const [rows, setRows] = useState<Row[]>([])
+  const [state, setState] = useState<WidgetRenderState>({ status: 'loading' })
 
   useEffect(() => {
     if (!datasetId) {
-      setRows([])
+      setState({ status: 'empty' })
       return
     }
 
     let live = true
+    setState({ status: 'loading' })
     retrieval
       .retrieve(datasetId, { limit }, viewer)
-      .then((outcome) => live && setRows(outcome.kind === 'rows' ? outcome.rows : []))
-      .catch(() => live && setRows([]))
+      /*
+       * Through the same resolver a Widget uses, rather than a second reading of
+       * the same four outcomes. This used to be `outcome.kind === 'rows' ?
+       * rows : []`, which turned *denied* and *withdrawn* into "no records" —
+       * FR-DA-11's exact prohibition, arrived at by a ternary.
+       */
+      .then((outcome) => live && setState(resolveRenderState(outcome)))
+      .catch((error) => live && setState(resolveFailure(error)))
 
     return () => {
       live = false
     }
   }, [retrieval, viewer, datasetId, limit])
 
-  return rows
+  return state
 }
 
 /**

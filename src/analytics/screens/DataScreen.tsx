@@ -12,6 +12,7 @@
 
 import { useState } from 'react'
 import { useDatasets, useRows, type CatalogueFailure } from '../data/AnalyticsData'
+import type { WidgetRenderState } from '../../retrieval/render-state'
 import { DataTable } from '../widgets/primitives'
 import { WidgetCard } from '../widgets/WidgetCard'
 import { typesFor } from '../builder/requirements'
@@ -214,15 +215,43 @@ export function NoDatasets() {
  * sample is retrieval work, and they are different ports.
  */
 function SamplePreview({ dataset }: { dataset: Dataset }) {
-  const rows = useRows(dataset.id, 20)
+  const state = useRows(dataset.id, 20)
 
-  if (rows.length === 0) {
-    return (
-      <p className="a-muted" style={{ margin: 0, fontSize: 'var(--a-text-xs)' }}>
-        No records to show.
-      </p>
-    )
+  if (state.status === 'ready') {
+    return <DataTable data={state.rows} columns={dataset.fields} limit={20} />
   }
 
-  return <DataTable data={rows} columns={dataset.fields} limit={20} />
+  /*
+   * The same six states a Widget draws, in one line each.
+   *
+   * This used to say "No records to show" for every one of them, which told a
+   * Viewer the Dataset was empty when the truth might be that they are not
+   * allowed to read it — FR-DA-11's exact prohibition, reached through a
+   * ternary. The sample is the one place on this screen that touches real
+   * records, so it is the one place those answers differ.
+   */
+  return (
+    <p className="a-muted" style={{ margin: 0, fontSize: 'var(--a-text-xs)' }}>
+      {sampleNote(state)}
+    </p>
+  )
+}
+
+export function sampleNote(state: WidgetRenderState): string {
+  switch (state.status) {
+    case 'loading':
+      return 'Loading a sample…'
+    case 'empty':
+      return 'No records to show.'
+    case 'denied':
+      // Not "no records": the Dataset may be full. What is absent is permission,
+      // and that is a different thing to tell someone.
+      return 'You do not have access to the records behind this source.'
+    case 'withdrawn':
+      return 'This source has been withdrawn by the product that publishes it.'
+    case 'failed':
+      return state.message || 'The sample could not be loaded.'
+    default:
+      return 'No records to show.'
+  }
 }

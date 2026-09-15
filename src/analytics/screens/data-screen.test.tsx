@@ -17,7 +17,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { AnalyticsDataProvider } from '../data/AnalyticsData'
 import { AccessRecordPanel } from './AccessRecordPanel'
 import { ApiError } from '../../api/errors'
-import { CatalogueProblem, NoDatasets } from './DataScreen'
+import { CatalogueProblem, NoDatasets, sampleNote } from './DataScreen'
+import { WIDGET_RENDER_STATUSES } from '../../retrieval/render-state'
 import { catalogueFailure } from '../data/AnalyticsData'
 import type { DatasetRetrievalPort } from '../../retrieval/port'
 
@@ -119,5 +120,63 @@ describe('the Catalogue failing is told apart from the Catalogue being empty', (
 
   test('and says who publishes one, since it is not the reader', () => {
     expect(words(renderToStaticMarkup(<NoDatasets />))).toContain('product teams')
+  })
+})
+
+describe('the sample says which of the six it hit', () => {
+  /*
+   * The sample is the one place on this screen that touches real records, so it
+   * is the one place the four outcomes differ. They all used to read "No records
+   * to show" — which tells a Viewer the Dataset is empty when the truth may be
+   * that they are not allowed to read it.
+   */
+  test('denied is not "no records"', () => {
+    // FR-DA-11. A denial drawn as absence teaches the Viewer the figure is zero.
+    const said = sampleNote({ status: 'denied' })
+    expect(said).toContain('do not have access')
+    expect(said.toLowerCase()).not.toContain('no records')
+  })
+
+  test('withdrawn names the publisher, not the data', () => {
+    const said = sampleNote({ status: 'withdrawn' })
+    expect(said).toContain('withdrawn')
+    expect(said.toLowerCase()).not.toContain('no records')
+  })
+
+  test('empty is still plainly empty', () => {
+    // FR-VZ-10 — authorized, and nothing to say. It must not read as a fault.
+    expect(sampleNote({ status: 'empty' })).toBe('No records to show.')
+  })
+
+  test('a failure carries its own message', () => {
+    expect(sampleNote({ status: 'failed', message: 'Source system timed out' })).toBe(
+      'Source system timed out',
+    )
+  })
+
+  test('a failure with no message still says something', () => {
+    expect(sampleNote({ status: 'failed', message: '' })).toContain('could not be loaded')
+  })
+
+  test('loading does not claim an outcome', () => {
+    // A preview that flashes "no records" before the answer arrives has already
+    // said something false.
+    expect(sampleNote({ status: 'loading' }).toLowerCase()).not.toContain('no records')
+  })
+
+  test('all six are distinguishable from one another', () => {
+    const said = WIDGET_RENDER_STATUSES.map((status) =>
+      sampleNote(
+        status === 'ready'
+          ? { status: 'ready', rows: [] }
+          : status === 'failed'
+            ? { status: 'failed', message: 'boom' }
+            : { status },
+      ),
+    )
+    // `ready` never reaches this function — the table draws instead — so it is
+    // the one duplicate permitted.
+    const distinct = new Set(said.filter((_, index) => WIDGET_RENDER_STATUSES[index] !== 'ready'))
+    expect(distinct.size).toBe(WIDGET_RENDER_STATUSES.length - 1)
   })
 })
