@@ -12,43 +12,46 @@
  *
  * The second is much worse, so every ambiguity below resolves toward showing.
  *
- * Two of those ambiguities are real and unresolved in the published contract.
+ * **The key format, settled by a live response on 16 September.** IAM answers
+ * with the fully qualified form the routes document:
  *
- * **The key format.** Routes are documented as
- * `holdings.analytics::dashboard.create`, while the change log's own `/v1/me`
- * example answers with bare `dataset.read`. One spec even says
- * `holdings.penilabs.analytics::dataset.read`, a third prefix. Matching on the
- * exact string would mean that a wrong guess hides the entire product — so keys
- * are compared on the part after `::`, which is identical under all three.
+ * ```
+ * "holdings.analytics::dashboard.create": true
+ * "holdings.analytics::dataset.read": true
+ * ```
  *
- * **The write family.** The same example carries `dashboard.write`, which
- * matches no documented route: the routes are `create`, `update`, `delete`,
- * `publish` and `share`. Rather than pick, a coarse key grants the fine ones it
- * plainly covers.
+ * The change log's `/v1/me` example showed bare `dataset.read` and a
+ * `dashboard.write` that matches no route; neither appears in the real map, so
+ * the example was wrong. Our own gate names stay short and readable, and the
+ * incoming key is compared on the part after `::` — which is what makes them
+ * meet. That normalisation is load-bearing rather than defensive: without it
+ * nothing matches and the whole product greys out.
  */
 
 import type { Actor } from './port'
 
 /**
- * A caller holding this may do anything. Named separately because it is
- * governance rather than a capability — it decides where Analytics may forward
- * queries — and a holder should not be blocked by a missing finer key.
- */
-const ADMINISTER = 'analytics.administer'
-
-/**
- * Each gate, and every key that opens it.
+ * Each gate and the key that opens it.
  *
- * The first entry is the documented route permission; the rest are the coarser
- * keys that plainly include it. A caller holding `dashboard.write` can write
- * dashboards, whatever the finer name for this particular write turns out to be.
+ * One key each, now that the real map is known. An earlier version accepted
+ * `dashboard.write` as a coarse key covering create, update, delete and publish
+ * — tolerance for a name that appeared only in the change log's example and
+ * exists nowhere in IAM. Speculative aliases are not free: a key nobody issues
+ * cannot help, and if one were ever issued meaning something narrower than the
+ * four it stood for, this would over-grant silently.
+ *
+ * `analytics.administer` is deliberately *not* a superuser key here either. The
+ * spec scopes it to Source System registration — *"it decides where Analytics
+ * may forward queries"* — which is a different surface from composing
+ * dashboards, and the live map grants it alongside the dashboard keys rather
+ * than in place of them.
  */
 export const PERMISSION_KEYS = {
   'dashboard.read': ['dashboard.read'],
-  'dashboard.create': ['dashboard.create', 'dashboard.write'],
-  'dashboard.update': ['dashboard.update', 'dashboard.write'],
-  'dashboard.delete': ['dashboard.delete', 'dashboard.write'],
-  'dashboard.publish': ['dashboard.publish', 'dashboard.write'],
+  'dashboard.create': ['dashboard.create'],
+  'dashboard.update': ['dashboard.update'],
+  'dashboard.delete': ['dashboard.delete'],
+  'dashboard.publish': ['dashboard.publish'],
   'dashboard.share': ['dashboard.share'],
   'dataset.read': ['dataset.read'],
 } as const
@@ -88,8 +91,6 @@ export function decide(
 
   const held = new Map<string, boolean>()
   for (const [key, value] of Object.entries(permissions)) held.set(bare(key), value === true)
-
-  if (held.get(bare(ADMINISTER)) === true) return 'granted'
 
   for (const candidate of PERMISSION_KEYS[permission]) {
     if (held.get(bare(candidate)) === true) return 'granted'

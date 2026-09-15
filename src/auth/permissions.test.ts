@@ -55,55 +55,79 @@ describe('not knowing is not denying', () => {
   })
 })
 
-describe('the key format is not guessed at', () => {
-  /*
-   * Routes are documented as `holdings.analytics::dashboard.create`; the change
-   * log's `/v1/me` example answers with bare `dataset.read`; one spec line says
-   * `holdings.penilabs.analytics::dataset.read`. Three spellings, and matching
-   * the wrong one exactly would hide the whole product.
-   */
-  const spellings = [
-    'dashboard.create',
-    'holdings.analytics::dashboard.create',
-    'holdings.penilabs.analytics::dashboard.create',
-  ]
+/**
+ * The map IAM actually returns, captured from `/v1/me` on 16 September.
+ *
+ * Verbatim, including the two publisher keys we never ask about — a fixture
+ * trimmed to what the tests need would stop being evidence of anything.
+ */
+const LIVE_PERMISSIONS: Record<string, boolean> = {
+  'holdings.analytics::analytics.administer': true,
+  'holdings.analytics::dashboard.create': true,
+  'holdings.analytics::dashboard.delete': true,
+  'holdings.analytics::dashboard.publish': true,
+  'holdings.analytics::dashboard.read': true,
+  'holdings.analytics::dashboard.share': true,
+  'holdings.analytics::dashboard.update': true,
+  'holdings.analytics::dataset.publish': true,
+  'holdings.analytics::dataset.read': true,
+  'holdings.analytics::dataset.withdraw': true,
+}
 
-  for (const key of spellings) {
-    test(`\`${key}\` grants it`, () => {
-      expect(decide({ [key]: true }, 'dashboard.create')).toBe('granted')
-    })
-  }
+describe('the keys IAM actually sends', () => {
+  test('every gate opens against the real map', () => {
+    /*
+     * The one test that would have caught a wrong guess at the key format. Ours
+     * are short and readable; IAM's are fully qualified, and the normalisation
+     * on `::` is the only thing that makes them meet. Without it nothing matches
+     * and every control on the product greys out at once.
+     */
+    for (const gate of [
+      'dashboard.read',
+      'dashboard.create',
+      'dashboard.update',
+      'dashboard.delete',
+      'dashboard.publish',
+      'dashboard.share',
+      'dataset.read',
+    ] as const) {
+      expect(decide(LIVE_PERMISSIONS, gate)).toBe('granted')
+    }
+  })
 
-  test('and a false decision is honoured under any of them', () => {
+  test('a bare key works too, in case the qualifier ever drops', () => {
+    expect(decide({ 'dashboard.create': true }, 'dashboard.create')).toBe('granted')
+  })
+
+  test('and an explicit false is honoured through the qualifier', () => {
     expect(decide({ 'holdings.analytics::dashboard.create': false }, 'dashboard.create')).toBe(
       'denied',
     )
   })
 })
 
-describe('a coarse key opens the fine gates it covers', () => {
-  test('`dashboard.write` covers create, update, delete and publish', () => {
+describe('keys that do not exist grant nothing', () => {
+  test('`dashboard.write` is not a key IAM issues', () => {
     /*
-     * It appears in the change log's own example and matches no documented
-     * route — the routes are create, update, delete, publish and share. Rather
-     * than pick one reading, a key that plainly includes an action grants it.
+     * It appeared in the change log's `/v1/me` example and matches no route; the
+     * live map confirms IAM never sends it. It was accepted here as a coarse
+     * alias for create, update, delete and publish — tolerance for a phantom,
+     * and if one were ever issued meaning something narrower, the alias would
+     * have over-granted silently.
      */
-    const writer = { 'dashboard.write': true }
-    for (const gate of ['dashboard.create', 'dashboard.update', 'dashboard.delete', 'dashboard.publish'] as const) {
-      expect(decide(writer, gate)).toBe('granted')
-    }
+    expect(decide({ 'dashboard.write': true }, 'dashboard.create')).toBe('denied')
   })
 
-  test('but not share, which is its own route and its own key', () => {
-    // Sharing changes who can see something. It is not a write in the same
-    // sense, and the API gives it a separate permission for that reason.
-    expect(decide({ 'dashboard.write': true }, 'dashboard.share')).toBe('denied')
-  })
-
-  test('the administrator key opens everything', () => {
+  test('administering Analytics is not a superuser key', () => {
+    /*
+     * The spec scopes it to Source System registration — "it decides where
+     * Analytics may forward queries" — a different surface from composing
+     * dashboards. The live map grants it *alongside* the dashboard keys rather
+     * than in place of them, so nothing needs it to imply them.
+     */
     const admin = { 'holdings.analytics::analytics.administer': true }
-    expect(decide(admin, 'dashboard.share')).toBe('granted')
-    expect(decide(admin, 'dataset.read')).toBe('granted')
+    expect(decide(admin, 'dashboard.create')).toBe('denied')
+    expect(decide(admin, 'dashboard.share')).toBe('denied')
   })
 })
 

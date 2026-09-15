@@ -78,11 +78,12 @@ describe('creating a dashboard', () => {
   })
 })
 
-describe('a coarse write permission is enough', () => {
-  test('`dashboard.write` offers creation', () => {
-    // It appears in the API's own `/v1/me` example and matches no documented
-    // route. Refusing to act on it would hide the product from whoever holds it.
-    expect(newDashboardButton(shellWith({ 'dashboard.write': true }))).not.toContain('disabled')
+describe('the keys IAM actually sends', () => {
+  test('a fully qualified key offers creation', () => {
+    // The form a live `/v1/me` returns. Our gate names are short, so the whole
+    // product depends on the two meeting.
+    const held = { 'holdings.analytics::dashboard.create': true }
+    expect(newDashboardButton(shellWith(held))).not.toContain('disabled')
   })
 })
 
@@ -135,9 +136,13 @@ describe('changing who can see a board', () => {
     expect(occurrences).toBe(1)
   })
 
-  test('`dashboard.write` does not grant sharing', () => {
-    // It changes who can see something rather than what it says, and the API
-    // gives it a separate permission for that reason.
-    expect(panelWith({ 'dashboard.write': true })).toContain('disabled')
+  test('the fully qualified share key opens it', () => {
+    expect(panelWith({ 'holdings.analytics::dashboard.share': true })).not.toContain('disabled')
+  })
+
+  test('and a different dashboard permission does not', () => {
+    // Sharing changes who can see a board rather than what it says, so it is
+    // its own route and its own key.
+    expect(panelWith({ 'holdings.analytics::dashboard.update': true })).toContain('disabled')
   })
 })
