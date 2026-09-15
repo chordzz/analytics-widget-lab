@@ -91,6 +91,20 @@ export interface WidgetSpec {
   exposedFilters?: string[]
   /** FR-VZ-06 — Fields a Viewer may reorder by. Same constraint, via `sortable`. */
   exposedSorts?: string[]
+  /**
+   * Values the Author fixed for the Dataset's Filter Parameters — D24.
+   *
+   * A third kind of narrowing, and distinct from both the others. An exposed
+   * filter is the *Viewer's* to set and is never persisted; a Dashboard Control
+   * is the Viewer's too, across several Widgets. A binding is the **Author's**,
+   * it is part of what this Widget is, and it travels with the Widget.
+   *
+   * It exists because a Filter Parameter may be `required` — the Source System
+   * cannot answer without it. A Widget over such a Dataset is not a Widget with
+   * an unset filter; it is a query that will be refused. So the value is
+   * collected when the Widget is composed, or the Widget is not composable.
+   */
+  parameterBindings?: Record<string, string | number>
   /*
    * No size and no position.
    *

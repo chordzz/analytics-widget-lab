@@ -63,6 +63,14 @@ const MAPPING_KEY = 'smc.mapping'
 const SUBTITLE_KEY = 'smc.subtitle'
 const SORTS_KEY = 'smc.exposedSorts'
 const OPTIONS_KEY = 'smc.options'
+/*
+ * D24. Travels under our own key rather than as a top-level field because the
+ * API models bindings nowhere: `exposed_filters` is the Viewer's list, and a
+ * binding is the Author's fixed value. Without this a Widget over a Dataset
+ * with a required parameter would save, reload unbound, and fail — the binding
+ * collected at composition time silently discarded by the round trip.
+ */
+const BINDINGS_KEY = 'smc.parameterBindings'
 
 // --- outbound ---------------------------------------------------------------
 
@@ -100,6 +108,9 @@ function widgetInputFrom(widget: PlacedWidget): ApiWidget {
       ...(widget.subtitle === undefined ? {} : { [SUBTITLE_KEY]: widget.subtitle }),
       ...(widget.exposedSorts === undefined ? {} : { [SORTS_KEY]: widget.exposedSorts }),
       ...(widget.options === undefined ? {} : { [OPTIONS_KEY]: widget.options }),
+      ...(widget.parameterBindings === undefined
+        ? {}
+        : { [BINDINGS_KEY]: widget.parameterBindings }),
     },
     exposed_filters: widget.exposedFilters ?? [],
     layout: { x: widget.x, y: widget.y, w: widget.w, h: widget.h },
@@ -181,6 +192,7 @@ function specFrom(id: string, widget: ApiWidget): WidgetSpec {
     options: options[OPTIONS_KEY] as Record<string, unknown> | undefined,
     exposedFilters: widget.exposed_filters,
     exposedSorts: options[SORTS_KEY] as string[] | undefined,
+    parameterBindings: options[BINDINGS_KEY] as Record<string, string | number> | undefined,
   }
 }
 

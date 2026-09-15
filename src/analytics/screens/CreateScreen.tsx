@@ -74,6 +74,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           mapping: draft.mapping,
           exposedFilters: draft.exposedFilters,
           exposedSorts: draft.exposedSorts,
+          parameterBindings: draft.parameterBindings,
         },
         { w: draft.span },
       )
@@ -88,6 +89,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           mapping: draft.mapping,
           exposedFilters: draft.exposedFilters,
           exposedSorts: draft.exposedSorts,
+          parameterBindings: draft.parameterBindings,
         },
         draft.span,
       )
@@ -108,6 +110,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
                 span: composing.w,
                 exposedFilters: composing.exposedFilters ?? [],
                 exposedSorts: composing.exposedSorts ?? [],
+                parameterBindings: composing.parameterBindings ?? {},
               }
             : undefined
         }

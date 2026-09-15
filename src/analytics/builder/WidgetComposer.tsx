@@ -33,6 +33,7 @@ import {
   unfilledSlots,
 } from './requirements'
 import { WIDGET_TYPES } from '../widgets/catalog'
+import { requiredParameters } from '../../domain/dataset'
 import type { Dataset } from '../data/types'
 
 export interface ComposerDraft {
@@ -45,6 +46,8 @@ export interface ComposerDraft {
   /** FR-VZ-06 — Fields a Viewer may filter on and reorder by. */
   exposedFilters: string[]
   exposedSorts: string[]
+  /** D24 — values the Author fixed for the Dataset's Filter Parameters. */
+  parameterBindings: Record<string, string | number>
 }
 
 const BUILT_COUNT = WIDGET_TYPES.filter((type) => type.built).length
@@ -104,6 +107,9 @@ export function WidgetComposer({
   }, [datasets, startWith, titled])
   const [span, setSpan] = useState(initial?.span ?? 0)
   const [exposedFilters, setExposedFilters] = useState<string[]>(initial?.exposedFilters ?? [])
+  const [parameterBindings, setParameterBindings] = useState<Record<string, string | number>>(
+    initial?.parameterBindings ?? {},
+  )
   const [exposedSorts, setExposedSorts] = useState<string[]>(initial?.exposedSorts ?? [])
   const [query, setQuery] = useState('')
 
@@ -139,7 +145,15 @@ export function WidgetComposer({
     if (!titled) setTitle(dataset.name)
   }
 
-  const complete = Boolean(dataset && type) && isComplete(typeId, mapping)
+  /*
+   * A required Filter Parameter is not an unset filter — it is a query the
+   * Source System will refuse. So an unbound one blocks the commit exactly as a
+   * missing mapping slot does, rather than producing a Widget that can only
+   * ever fail with a validation error nobody can trace back to here.
+   */
+  const unbound = dataset ? requiredParameters(dataset).filter((p) => !bindingOf(parameterBindings, p.name)) : []
+
+  const complete = Boolean(dataset && type) && isComplete(typeId, mapping) && unbound.length === 0
   const missing = typeId ? unfilledSlots(typeId, mapping) : []
 
   const preview: WidgetSpec | null =
@@ -154,6 +168,7 @@ export function WidgetComposer({
           // Author is composing rather than describing it in prose.
           exposedFilters,
           exposedSorts,
+          parameterBindings,
         }
       : null
 
@@ -248,6 +263,14 @@ export function WidgetComposer({
             <SpanControl span={span} onChange={setSpan} />
 
             {dataset && (
+              <RequiredParameters
+                dataset={dataset}
+                bindings={parameterBindings}
+                onChange={setParameterBindings}
+              />
+            )}
+
+            {dataset && (
               <ExposeControl
                 dataset={dataset}
                 filters={exposedFilters}
@@ -276,9 +299,14 @@ export function WidgetComposer({
           </div>
         )}
 
-        {missing.length > 0 && (
+        {(missing.length > 0 || unbound.length > 0) && (
           <p className="a-composer__missing">
-            Still needed: {missing.map((slot) => slot.label.toLowerCase()).join(', ')}.
+            Still needed:{' '}
+            {[
+              ...missing.map((slot) => slot.label.toLowerCase()),
+              ...unbound.map((parameter) => parameter.label.toLowerCase()),
+            ].join(', ')}
+            .
           </p>
         )}
 
@@ -300,6 +328,7 @@ export function WidgetComposer({
                 span,
                 exposedFilters,
                 exposedSorts,
+                parameterBindings,
               })
             }
           >
@@ -463,6 +492,93 @@ function SpanControl({ span, onChange }: { span: number; onChange: (next: number
         ))}
       </div>
       <p className="a-field__help">How much of the board's width this widget takes.</p>
+    </div>
+  )
+}
+
+/** A binding counts only when it holds a value; `''` is an empty select. */
+const bindingOf = (bindings: Record<string, string | number>, name: string) => {
+  const value = bindings[name]
+  return value === '' || value === undefined ? undefined : value
+}
+
+/**
+ * Values the Author fixes for the Dataset's Filter Parameters — D24.
+ *
+ * Only the required ones are collected here. An optional parameter is better
+ * served by exposing it to Viewers, and offering an Author a form field for
+ * every parameter a Dataset publishes would bury the two that matter.
+ *
+ * This reads as a question rather than a setting because that is what it is:
+ * the Source System has said it cannot answer without this, so the Author is
+ * being asked to complete the query, not to configure a preference.
+ */
+function RequiredParameters({
+  dataset,
+  bindings,
+  onChange,
+}: {
+  dataset: Dataset
+  bindings: Record<string, string | number>
+  onChange: (next: Record<string, string | number>) => void
+}) {
+  const required = requiredParameters(dataset)
+  if (required.length === 0) return null
+
+  const set = (name: string, raw: string, allowed: (string | number)[] | undefined) => {
+    // A numeric parameter's values are compared against JSON numbers upstream,
+    // so the original is recovered from the declared list rather than left as
+    // the string the select handed back.
+    const original = allowed?.find((entry) => String(entry) === raw)
+    onChange({ ...bindings, [name]: original ?? raw })
+  }
+
+  return (
+    <div className="a-field">
+      <span className="a-field__label">This data source needs</span>
+      <p className="a-field__help">
+        {dataset.name} cannot answer without {required.length === 1 ? 'this' : 'these'}. Viewers do
+        not change {required.length === 1 ? 'it' : 'them'} — {required.length === 1 ? 'it is' : 'they are'} part
+        of what this widget asks for.
+      </p>
+
+      {required.map((parameter) => {
+        const value = bindings[parameter.name]
+        const current = value === undefined ? '' : String(value)
+
+        return (
+          <label key={parameter.name} className="a-filters__field">
+            <span className="a-filters__label">{parameter.label}</span>
+            {parameter.allowedValues && parameter.allowedValues.length > 0 ? (
+              <select
+                className="a-filters__select"
+                value={current}
+                onChange={(event) => set(parameter.name, event.target.value, parameter.allowedValues)}
+              >
+                <option value="">Choose one</option>
+                {parameter.allowedValues.map((entry) => (
+                  <option key={String(entry)} value={String(entry)}>
+                    {String(entry)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              /*
+               * No declared values, so no list to offer. The publisher knows what
+               * this accepts and has not said — Finding 8 — and a free field is
+               * the honest fallback rather than a guess drawn from returned rows.
+               */
+              <input
+                type="text"
+                className="a-filters__select"
+                value={current}
+                onChange={(event) => set(parameter.name, event.target.value, undefined)}
+                placeholder={parameter.description ?? 'Required'}
+              />
+            )}
+          </label>
+        )
+      })}
     </div>
   )
 }
