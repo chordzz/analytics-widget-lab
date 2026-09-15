@@ -40,6 +40,7 @@ import type { QueryContribution } from '../../composition/correspondence'
 import type { WidgetSpec } from '../widgets/Widget'
 import type { Row } from './types'
 import { decide, type Permission } from '../../auth/permissions'
+import { isApiError } from '../../api/errors'
 
 interface AnalyticsDataValue {
   catalogue: CataloguePort
@@ -58,6 +59,20 @@ interface AnalyticsDataValue {
   permissions?: Record<string, boolean>
   /** FR-DA-14 — the access record, for a surface that shows it. */
   recorder: AccessRecorderPort
+  /**
+   * Whether that record accounts for every retrieval, or only the ones this
+   * module made.
+   *
+   * The recorder is fed by the *retrieval adapter*, and only the fixture one
+   * feeds it. When a host supplies its own, retrievals go straight past and the
+   * log stays empty — which is not the same claim as "nobody read anything",
+   * and a panel that cannot tell them apart makes the second one silently.
+   *
+   * Derived rather than declared on the port: the provider is what knows which
+   * adapter is in play, and asking the recorder to know would be asking it
+   * about something it cannot see.
+   */
+  accessRecordIsComplete: boolean
 }
 
 const AnalyticsDataContext = createContext<AnalyticsDataValue | null>(null)
@@ -107,6 +122,7 @@ export function AnalyticsDataProvider({
       viewer,
       permissions,
       recorder,
+      accessRecordIsComplete: retrieval === undefined,
       catalogue: catalogue ?? new FixtureCatalogue({ scenarios, latencyMs }),
       retrieval: retrieval ?? new FixtureRetrieval({ scenarios, latencyMs }, recorder),
       authorization: authorization ?? new LocalAuthorization(),
@@ -230,10 +246,47 @@ export function useWidgetRows(
  * `Promise.all` rather than a describe-per-card as the list renders: the
  * sequential version is an N+1 that a real Catalogue would feel.
  */
-export function useDatasets(): { datasets: Dataset[]; loading: boolean } {
+/**
+ * Why the Catalogue has nothing to show.
+ *
+ * Three situations that a bare empty list cannot tell apart, and they call for
+ * three different actions: ask for access, wait and retry, or publish a Dataset.
+ * This is the same distinction the six render states protect for a Widget —
+ * *denied* must not read as *empty*, and neither may read as *broken* — applied
+ * to the screen someone opens first when they want to know whether the backend
+ * is working at all.
+ */
+export interface CatalogueFailure {
+  kind: 'denied' | 'unavailable' | 'failed'
+  message: string
+}
+
+/** Exported for its own test: the mapping is the part worth pinning. */
+export function catalogueFailure(error: unknown): CatalogueFailure {
+  if (isApiError(error)) {
+    if (error.kind === 'denied') {
+      return { kind: 'denied', message: 'You do not have permission to browse data sources.' }
+    }
+    if (error.kind === 'unavailable' || error.kind === 'timeout' || error.kind === 'transport') {
+      return { kind: 'unavailable', message: error.message }
+    }
+  }
+  return {
+    kind: 'failed',
+    message: error instanceof Error ? error.message : 'The catalogue could not be loaded.',
+  }
+}
+
+export function useDatasets(): {
+  datasets: Dataset[]
+  loading: boolean
+  /** Null when the Catalogue answered — including when it answered with nothing. */
+  failure: CatalogueFailure | null
+} {
   const { catalogue, viewer } = useAnalyticsData()
   const [described, setDescribed] = useState<Dataset[]>([])
   const [loading, setLoading] = useState(true)
+  const [failure, setFailure] = useState<CatalogueFailure | null>(null)
 
   useEffect(() => {
     let live = true
@@ -247,16 +300,28 @@ export function useDatasets(): { datasets: Dataset[]; loading: boolean } {
       .then((results) => {
         if (!live) return
         setDescribed(results.filter((entry): entry is Dataset => entry !== null))
+        setFailure(null)
         setLoading(false)
       })
-      .catch(() => live && (setDescribed([]), setLoading(false)))
+      .catch((error) => {
+        /*
+         * This used to be `setDescribed([])` and nothing else, which turned a
+         * `403`, a `503` and an empty Catalogue into the same screen. The list
+         * is still cleared — stale Datasets from a previous answer would be
+         * worse than none — but the reason travels with it now.
+         */
+        if (!live) return
+        setDescribed([])
+        setFailure(catalogueFailure(error))
+        setLoading(false)
+      })
 
     return () => {
       live = false
     }
   }, [catalogue, viewer])
 
-  return { datasets: described, loading }
+  return { datasets: described, loading, failure }
 }
 
 /**

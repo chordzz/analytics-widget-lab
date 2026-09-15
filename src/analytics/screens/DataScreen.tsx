@@ -11,7 +11,7 @@
  */
 
 import { useState } from 'react'
-import { useDatasets, useRows } from '../data/AnalyticsData'
+import { useDatasets, useRows, type CatalogueFailure } from '../data/AnalyticsData'
 import { DataTable } from '../widgets/primitives'
 import { WidgetCard } from '../widgets/WidgetCard'
 import { typesFor } from '../builder/requirements'
@@ -23,7 +23,7 @@ import type { ScreenId } from '../shell/nav'
 export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const [openId, setOpenId] = useState<string | null>(null)
   const { composeWith } = useComposeIntent()
-  const { datasets, loading } = useDatasets()
+  const { datasets, loading, failure } = useDatasets()
 
   if (loading) {
     return (
@@ -33,12 +33,24 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
     )
   }
 
+  /*
+   * Four outcomes, told apart.
+   *
+   * This screen used to render one sentence for all of them — a `403`, a `503`
+   * and a Catalogue with nothing in it all arrived as "0 datasets", under copy
+   * that called them mock. They need three different things from whoever is
+   * reading: ask for access, wait and retry, publish something. Collapsing them
+   * is the same mistake the six render states exist to prevent, on the screen
+   * someone opens first to find out whether the backend works at all.
+   */
+  if (failure) return <CatalogueProblem failure={failure} />
+  if (datasets.length === 0) return <NoDatasets />
+
   return (
     <>
       <div style={{ display: 'grid', gap: 'var(--a-space-4)' }}>
       <p className="a-muted" style={{ margin: 0 }}>
-        {datasets.length} mock datasets. Rows are generated from a fixed seed, so a widget looks
-        identical between runs and screenshots stay comparable.
+        {datasets.length} data {datasets.length === 1 ? 'source' : 'sources'} you can build from.
       </p>
 
       {datasets.map((dataset) => {
@@ -142,6 +154,54 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
 
       <AccessRecordPanel />
     </>
+  )
+}
+
+/**
+ * The Catalogue could not answer.
+ *
+ * Named by cause rather than as a generic error, because the three causes call
+ * for different actions and only one of them is anybody's fault.
+ */
+export function CatalogueProblem({ failure }: { failure: CatalogueFailure }) {
+  const heading =
+    failure.kind === 'denied'
+      ? 'You do not have access to the data catalogue'
+      : failure.kind === 'unavailable'
+        ? 'The data catalogue is temporarily unavailable'
+        : 'The data catalogue could not be loaded'
+
+  const guidance =
+    failure.kind === 'denied'
+      ? 'Ask an administrator for the data source read permission.'
+      : failure.kind === 'unavailable'
+        ? 'This usually clears on its own. Try again in a few minutes.'
+        : failure.message
+
+  return (
+    <div className="a-placeholder a-placeholder--warning">
+      <p className="a-placeholder__heading">{heading}</p>
+      <p style={{ margin: 0 }}>{guidance}</p>
+    </div>
+  )
+}
+
+/**
+ * The Catalogue answered, and there is nothing in it.
+ *
+ * A real state and not a failure: Analytics holds no data of its own, so an
+ * empty Catalogue means no product has published a Dataset yet. Drawn as an
+ * error it would send someone to check a service that is working.
+ */
+export function NoDatasets() {
+  return (
+    <div className="a-placeholder a-placeholder--muted">
+      <p className="a-placeholder__heading">No data sources published yet</p>
+      <p style={{ margin: 0 }}>
+        Data sources are published by the product teams that own the data. Once one is
+        registered it appears here and can be built from.
+      </p>
+    </div>
   )
 }
 
