@@ -8,12 +8,13 @@
  * click. That is why `expired` is a state distinct from `signed-out`.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AnalyticsModule } from '../analytics'
 import { httpAuthorization } from '../access/http-authorization'
 import { httpCatalogue } from '../catalogue/http-catalogue'
 import { httpRetrieval } from '../retrieval/http-retrieval'
 import { httpBoardStore } from '../dashboard/http-board-store'
+import { checkTaxonomyDrift, describeDrift, inAgreement } from '../dashboard/taxonomy-drift'
 import { useSession } from './AuthProvider'
 import type { Actor } from './port'
 import type { ApiClient } from '../api/client'
@@ -31,6 +32,19 @@ export function SessionGate() {
     // flashing a sign-in form at someone who is signed in is worse than a beat
     // of nothing.
     return <div className="a-auth a-auth--booting" aria-busy="true" />
+  }
+
+  if (state.status === 'unavailable') {
+    /*
+     * We hold a token and cannot find out whose it is — `/v1/me` answered `503`,
+     * or never answered at all.
+     *
+     * Not a sign-in screen, because the token is probably fine and asking for a
+     * fresh code would be asking someone to fix a problem that is not theirs.
+     * Not the dashboard either: board ownership is decided by comparing the
+     * actor id, so without one every board would look like somebody else's.
+     */
+    return <SessionUnavailable onRetry={() => window.location.reload()} />
   }
 
   if (state.status === 'signed-out' || reauthenticating) {
@@ -53,6 +67,32 @@ export function SessionGate() {
       )}
       <SignedIn actor={state.actor} api={api} generation={generation} onSignOut={signOut} />
     </>
+  )
+}
+
+/**
+ * Signed in, in principle, and unable to prove it.
+ *
+ * Says which service is degraded rather than "something went wrong", because
+ * the two lead somewhere different: one is worth waiting out, the other is
+ * worth reporting.
+ */
+function SessionUnavailable({ onRetry }: { onRetry: () => void }) {
+  return (
+    <main className="a-auth">
+      <div className="a-auth__card">
+        <div className="a-auth__head">
+          <h1 className="a-auth__title">Signing you in is taking longer than usual</h1>
+          <p className="a-auth__lede">
+            We could not reach the identity service to confirm who you are. You are still
+            signed in — this usually clears on its own.
+          </p>
+        </div>
+        <button type="button" className="a-button a-button--primary a-auth__submit" onClick={onRetry}>
+          Try again
+        </button>
+      </div>
+    </main>
   )
 }
 
@@ -102,6 +142,33 @@ function SignedIn({
         : [...entries, { board: board.name, who: grant.recipientLabel }],
     )
   }, [])
+
+  /*
+   * Ask the API whether our taxonomy is still its taxonomy.
+   *
+   * Once per session, after sign-in, and it never blocks anything. The reason it
+   * exists is a failure worth not repeating: we once guarded a Visualization
+   * Type translation with a test that compared against a hardcoded copy of the
+   * backend's list, so when their list changed the test kept passing and the
+   * translation silently started sending strings the API rejects.
+   *
+   * A log line is the right weight. A disagreement is a fact about two
+   * deployments rather than a reason to refuse to render, and every consequence
+   * it predicts — a 400 on save, a card that cannot draw — is one somebody will
+   * otherwise meet without explanation.
+   */
+  useEffect(() => {
+    let cancelled = false
+    void checkTaxonomyDrift(api).then((drift) => {
+      if (cancelled || !drift || inAgreement(drift)) return
+      for (const line of describeDrift(drift)) {
+        console.warn(`[analytics-taxonomy] ${line}`)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [api])
 
   const adapters = useMemo(
     () => ({

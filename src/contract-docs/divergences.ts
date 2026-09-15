@@ -464,8 +464,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema Widget.visualization_type',
     authority: 'api',
     divergence: 'Visualization Type ids may be a third vocabulary, neither ours nor the FRD\'s.',
-    status: 'temporary',
-    endedAt: 'confirmation against a live Dataset',
+    status: 'resolved',
+    endedAt: 'the API adopted §4.2 on 15 September 2026',
     findings: [22],
     where: 'analytics/widgets/catalog.ts, analytics/widgets/taxonomy.test.ts',
     reason:
@@ -498,7 +498,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema Dataset',
     authority: 'api',
     divergence: 'A Dataset declares what one row represents; the API has nowhere to put it.',
-    status: 'proposed-extension',
+    status: 'resolved',
+    endedAt: '`Dataset.grain`, added by the API on 15 September 2026',
     where: 'domain/dataset.ts, domain/publication-contract.ts (PC-08)',
     reason:
       'A declaration lists the columns and never says how many rows to expect. Two Datasets can ' +

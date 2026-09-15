@@ -207,6 +207,20 @@ export interface Dataset {
    */
   filterParameters?: FilterParameter[]
   /**
+   * What one row represents: the Field keys whose combination identifies it.
+   *
+   * An empty array is meaningful and is not the same as an absent one — `[]`
+   * says the endpoint answers with a *single summary row*, where absent says the
+   * publisher has not declared a grain at all.
+   *
+   * This is the fact an Author needs at the moment they pick a Dataset and
+   * could not previously get: two declarations with identical Fields can answer
+   * with one summary row or with thousands of records, and the choice decides
+   * whether the widget they are building is correct. Asked for as D30 and
+   * granted on 15 September.
+   */
+  grain?: string[]
+  /**
    * PROPOSED — Finding 1. The Distribution Family requires "one Measure across
    * many records"; record volume is not expressible in the published model.
    */

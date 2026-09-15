@@ -151,12 +151,38 @@ describe('where we differ, the register says so', () => {
   })
 
   test('filter parameters are declared apart from fields — D24', () => {
+    /*
+     * Two lists, still. What changed on 15 September is that a Field now states
+     * its own `filterable` rather than leaving us to infer it from whether a
+     * Parameter of the same name exists — so the lists are no longer collapsed
+     * by us, which is the half of D24 that was ours.
+     */
     expect(propsOf('Dataset')).toContain('filter_parameters')
     expect(propsOf('FilterParameter')).toContain('allowed_values')
-    // And a Field has no `filterable`; it has operators instead.
-    expect(propsOf('Field')).not.toContain('filterable')
+    expect(propsOf('Field')).toContain('filterable')
     expect(propsOf('Field')).toContain('filter_operators')
     translated('D24')
+  })
+
+  test('a Field carries its own key and label — the 15 September shape', () => {
+    /*
+     * The rename that would have broken everything silently. `name` became
+     * `key`, and an adapter reading the old name gets `undefined` for every
+     * Field key — no error, just Datasets with no usable columns.
+     */
+    expect(propsOf('Field')).toContain('key')
+    expect(propsOf('Field')).toContain('label')
+    expect(propsOf('Field')).toContain('orderable')
+    expect(propsOf('Field')).not.toContain('name')
+    expect(propsOf('Field')).not.toContain('sortable')
+  })
+
+  test('a Dataset declares its row grain and its personal data — BE-2, D30', () => {
+    // Asked for, and granted. `grain` is the fact an Author could not previously
+    // get; `exposes_personal_data` is kept apart from `classification` because a
+    // Dataset can be financial *and* personal.
+    expect(propsOf('Dataset')).toContain('grain')
+    expect(propsOf('Dataset')).toContain('exposes_personal_data')
   })
 
   test('scope has four levels — D25', () => {
@@ -179,12 +205,18 @@ describe('where we differ, the register says so', () => {
     translated('D27')
   })
 
-  test('the two extremes are abbreviated — D29', () => {
+  test('the two extremes are spelled out now — D29 closed', () => {
+    /*
+     * This asserted the opposite until 15 September, when the API adopted
+     * `minimum` and `maximum`. Worth keeping rather than deleting: an
+     * aggregation we do not recognise falls through the reducer to a silent
+     * zero, which looks exactly like an empty column, so the day this changes
+     * again is a day to find out from a test.
+     */
     const theirs = enumOf('Aggregation')
-    expect(theirs).toContain('min')
-    expect(theirs).toContain('max')
-    expect(theirs).not.toContain('minimum')
-    translated('D29')
+    expect(theirs).toContain('minimum')
+    expect(theirs).toContain('maximum')
+    expect(theirs).not.toContain('min')
   })
 
   test('the same six operations, whatever they are called — D29', () => {

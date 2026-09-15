@@ -23,12 +23,24 @@ import {
   type ReactNode,
 } from 'react'
 import { createApiClient, type ApiClient } from '../api/client'
+import { isApiError } from '../api/errors'
 import { analyticsApiBaseUrl } from '../api/config'
 import { browserTokenStore, type TokenStore } from './token-store'
 import { sessionTokenProvider, type SessionTokenProvider } from './otp-provider'
 import { otpSignInClient } from './otp-client'
 import { fetchActor } from './me'
 import type { Actor, AuthTokens, SignInClient } from './port'
+
+/**
+ * A failure that says nothing about the token.
+ *
+ * Deliberately narrow: anything not known to be transient is treated as the
+ * session ending, because the cost of being wrong that way is one sign-in, and
+ * the cost of being wrong the other way is a session that looks alive and can do
+ * nothing.
+ */
+const isRetryable = (error: unknown): boolean =>
+  isApiError(error) && (error.kind === 'unavailable' || error.kind === 'transport')
 
 export type SessionState =
   /** Booting. Stored tokens exist or do not, and we have not asked yet. */
@@ -37,6 +49,19 @@ export type SessionState =
   | { status: 'signed-in'; actor: Actor }
   /** Had a session; a refresh could not save it. The board is still behind this. */
   | { status: 'expired'; actor: Actor }
+  /**
+   * We hold a token and cannot find out whose it is.
+   *
+   * `/v1/me` answered `503` — IAM could not be reached to resolve the profile —
+   * or the request never left. The API is explicit that this is retryable and
+   * the token is not necessarily bad, so signing out would throw away a good
+   * session over a service the Viewer does not use.
+   *
+   * It is its own state rather than an optimistic `signed-in` because the actor
+   * id is load-bearing: board ownership is decided by comparing it, so carrying
+   * on without one would make every board look like somebody else's.
+   */
+  | { status: 'unavailable' }
 
 export interface SessionValue {
   state: SessionState
@@ -127,11 +152,29 @@ export function AuthProvider({ children, baseUrl, store, fetch: fetchImpl }: Aut
         actorRef.current = actor
         setState({ status: 'signed-in', actor })
         setGeneration((value) => value + 1)
-      } catch {
-        // Any failure at boot is "sign in again". Distinguishing a dead token
-        // from a dead network here would leave someone staring at a spinner,
-        // and the sign-in screen is one step from either.
+      } catch (error) {
         if (cancelled) return
+
+        /*
+         * Not every failure here means the token is dead.
+         *
+         * `/v1/me` answers `503` when IAM cannot be reached to resolve the
+         * profile, and the API says plainly that this is retryable — the token
+         * is not necessarily bad. Discarding it would sign someone out of a
+         * perfectly good session because a service they do not use was
+         * momentarily down, and getting back in means waiting for an email.
+         *
+         * The same applies to `transport`: we never reached the API, so we
+         * learned nothing about the token.
+         *
+         * Everything else — a `401`, a session the provider gave up on — is a
+         * dead session, and the tokens go with it.
+         */
+        if (isRetryable(error)) {
+          setState({ status: 'unavailable' })
+          return
+        }
+
         tokens.discard()
         setState({ status: 'signed-out' })
       }

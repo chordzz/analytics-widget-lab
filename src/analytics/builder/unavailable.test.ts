@@ -56,7 +56,7 @@ describe('every built type is either offered or explained', () => {
 })
 
 describe('the backend will not accept it', () => {
-  test('the three unmapped types are listed whatever the data', () => {
+  test('every unmapped type is listed whatever the data', () => {
     const listed = unavailableTypesFor(regions)
       .filter((entry) => entry.reason.kind === 'not-accepted')
       .map((entry) => entry.type.id)
@@ -66,10 +66,15 @@ describe('the backend will not accept it', () => {
 
   test('the reason blames the API, not the data', () => {
     /*
-     * These are built, working, and fit the Dataset. Telling an Author their
-     * data is unsuitable would send them to change the wrong thing.
+     * Built, working, and a fit for the Dataset. Telling an Author their data is
+     * unsuitable would send them to change the wrong thing.
+     *
+     * `status-list` is the last of these. It was one of three until 15
+     * September, when the backend adopted §4.2 and the Chronological Family
+     * came with it — `activity-feed` and `event-log-view` are accepted now, and
+     * this test moved to the one Type that is still ours alone (D7).
      */
-    const reason = reasonFor(regions, 'activity-feed')
+    const reason = reasonFor(regions, 'status-list')
     expect(reason?.kind).toBe('not-accepted')
     expect(reason?.because).toContain('Analytics API')
     expect(reason?.because.toLowerCase()).not.toContain('this data')
@@ -90,10 +95,10 @@ describe('the publisher has not said enough', () => {
      */
     const dataset = datasetFrom(
       apiDataset([
-        { name: 'day', type: 'date', role: 'dimension' },
-        { name: 'region', type: 'location', role: 'dimension' },
-        { name: 'lat', type: 'number', role: 'measure', aggregations: ['average'] },
-        { name: 'lon', type: 'number', role: 'measure', aggregations: ['average'] },
+        { key: 'day', label: 'Day', type: 'date', role: 'dimension' },
+        { key: 'region', label: 'Region', type: 'location', role: 'dimension' },
+        { key: 'lat', label: 'Lat', type: 'number', role: 'measure', aggregations: ['average'] },
+        { key: 'lon', label: 'Lon', type: 'number', role: 'measure', aggregations: ['average'] },
       ]),
     )
 
@@ -110,9 +115,9 @@ describe('the publisher has not said enough', () => {
      */
     const dataset = datasetFrom(
       apiDataset([
-        { name: 'region', type: 'location', role: 'dimension' },
-        { name: 'lat', type: 'number', role: 'measure', aggregations: ['average'] },
-        { name: 'lon', type: 'number', role: 'measure', aggregations: ['average'] },
+        { key: 'region', label: 'Region', type: 'location', role: 'dimension' },
+        { key: 'lat', label: 'Lat', type: 'number', role: 'measure', aggregations: ['average'] },
+        { key: 'lon', label: 'Lon', type: 'number', role: 'measure', aggregations: ['average'] },
       ]),
     )
     expect(reasonFor(dataset, 'point-map')?.because).toContain('latitude and a longitude')
@@ -128,8 +133,8 @@ describe('a location-typed Dimension names a place', () => {
      */
     const dataset = datasetFrom(
       apiDataset([
-        { name: 'country', type: 'location', role: 'dimension' },
-        { name: 'amount', type: 'number', role: 'measure', aggregations: ['sum'] },
+        { key: 'country', label: 'Country', type: 'location', role: 'dimension' },
+        { key: 'amount', label: 'Amount', type: 'number', role: 'measure', aggregations: ['sum'] },
       ]),
     )
     expect(dataset.fields.find((field) => field.key === 'country')?.semantic).toBe(
@@ -143,8 +148,8 @@ describe('a location-typed Dimension names a place', () => {
     // be the failure the semantic exists to prevent.
     const dataset = datasetFrom(
       apiDataset([
-        { name: 'day', type: 'date', role: 'dimension' },
-        { name: 'lat', type: 'location', role: 'measure', aggregations: ['average'] },
+        { key: 'day', label: 'Day', type: 'date', role: 'dimension' },
+        { key: 'lat', label: 'Lat', type: 'location', role: 'measure', aggregations: ['average'] },
       ]),
     )
     expect(dataset.fields.find((field) => field.key === 'lat')?.semantic).toBeUndefined()
@@ -155,8 +160,8 @@ describe('the data is simply the wrong shape', () => {
   test('a shortfall names what is missing and how much there is', () => {
     const dataset = datasetFrom(
       apiDataset([
-        { name: 'day', type: 'date', role: 'dimension' },
-        { name: 'amount', type: 'number', role: 'measure', aggregations: ['sum'] },
+        { key: 'day', label: 'Day', type: 'date', role: 'dimension' },
+        { key: 'amount', label: 'Amount', type: 'number', role: 'measure', aggregations: ['sum'] },
       ]),
     )
     const reason = reasonFor(dataset, 'scatter-plot')
@@ -166,7 +171,7 @@ describe('the data is simply the wrong shape', () => {
 
   test('"none" reads better than "only 0"', () => {
     const dataset = datasetFrom(
-      apiDataset([{ name: 'region', type: 'category', role: 'dimension' }]),
+      apiDataset([{ key: 'region', label: 'Region', type: 'category', role: 'dimension' }]),
     )
     const reason = reasonFor(dataset, 'stat-card')
     expect(reason?.because).toContain('none')

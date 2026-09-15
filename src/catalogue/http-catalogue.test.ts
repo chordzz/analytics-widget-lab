@@ -21,10 +21,20 @@ const settlements: ApiDataset = {
   status: 'published',
   classification: 'financial',
   time_dimension_field: 'day',
+  exposes_personal_data: false,
+  grain: ['day', 'corridor'],
   fields: [
-    { name: 'day', type: 'date', role: 'dimension', sortable: true },
-    { name: 'corridor', type: 'category', role: 'dimension' },
-    { name: 'total_amount', type: 'number', role: 'measure', aggregations: ['sum', 'min', 'max'] },
+    { key: 'day', label: 'Day', type: 'date', role: 'dimension', filterable: true, orderable: true },
+    { key: 'corridor', label: 'Corridor', type: 'category', role: 'dimension', filterable: true, orderable: false },
+    {
+      key: 'settlement_amount',
+      label: 'Settlement amount',
+      type: 'number',
+      role: 'measure',
+      aggregations: ['sum', 'minimum', 'maximum'],
+      filterable: false,
+      orderable: true,
+    },
   ],
   filter_parameters: [
     { name: 'corridor', type: 'category' },
@@ -62,7 +72,7 @@ describe('aggregations are translated, not passed through', () => {
      * switch to a silent zero, so a declared `min` would draw 0 rather than
      * fail — which looks exactly like an empty column.
      */
-    const measure = field(datasetFrom(settlements), 'total_amount')
+    const measure = field(datasetFrom(settlements), 'settlement_amount')
     expect(measure?.role === 'measure' && measure.aggregations).toEqual([
       'sum',
       'minimum',
@@ -73,7 +83,7 @@ describe('aggregations are translated, not passed through', () => {
   test('an unrecognised one is dropped rather than offered', () => {
     const odd = datasetFrom({
       ...settlements,
-      fields: [{ name: 'x', type: 'number', role: 'measure', aggregations: ['median', 'sum'] }],
+      fields: [{ key: 'x', label: 'X', type: 'number', role: 'measure', aggregations: ['median', 'sum'] }],
     })
     const measure = field(odd, 'x')
     expect(measure?.role === 'measure' && measure.aggregations).toEqual(['sum'])
@@ -84,22 +94,44 @@ describe('aggregations are translated, not passed through', () => {
     // the Field from an Author rather than explain it.
     const odd = datasetFrom({
       ...settlements,
-      fields: [{ name: 'x', type: 'number', role: 'measure', aggregations: [] }],
+      fields: [{ key: 'x', label: 'X', type: 'number', role: 'measure', aggregations: [] }],
     })
     const measure = field(odd, 'x')
     expect(measure?.role === 'measure' && measure.aggregations.length).toBeGreaterThan(0)
   })
 })
 
-describe('filterability comes from the parameter list, not the field list', () => {
-  test('a Field with a matching Filter Parameter is filterable', () => {
+describe('filterability is declared, not inferred', () => {
+  /*
+   * This used to be derived from whether a Filter Parameter of the same name
+   * existed — a guess we were forced into, and D24. Since 15 September a Field
+   * states it, and the API's note is emphatic that an omitted value is *an
+   * undeclared Field, not a default*.
+   */
+  test('a Field that declares itself filterable is', () => {
     expect(field(datasetFrom(settlements), 'corridor')?.filterable).toBe(true)
   })
 
-  test('one without is not', () => {
-    // D24 — the API keeps two lists and we collapse them, which cannot express
-    // a parameter that is not also a returned column. `from` is exactly that.
-    expect(field(datasetFrom(settlements), 'day')?.filterable).toBe(false)
+  test('one that declares itself not filterable is not', () => {
+    expect(field(datasetFrom(settlements), 'settlement_amount')?.filterable).toBe(false)
+  })
+
+  test('an omitted declaration is false, not inferred from anything else', () => {
+    // Specifically: not inferred from a matching Filter Parameter. `corridor`
+    // has one, and saying nothing about the Field still means nothing.
+    const silent = {
+      ...settlements,
+      fields: settlements.fields.map((entry) =>
+        entry.key === 'corridor' ? { ...entry, filterable: undefined } : entry,
+      ),
+    }
+    expect(field(datasetFrom(silent), 'corridor')?.filterable).toBe(false)
+  })
+
+  test('orderability is read the same way', () => {
+    // `sortable` became `orderable` in the same change, and reading the old name
+    // would have silently disabled sorting everywhere rather than failing.
+    expect(field(datasetFrom(settlements), 'day')?.sortable).toBe(true)
   })
 })
 
@@ -109,16 +141,61 @@ describe('classification errs upward', () => {
     // went out under that label.
     const dataset = datasetFrom({ ...settlements, classification: 'pii' })
     expect(dataset.classification).toBe('restricted')
-    expect(dataset.exposesPersonalData).toBe(true)
   })
 
-  test('financial is confidential and asserts no personal data', () => {
+  test('financial is confidential', () => {
     expect(datasetFrom(settlements).classification).toBe('confidential')
-    expect(datasetFrom(settlements).exposesPersonalData).toBe(false)
   })
 
   test('an unknown tag lands on internal rather than on nothing', () => {
     expect(datasetFrom({ ...settlements, classification: 'novel' }).classification).toBe('internal')
+  })
+})
+
+describe('personal data is declared, not read off the classification', () => {
+  /*
+   * The two were separated on 15 September for a reason worth protecting: a
+   * Dataset can be `financial` *and* personal. We used to infer this flag as
+   * `classification === 'pii'`, which answered `false` for exactly that case —
+   * and since the flag drives an access-recording obligation (FR-DA-14), the
+   * inference silently skipped the record.
+   */
+  test('a financial Dataset can still expose personal data', () => {
+    const dataset = datasetFrom({ ...settlements, exposes_personal_data: true })
+    expect(dataset.classification).toBe('confidential')
+    expect(dataset.exposesPersonalData).toBe(true)
+  })
+
+  test('and the declaration beats the classification either way', () => {
+    const dataset = datasetFrom({
+      ...settlements,
+      classification: 'pii',
+      exposes_personal_data: false,
+    })
+    expect(dataset.exposesPersonalData).toBe(false)
+  })
+
+  test('an older declaration without the field falls back to the old inference', () => {
+    // Absent is not `false`. A declaration written before the field existed is
+    // better read the way it was written than treated as an assertion.
+    const legacy = { ...settlements, classification: 'pii', exposes_personal_data: undefined }
+    expect(datasetFrom(legacy).exposesPersonalData).toBe(true)
+  })
+})
+
+describe('the row grain comes through', () => {
+  test('the Fields that identify one row', () => {
+    expect(datasetFrom(settlements).grain).toEqual(['day', 'corridor'])
+  })
+
+  test('an empty grain means one summary row, and is not the same as absent', () => {
+    /*
+     * The distinction the whole field exists for. `[]` says the endpoint answers
+     * with a single figure — a stat card over it is correct by construction.
+     * Absent says the publisher has not declared one, and nothing can be assumed.
+     */
+    expect(datasetFrom({ ...settlements, grain: [] }).grain).toEqual([])
+    expect(datasetFrom({ ...settlements, grain: undefined }).grain).toBeUndefined()
   })
 })
 

@@ -39,6 +39,17 @@ export interface ApiDataset {
   path?: string
   status?: 'published' | 'withdrawn'
   classification?: string
+  /**
+   * Explicit since 15 September, and deliberately separate from
+   * `classification` — a Dataset can be `financial` *and* personal, so
+   * inferring one from the other under-records (FR-DA-14).
+   */
+  exposes_personal_data?: boolean
+  /**
+   * The Field keys whose combination identifies one row; `[]` where the endpoint
+   * answers with a single summary row. What we asked for as BE-2 and D30.
+   */
+  grain?: string[]
   time_dimension_field?: string | null
   fields: ApiField[]
   filter_parameters?: ApiFilterParameter[]
@@ -46,14 +57,25 @@ export interface ApiDataset {
   deleted?: boolean
 }
 
+/**
+ * A Field, as declared since 15 September.
+ *
+ * Four changes landed at once, and three of them replace something we were
+ * guessing at: `name` became `key`, `label` is now supplied rather than derived
+ * from the key, and `filterable` and `orderable` are stated rather than inferred
+ * — the API's own note says an omitted value is *an undeclared Field, not a
+ * default*, so neither is optional here.
+ */
 export interface ApiField {
-  name: string
+  key: string
+  label: string
   type: string
   role: 'dimension' | 'measure'
   description?: string
   aggregations?: string[]
   filter_operators?: string[]
-  sortable?: boolean
+  filterable?: boolean
+  orderable?: boolean
 }
 
 export interface ApiFilterParameter {
@@ -143,7 +165,6 @@ const CLASSIFICATION: Record<string, DataClassification> = {
 }
 
 export function datasetFrom(api: ApiDataset): Dataset {
-  const filterable = new Set((api.filter_parameters ?? []).map((parameter) => parameter.name))
   const timeField = api.time_dimension_field ?? null
 
   return {
@@ -152,25 +173,52 @@ export function datasetFrom(api: ApiDataset): Dataset {
     description: api.description ?? '',
     sourceSystem: api.source_system_id,
     classification: CLASSIFICATION[api.classification ?? ''] ?? 'internal',
-    // FR-DP-07 drives the access record (FR-DA-14), and `pii` is the only tag
-    // the API has that asserts personal data.
-    exposesPersonalData: api.classification === 'pii',
-    fields: api.fields.map((field) => fieldFrom(field, timeField, filterable)),
+    /*
+     * Read, not inferred.
+     *
+     * This was `classification === 'pii'`, which under-records: the API's own
+     * note says a Dataset can be `financial` *and* personal, and the two are
+     * kept apart precisely because this flag drives an access-recording
+     * obligation (FR-DA-14). Inferring it would have silently skipped the
+     * record for every financial Dataset holding personal data.
+     *
+     * The old inference stays as the fallback for a declaration written before
+     * the field existed — absent is not the same as `false`.
+     */
+    exposesPersonalData: api.exposes_personal_data ?? api.classification === 'pii',
+    /*
+     * BE-2, granted. `[]` is meaningful — the endpoint answers with one summary
+     * row — so it is kept distinct from an absent declaration, which says
+     * nothing.
+     */
+    ...(api.grain === undefined ? {} : { grain: api.grain }),
+    fields: api.fields.map((field) => fieldFrom(field, timeField)),
     filterParameters: filterParametersFrom(api),
   }
 }
 
-function fieldFrom(api: ApiField, timeField: string | null, filterable: Set<string>): Field {
+function fieldFrom(api: ApiField, timeField: string | null): Field {
   const base = {
-    key: api.name,
-    // The API declares no label — `name` is the key the Source System returns,
-    // and it is the only human-facing string we have. Humanising it here beats
-    // showing `total_amount` in a picker, and a publisher who wants better can
-    // write a `description`.
-    label: labelFor(api.name),
+    key: api.key,
+    /*
+     * Supplied since 15 September. `labelFor` remains the fallback for a
+     * declaration written before the field existed — it humanises the key,
+     * which beats showing `total_amount` in a picker but is a guess at what the
+     * publisher would have called it.
+     */
+    label: api.label || labelFor(api.key),
     description: api.description,
-    filterable: filterable.has(api.name),
-    sortable: api.sortable ?? false,
+    /*
+     * Stated, not derived.
+     *
+     * These were inferred — `filterable` from the presence of a matching Filter
+     * Parameter, `sortable` from a field that no longer exists under that name.
+     * Both are now explicit, and the API's note is worth honouring exactly: an
+     * omitted value is *an undeclared Field, not a default*. So absent becomes
+     * `false` rather than being guessed at from anything else.
+     */
+    filterable: api.filterable === true,
+    sortable: api.orderable === true,
   }
 
   if (api.role === 'measure') {
@@ -183,7 +231,7 @@ function fieldFrom(api: ApiField, timeField: string | null, filterable: Set<stri
 
   // D21 — the third role, reconstructed. The API names exactly one temporal
   // Field per Dataset, so this is exact rather than a heuristic on `type`.
-  const role = api.name === timeField ? 'time-dimension' : 'dimension'
+  const role = api.key === timeField ? 'time-dimension' : 'dimension'
 
   /*
    * A `location`-typed Dimension names a place — D2, and conformance rather

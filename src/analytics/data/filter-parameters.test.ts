@@ -21,9 +21,9 @@ const api = (overrides: Partial<ApiDataset> = {}): ApiDataset => ({
   source_system_id: 'peniremit',
   time_dimension_field: 'settlement_date',
   fields: [
-    { name: 'settlement_date', type: 'date', role: 'dimension' },
-    { name: 'corridor', type: 'category', role: 'dimension' },
-    { name: 'settlement_amount', type: 'number', role: 'measure', aggregations: ['sum'] },
+    { key: 'settlement_date', label: 'Settlement date', type: 'date', role: 'dimension' },
+    { key: 'corridor', label: 'Corridor', type: 'category', role: 'dimension' },
+    { key: 'settlement_amount', label: 'Settlement amount', type: 'number', role: 'measure', aggregations: ['sum'] },
   ],
   filter_parameters: [
     { name: 'from', type: 'date', required: true },
