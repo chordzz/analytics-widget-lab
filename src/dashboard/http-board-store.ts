@@ -33,6 +33,7 @@ import {
   scopeInputFrom,
   type ApiDashboard,
 } from './api-dashboard'
+import { browserEditingPointer, type EditingPointer } from './editing-pointer'
 import { isApiError } from '../api/errors'
 import type { ApiClient } from '../api/client'
 import type { Board } from '../analytics/builder/boards'
@@ -58,6 +59,13 @@ export interface HttpBoardStoreOptions {
    * not, which is a disclosure rather than an inconvenience.
    */
   onGrantNotRevoked?: (board: Board, grant: ShareGrant) => void
+  /**
+   * Where the board you had open is remembered. Defaults to `localStorage`.
+   *
+   * Injected so a host that would rather not persist anything can say so, and
+   * so the tests have something to look at.
+   */
+  editingPointer?: EditingPointer
 }
 
 export function httpBoardStore(
@@ -65,6 +73,7 @@ export function httpBoardStore(
   {
     onSaveFailed = warnSaveFailed,
     onGrantNotRevoked = warnGrantNotRevoked,
+    editingPointer = browserEditingPointer(),
   }: HttpBoardStoreOptions = {},
 ): BoardStorePort {
   /** What we believe the server holds, by the id the client uses. */
@@ -105,7 +114,24 @@ export function httpBoardStore(
 
       baseline = new Map(boards.map((board) => [board.id, board]))
       assigned.clear()
-      return { boards, editingId: null }
+
+      /*
+       * Validated against what came back, not trusted.
+       *
+       * The pointer outlives the session that wrote it, so it can name a board
+       * since deleted, one belonging to whoever used this browser last, or one
+       * this viewer may no longer see. In every case it is absent from `boards`,
+       * and returning it anyway would open the Create screen on a board that
+       * does not exist.
+       */
+      const remembered = editingPointer.read()
+      const editingId = remembered && boards.some((board) => board.id === remembered)
+        ? remembered
+        : null
+
+      if (remembered !== null && editingId === null) editingPointer.write(null)
+
+      return { boards, editingId }
     },
 
     async save(state) {
@@ -179,6 +205,17 @@ export function httpBoardStore(
 
         await reconcileGrants(board)
       }
+
+      /*
+       * Written after the boards, and under the id the *server* knows.
+       *
+       * A board created during this save is known locally as `local:board-xyz`
+       * until the POST answers; writing that name would leave a pointer that is
+       * stale the moment the page reloads, which is the one moment it is read.
+       */
+      editingPointer.write(
+        state.editingId === null ? null : remoteId(state.editingId),
+      )
     },
 
     /**
