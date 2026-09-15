@@ -30,6 +30,7 @@ import {
   satisfies,
   suggestedTypesFor,
   typesFor,
+  unavailableTypesFor,
   unfilledSlots,
 } from './requirements'
 import { WIDGET_TYPES } from '../widgets/catalog'
@@ -440,7 +441,85 @@ function TypePicker({
           </div>
         )
       })}
+
+      <UnavailableTypes dataset={dataset} term={term} />
     </>
+  )
+}
+
+/**
+ * The widgets that are *not* on offer, and why.
+ *
+ * Collapsed, because the list a person came here to use is the one above it —
+ * but present, because the alternative is what this replaced: two thirds of the
+ * catalogue missing with nothing said, and an Author who came to build a funnel
+ * left wondering whether the product has one.
+ *
+ * Grouped by the kind of answer rather than by Family, since the kinds call for
+ * different actions. One is ours to fix with the Analytics team, one is the
+ * publisher's, and one is nobody's — it is simply the wrong data for that
+ * picture.
+ */
+function UnavailableTypes({ dataset, term }: { dataset: Dataset; term: string }) {
+  const [open, setOpen] = useState(false)
+  const all = unavailableTypesFor(dataset)
+
+  const entries = term
+    ? all.filter(
+        ({ type }) =>
+          type.label.toLowerCase().includes(term) || type.description.toLowerCase().includes(term),
+      )
+    : all
+
+  if (entries.length === 0) return null
+
+  const groups = [
+    {
+      kind: 'not-accepted' as const,
+      title: 'Not available yet',
+      note: 'Built and working here, but the Analytics API has no name for them. We have asked.',
+    },
+    {
+      kind: 'undeclared' as const,
+      title: 'Needs more from the publisher',
+      note: `${dataset.name} may suit these. Its declaration cannot say so yet.`,
+    },
+    {
+      kind: 'shape' as const,
+      title: 'Not for this data',
+      note: 'These need fields this data source does not have.',
+    },
+  ].filter((group) => entries.some((entry) => entry.reason.kind === group.kind))
+
+  return (
+    <div className="a-type-group">
+      <button
+        type="button"
+        className="a-unavailable__toggle"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        {open ? 'Hide' : 'Show'} the {entries.length} that cannot show {dataset.name}
+      </button>
+
+      {open &&
+        groups.map((group) => (
+          <div key={group.kind} className="a-unavailable__group">
+            <h5 className="a-unavailable__title">{group.title}</h5>
+            <p className="a-field__help">{group.note}</p>
+            <ul className="a-unavailable__list">
+              {entries
+                .filter((entry) => entry.reason.kind === group.kind)
+                .map(({ type, reason }) => (
+                  <li key={type.id} className="a-unavailable__item">
+                    <span className="a-unavailable__name">{type.label}</span>
+                    <span className="a-muted">{reason.because}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))}
+    </div>
   )
 }
 

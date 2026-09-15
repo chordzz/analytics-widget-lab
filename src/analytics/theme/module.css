@@ -889,3 +889,63 @@
   padding: var(--a-space-1) 0;
   color: var(--a-text);
 }
+
+/* --- widgets that cannot show this data, and why --------------------------
+ *
+ * Deliberately quieter than the pickable list above it. This is reference — an
+ * Author reads it once to find out whether the thing they came for exists —
+ * and styling it like a second menu would suggest these are choices.
+ */
+.a-unavailable__toggle {
+  font: inherit;
+  font-size: var(--a-text-xs);
+  color: var(--a-accent);
+  background: none;
+  border: 0;
+  padding: var(--a-space-2) 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.a-unavailable__toggle:hover {
+  text-decoration: underline;
+}
+
+.a-unavailable__toggle:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--a-radius-sm);
+}
+
+.a-unavailable__group {
+  margin-top: var(--a-space-3);
+}
+
+.a-unavailable__title {
+  margin: 0 0 2px;
+  font-size: var(--a-text-xs);
+  font-weight: 600;
+  color: var(--a-text-secondary);
+}
+
+.a-unavailable__list {
+  list-style: none;
+  margin: var(--a-space-2) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--a-space-1);
+}
+
+.a-unavailable__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-space-2);
+  font-size: var(--a-text-xs);
+  line-height: 1.45;
+}
+
+.a-unavailable__name {
+  min-width: 11ch;
+  font-weight: 500;
+  color: var(--a-text);
+}

@@ -19,6 +19,7 @@
  */
 
 import { placedWidgets, type Board, type PlacedWidget } from '../analytics/builder/boards'
+import { visualizationTypeFromApi, visualizationTypeToApi } from './api-taxonomy'
 import { DASHBOARD_COLUMNS } from '../domain/composition'
 import type { Control, Placement, Section } from '../domain/composition'
 import type { DashboardScope, ShareGrant } from '../domain/dashboard'
@@ -96,13 +97,13 @@ function widgetInputFrom(widget: PlacedWidget): ApiWidget {
     title: widget.title,
     dataset_id: widget.datasetId,
     /*
-     * Sent as we spell it. D28 is unresolved — the API validates this string
-     * against the Families its bound Dataset satisfies but publishes no enum,
-     * and its examples read `line` where ours reads `line-chart`. A mismatch
-     * comes back as a 400 naming the field, which answers the question from one
-     * real save rather than from re-reading the spec.
+     * Translated at the boundary — D28, and see `api-taxonomy.ts`. Their
+     * `visualization_type` takes `line` where §4.2 and our registry say
+     * `line-chart`; sixteen ids differ that way and a Widget of any of them was
+     * rejected on save. Our domain keeps §4.2's vocabulary and only the wire
+     * speaks theirs.
      */
-    visualization_type: widget.typeId,
+    visualization_type: visualizationTypeToApi(widget.typeId),
     presentation_options: {
       [MAPPING_KEY]: widget.mapping,
       ...(widget.subtitle === undefined ? {} : { [SUBTITLE_KEY]: widget.subtitle }),
@@ -199,7 +200,7 @@ function specFrom(id: string, widget: ApiWidget): WidgetSpec {
   const options = widget.presentation_options ?? {}
   return {
     id,
-    typeId: widget.visualization_type,
+    typeId: visualizationTypeFromApi(widget.visualization_type),
     datasetId: widget.dataset_id,
     title: widget.title,
     subtitle: asString(options[SUBTITLE_KEY]),

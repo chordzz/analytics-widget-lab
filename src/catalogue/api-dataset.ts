@@ -183,7 +183,25 @@ function fieldFrom(api: ApiField, timeField: string | null, filterable: Set<stri
 
   // D21 — the third role, reconstructed. The API names exactly one temporal
   // Field per Dataset, so this is exact rather than a heuristic on `type`.
-  return { ...base, role: api.name === timeField ? 'time-dimension' : 'dimension' }
+  const role = api.name === timeField ? 'time-dimension' : 'dimension'
+
+  /*
+   * A `location`-typed Dimension names a place — D2, and conformance rather
+   * than inference.
+   *
+   * §4.2 asks Geospatial for "a location-typed Dimension", and the API has
+   * exactly that in `FieldType`. Our model expresses the same fact as a
+   * `semantic`, so reading one as the other is a translation, not a guess.
+   *
+   * The coordinate half stays undecidable and is left alone: a point map needs
+   * two Measures that know which of them is latitude, and `type: 'location'` on
+   * a number cannot say. Marking those would be the failure the semantic was
+   * introduced to prevent — a table of regional sales plotted with revenue as a
+   * latitude.
+   */
+  const semantic = role === 'dimension' && api.type === 'location' ? 'geographic-area' : undefined
+
+  return { ...base, role, ...(semantic ? { semantic } : {}) }
 }
 
 /**
