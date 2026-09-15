@@ -25,6 +25,7 @@ import type {
   DataClassification,
   Dataset,
   Field,
+  FilterParameter,
   Measure,
 } from '../domain/dataset'
 
@@ -61,6 +62,49 @@ export interface ApiFilterParameter {
   required?: boolean
   description?: string
   allowed_values?: string[]
+}
+
+/**
+ * Filter Parameters, carried whole — D24.
+ *
+ * Previously this list was read only to set a boolean on each Field, which
+ * discarded the two facts a filter control actually needs: whether the endpoint
+ * refuses to answer without the parameter, and which values it accepts. Both
+ * were declared and both were thrown away, so every Viewer-facing filter
+ * rendered an empty dropdown and every Dataset with a required parameter
+ * produced a widget that could only fail.
+ */
+export function filterParametersFrom(api: ApiDataset): FilterParameter[] {
+  return (api.filter_parameters ?? []).map((parameter) => ({
+    name: parameter.name,
+    label: labelFor(parameter.name),
+    ...(parameter.description === undefined ? {} : { description: parameter.description }),
+    required: parameter.required === true,
+    /*
+     * Absent stays absent rather than becoming `[]`. The two mean different
+     * things to a control — open-ended values it must find elsewhere, versus a
+     * publisher declaring this parameter accepts nothing.
+     */
+    ...(parameter.allowed_values === undefined
+      ? {}
+      : { allowedValues: numericIfAll(parameter.allowed_values, parameter.type) }),
+  }))
+}
+
+/**
+ * `allowed_values` is declared as strings whatever the parameter's type.
+ *
+ * A numeric parameter's values are compared against row data that arrives as
+ * JSON numbers, so leaving them as strings would make every comparison fail on
+ * type — the same class of silent mismatch the widget data contract warns
+ * publishers about from the other direction.
+ */
+function numericIfAll(values: string[], type: string): (string | number)[] {
+  if (type !== 'number') return values
+  return values.map((value) => {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) && value.trim() !== '' ? parsed : value
+  })
 }
 
 /**
@@ -112,6 +156,7 @@ export function datasetFrom(api: ApiDataset): Dataset {
     // the API has that asserts personal data.
     exposesPersonalData: api.classification === 'pii',
     fields: api.fields.map((field) => fieldFrom(field, timeField, filterable)),
+    filterParameters: filterParametersFrom(api),
   }
 }
 

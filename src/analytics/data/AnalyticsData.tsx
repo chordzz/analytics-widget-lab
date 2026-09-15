@@ -25,7 +25,7 @@ import type { CataloguePort, DatasetSummary } from '../../catalogue/port'
 import type { DatasetRetrievalPort, ViewerIdentity } from '../../retrieval/port'
 import type { AuthorizationPort } from '../../access/port'
 import { resolveFailure, resolveRenderState, type WidgetRenderState } from '../../retrieval/render-state'
-import type { Dataset } from '../../domain/dataset'
+import { allowedValuesFor, type Dataset } from '../../domain/dataset'
 import { InMemoryAccessRecorder } from '../../access/fake-access-recorder'
 import type { AccessRecorderPort } from '../../access/port'
 import {
@@ -279,21 +279,42 @@ export function useRows(datasetId: string | undefined, limit = 20): Row[] {
 /**
  * The values a Viewer may choose from for one exposed filter.
  *
- * Finding 8: the FRD lets an Author expose a filter and never says how a Viewer
- * discovers what they can pick. The listing has to be scoped to the Viewer's
- * authorization or the dropdown itself discloses values from data they could not
- * otherwise obtain — which FR-DA-12 forbids just as firmly as returning the rows
- * would.
+ * **The declaration answers first.** A Filter Parameter may publish
+ * `allowedValues`, and where it does those are authoritative: they are what the
+ * Source System will accept, they arrive with the Catalogue, and they cost no
+ * request. Asking the network for something we were already told is both slower
+ * and less correct — a derived list can only ever report what the current query
+ * happened to return.
+ *
+ * **The port answers for the rest.** Finding 8: the FRD lets an Author expose a
+ * filter and never says how a Viewer discovers what they can pick, and a
+ * parameter whose values are open-ended has no declared answer. That listing has
+ * to be scoped to the Viewer's authorization or the dropdown itself discloses
+ * values from data they could not otherwise obtain — FR-DA-12 forbids that as
+ * firmly as returning the rows would.
+ *
+ * So Finding 8 is now narrower rather than closed: it covers the filters a
+ * declaration cannot enumerate, and nothing else.
  */
 export function useFilterValues(
-  datasetId: string | undefined,
+  dataset: Dataset | undefined,
   field: string | undefined,
 ): (string | number)[] {
   const { retrieval, viewer } = useAnalyticsData()
   const [values, setValues] = useState<(string | number)[]>([])
+  const datasetId = dataset?.id
+
+  // The Dataset itself rather than its id: every caller already holds it — a
+  // filter control cannot be drawn without knowing which Fields are filterable —
+  // and looking it up again would mean a describe per control.
+  const declared = dataset && field ? allowedValuesFor(dataset, field) : undefined
 
   useEffect(() => {
-    if (!datasetId || !field) {
+    // `undefined` and `[]` are different answers. A publisher who declared an
+    // empty list has declared that nothing is selectable — a broken declaration,
+    // but theirs to make — and asking the port to second-guess it would put
+    // values in a control the Source System will refuse.
+    if (!datasetId || !field || declared !== undefined) {
       setValues([])
       return
     }
@@ -307,7 +328,7 @@ export function useFilterValues(
     return () => {
       live = false
     }
-  }, [retrieval, viewer, datasetId, field])
+  }, [retrieval, viewer, datasetId, field, declared])
 
-  return values
+  return declared ?? values
 }
