@@ -130,10 +130,25 @@ function publish(draft: Draft): { dataset: Dataset; rows: Row[] } {
       recordCount: rows.length,
       recordVolume: rows.length >= 50 ? 'many' : 'few',
       fields: published,
+      rowGrain: { dimensions: grainOf(published) },
       filterParameters: filterParametersFor(published, rows, requires ?? []),
     },
   }
 }
+
+/**
+ * What one row of a fixture represents — PC-08.
+ *
+ * The non-Measure Fields. A row in an aggregated table is keyed by its
+ * Dimensions and its Time Dimension; the Measures are what that key resolves to.
+ * `grain.test.ts` checks the combination is actually unique per fixture, which
+ * is the claim this makes and the one a publisher would be making too.
+ *
+ * A Dataset whose endpoint returns a single summary row declares `[]` — that is
+ * a grain, and a meaningful one, rather than an omission.
+ */
+const grainOf = (fields: Field[]): string[] =>
+  fields.filter((field) => field.role !== 'measure').map((field) => field.key)
 
 /**
  * How many distinct values still counts as a list someone can choose from.

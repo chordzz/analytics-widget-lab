@@ -185,6 +185,20 @@ export interface Dataset {
   /** FR-DP-03 */
   fields: Field[]
   /**
+   * What one row represents — D30.
+   *
+   * The Fields whose combination identifies a row, or an empty list where the
+   * endpoint answers with a single summary row. A declaration lists the columns
+   * and, without this, never says how many rows to expect — so an Author cannot
+   * tell a one-row summary from two thousand records, and the two feed almost
+   * disjoint sets of Visualization Types.
+   *
+   * Optional on the type because the deployed API does not carry it yet; PC-08
+   * requires it, so a Dataset arriving without one is a Dataset we can say is
+   * incompletely declared rather than one we have to guess about.
+   */
+  rowGrain?: { dimensions: string[] }
+  /**
    * What the endpoint accepts as query input — D24.
    *
    * Optional because the fixtures predate it and a Dataset may legitimately

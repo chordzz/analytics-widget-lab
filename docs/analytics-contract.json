@@ -57,6 +57,16 @@
         "id": "PC-07",
         "requirement": "FR-DP-07",
         "statement": "A Dataset must state explicitly whether it exposes personal data. This drives the access recording obligation in FR-DA-14, so it cannot be left to inference."
+      },
+      {
+        "id": "PC-08",
+        "requirement": "Proposed extension — D30",
+        "statement": "A Dataset must declare its row grain: the Fields whose combination identifies one row, or an empty list where the endpoint answers with a single summary row. An Author choosing a Dataset cannot otherwise tell a one-row summary from two thousand records, and the two feed almost disjoint sets of Visualization Types."
+      },
+      {
+        "id": "PC-09",
+        "requirement": "Proposed extension — D31",
+        "statement": "Every Filter Parameter must state whether it is required, and must declare its accepted values wherever those are enumerable. A parameter whose values are not declared renders as an empty control: the Viewer is offered a filter with nothing to pick."
       }
     ]
   },

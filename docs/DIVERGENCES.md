@@ -24,7 +24,7 @@ them. Where the two are related the entry says so.
 | Temporary | Conformance deferred, with a stage that ends it. |
 | Resolved | Was one of the above; no longer diverges. Kept for the record. |
 
-## Open — 17
+## Open — 19
 
 | # | Answers to | Clause | Divergence | Status |
 | --- | --- | --- | --- | --- |
@@ -45,6 +45,8 @@ them. Where the two are related the entry says so.
 | **D20** | FRD | `FR-VZ-03, §4.2` | The Status Family requires none of its mapping slots, because its Data Shape is a disjunction. | Proposed extension |
 | **D26** | API | `API: schema ShareGrantTarget` | A Share Grant targets an individual or a group; the API says user or department. | Temporary — the HTTP adapter |
 | **D28** | API | `API: schema Widget.visualization_type` | Visualization Type ids may be a third vocabulary, neither ours nor the FRD's. | Temporary — confirmation against a live Dataset |
+| **D30** | API | `API: schema Dataset` | A Dataset declares what one row represents; the API has nowhere to put it. | Proposed extension |
+| **D31** | API | `API: schema FilterParameter` | Enumerable Filter Parameters must publish their accepted values; the API leaves it optional. | Proposed extension |
 
 ## Resolved — 10
 
@@ -208,6 +210,23 @@ Ours is `individual | group` with a `recipientLabel`; the API is `user | departm
 **Where:** `analytics/widgets/catalog.ts, analytics/widgets/taxonomy.test.ts`  
 
 `visualization_type` is a bare string that Analytics *validates* against the Families the bound Dataset's Data Shape satisfies, so the API is the authority for those strings. It publishes no enum: they are discovered at runtime from `/presentation`. Its examples read `family: "trend-over-time"` and `types: ["line", "area"]` where Stage 1 renamed us to the FRD's `trend`, `line-chart` and `area-chart`. Examples are not a contract and may simply be loose, so this is unconfirmed — one authenticated call settles it. If it holds, Stage 1 needs doing again, and `taxonomy.test.ts` should assert against the API rather than a local manifest.
+
+### D30 — A Dataset declares what one row represents; the API has nowhere to put it.
+
+**Answers to:** API — `API: schema Dataset`  
+**Status:** Proposed extension  
+**Where:** `domain/dataset.ts, domain/publication-contract.ts (PC-08)`  
+
+A declaration lists the columns and never says how many rows to expect. Two Datasets can declare identically — same Fields, same roles, same aggregations — while one returns a single summary row and the other one row per corridor per day, and those feed almost disjoint sets of Visualization Types. An Author picking for a stat card cannot tell them apart, and FR-DP-11 exists precisely so they do not have to retrieve the data to find out. Worse, `aggregations` is the only aggregation-shaped field in a declaration, so it reads like the answer and is not: it says what could meaningfully be done to a figure, never what was. PC-08 requires the grain; the API carrying it is the ask.
+
+### D31 — Enumerable Filter Parameters must publish their accepted values; the API leaves it optional.
+
+**Answers to:** API — `API: schema FilterParameter`  
+**Status:** Proposed extension  
+**Findings:** Finding 8  
+**Where:** `domain/publication-contract.ts (PC-09), analytics/data/AnalyticsData.tsx`  
+
+`allowed_values` exists on the API and is optional, so a publisher may omit it and still pass validation — at which point a Viewer is offered a filter control with nothing in it. Deriving the list from returned rows is the obvious substitute and the wrong one: the options would then change as other filters changed, and a control that narrows itself is worse than an empty one. Whether values are enumerable is the publisher's judgement and cannot be checked from here — 365 dates are not a dropdown — so PC-09 states the obligation and checks what it can, that a declared list is not empty. Narrows Finding 8 to the filters a declaration genuinely cannot enumerate.
 
 ---
 

@@ -234,6 +234,82 @@ export const publicationRules: PublicationRule[] = [
         ? []
         : ['The Dataset does not state whether it exposes personal data.'],
   },
+  {
+    id: 'PC-08',
+    requirement: 'Proposed extension — D30',
+    statement:
+      'A Dataset must declare its row grain: the Fields whose combination identifies one row, or ' +
+      'an empty list where the endpoint answers with a single summary row. An Author choosing a ' +
+      'Dataset cannot otherwise tell a one-row summary from two thousand records, and the two feed ' +
+      'almost disjoint sets of Visualization Types.',
+    check: (c) => {
+      const grain = c.rowGrain
+      if (grain === undefined) return ['The Dataset does not declare what one row represents.']
+
+      const record = asRecord(grain)
+      const dimensions = record?.dimensions
+      if (!Array.isArray(dimensions)) {
+        return ["Row grain must name the Fields identifying a row, as { dimensions: [...] }."]
+      }
+
+      // Every name must be a declared Field — the same rule that rejects `sum`
+      // on a string column, and checkable with the machinery already here.
+      const declared = new Set(
+        fieldsOf(c)
+          .map((field) => field.key)
+          .filter(isFilledString),
+      )
+      return dimensions
+        .filter((name) => !declared.has(name))
+        .map((name) => `Row grain names '${String(name)}', which is not a declared Field.`)
+    },
+  },
+
+  {
+    id: 'PC-09',
+    requirement: 'Proposed extension — D31',
+    statement:
+      'Every Filter Parameter must state whether it is required, and must declare its accepted ' +
+      'values wherever those are enumerable. A parameter whose values are not declared renders as ' +
+      'an empty control: the Viewer is offered a filter with nothing to pick.',
+    check: (c) => {
+      const parameters = Array.isArray(c.filterParameters)
+        ? c.filterParameters.map(asRecord).filter((p): p is Record<string, unknown> => p !== null)
+        : []
+
+      const violations: string[] = []
+
+      parameters.forEach((parameter, index) => {
+        const label = isFilledString(parameter.name)
+          ? `'${String(parameter.name)}'`
+          : `at position ${String(index)}`
+
+        if (!isFilledString(parameter.name)) {
+          violations.push(`Filter Parameter ${label} has no name.`)
+        }
+        if (typeof parameter.required !== 'boolean') {
+          violations.push(`Filter Parameter ${label} does not declare whether it is required.`)
+        }
+        /*
+         * Whether a parameter's values are enumerable is the publisher's
+         * judgement and cannot be checked from here — 365 dates are not a
+         * dropdown. What is checkable is that a declared list is a usable one:
+         * an empty `allowedValues` says this parameter accepts nothing, which is
+         * a broken declaration rather than an absent one.
+         */
+        if (parameter.allowedValues !== undefined) {
+          if (!Array.isArray(parameter.allowedValues) || parameter.allowedValues.length === 0) {
+            violations.push(
+              `Filter Parameter ${label} declares an empty list of accepted values. Omit it if the ` +
+                'values are open-ended.',
+            )
+          }
+        }
+      })
+
+      return violations
+    },
+  },
 ]
 
 /**

@@ -493,6 +493,41 @@ export const DIVERGENCES: Divergence[] = [
       'recognise looks exactly like an empty column. Two names for one operation is also how a ' +
       'board ends up averaging a count, so the translation belongs in one place.',
   },
+  {
+    id: 'D30',
+    clause: 'API: schema Dataset',
+    authority: 'api',
+    divergence: 'A Dataset declares what one row represents; the API has nowhere to put it.',
+    status: 'proposed-extension',
+    where: 'domain/dataset.ts, domain/publication-contract.ts (PC-08)',
+    reason:
+      'A declaration lists the columns and never says how many rows to expect. Two Datasets can ' +
+      'declare identically — same Fields, same roles, same aggregations — while one returns a ' +
+      'single summary row and the other one row per corridor per day, and those feed almost ' +
+      'disjoint sets of Visualization Types. An Author picking for a stat card cannot tell them ' +
+      'apart, and FR-DP-11 exists precisely so they do not have to retrieve the data to find out. ' +
+      "Worse, `aggregations` is the only aggregation-shaped field in a declaration, so it reads " +
+      'like the answer and is not: it says what could meaningfully be done to a figure, never what ' +
+      'was. PC-08 requires the grain; the API carrying it is the ask.',
+  },
+  {
+    id: 'D31',
+    clause: 'API: schema FilterParameter',
+    authority: 'api',
+    divergence: 'Enumerable Filter Parameters must publish their accepted values; the API leaves it optional.',
+    status: 'proposed-extension',
+    findings: [8],
+    where: 'domain/publication-contract.ts (PC-09), analytics/data/AnalyticsData.tsx',
+    reason:
+      '`allowed_values` exists on the API and is optional, so a publisher may omit it and still ' +
+      'pass validation — at which point a Viewer is offered a filter control with nothing in it. ' +
+      'Deriving the list from returned rows is the obvious substitute and the wrong one: the ' +
+      'options would then change as other filters changed, and a control that narrows itself is ' +
+      'worse than an empty one. Whether values are enumerable is the publisher\'s judgement and ' +
+      'cannot be checked from here — 365 dates are not a dropdown — so PC-09 states the obligation ' +
+      'and checks what it can, that a declared list is not empty. Narrows Finding 8 to the filters ' +
+      'a declaration genuinely cannot enumerate.',
+  },
 ]
 /** Entries that still diverge. */
 export const openDivergences = (): Divergence[] =>
