@@ -20,7 +20,7 @@ import { ApiError } from '../../api/errors'
 import { sampleNote } from './DataScreen'
 import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
 import { WIDGET_RENDER_STATUSES } from '../../retrieval/render-state'
-import { WidgetComposer } from '../builder/WidgetComposer'
+import { WidgetComposer, previewPrompt } from '../builder/WidgetComposer'
 import type { CataloguePort } from '../../catalogue/port'
 import { catalogueFailure } from '../data/AnalyticsData'
 import type { DatasetRetrievalPort } from '../../retrieval/port'
@@ -222,5 +222,36 @@ describe('step 1 of the composer answers the same question', () => {
     ))
     expect(said).toContain('nothing to compose')
     expect(said).toContain('Ask the team')
+  })
+})
+
+describe('the preview does not ask for the impossible', () => {
+  test('it prompts for a source while there are sources', () => {
+    expect(previewPrompt({ hasDataset: false, hasSources: true })).toBe(
+      'Choose a data source to begin.',
+    )
+  })
+
+  test('and goes quiet when there are none', () => {
+    /*
+     * "Choose a data source to begin" beside a panel explaining that none exist
+     * reads as the screen disagreeing with itself — and instructs someone to do
+     * something they cannot.
+     */
+    const said = previewPrompt({ hasDataset: false, hasSources: false })
+    expect(said).toBe('Nothing to preview yet.')
+    expect(said.toLowerCase()).not.toContain('choose')
+  })
+
+  test('a chosen source outranks both', () => {
+    expect(previewPrompt({ hasDataset: true, hasSources: true })).toBe(
+      'Pick a widget to see it here.',
+    )
+  })
+
+  test('while the Catalogue is still being asked, it keeps prompting', () => {
+    // Saying "nothing to preview" a moment before the list arrives would be
+    // wrong, and the correction is more jarring than the wait.
+    expect(previewPrompt({ hasDataset: false, hasSources: true })).toContain('Choose')
   })
 })

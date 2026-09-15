@@ -74,6 +74,9 @@ export function WidgetComposer({
   onCancel: () => void
 }) {
   const { datasets, loading: loadingDatasets, failure: catalogueFailure } = useDatasets()
+  // Still asking is not the same as none: prompting either way beats telling
+  // someone there is nothing here a moment before the list arrives.
+  const hasSources = loadingDatasets || catalogueFailure !== null || datasets.length > 0
   const byId = (id: string) => datasets.find((entry) => entry.id === id)
 
   const [datasetId, setDatasetId] = useState(initial?.datasetId ?? startWith?.datasetId ?? '')
@@ -314,7 +317,16 @@ export function WidgetComposer({
           </div>
         ) : (
           <div className="a-empty a-empty--inline">
-            <p>{dataset ? 'Pick a widget to see it here.' : 'Choose a data source to begin.'}</p>
+            {/*
+              * Quiet when there is nothing to choose from.
+              *
+              * "Choose a data source to begin" is the right prompt while sources
+              * exist and one has not been picked. With an empty Catalogue it
+              * instructs someone to do something impossible, next to a panel on
+              * the left already explaining why they cannot — so the preview
+              * stops asking and says only what it is.
+              */}
+            <p>{previewPrompt({ hasDataset: Boolean(dataset), hasSources })}</p>
           </div>
         )}
 
@@ -750,4 +762,24 @@ function ExposeControl({
       )}
     </div>
   )
+}
+
+/**
+ * What the preview says before there is anything to draw.
+ *
+ * Three states rather than two. The prompt to choose a source is only useful
+ * when there is one to choose — with an empty Catalogue it asks for something
+ * impossible, beside a panel already explaining why, which reads as the screen
+ * disagreeing with itself.
+ */
+export function previewPrompt({
+  hasDataset,
+  hasSources,
+}: {
+  hasDataset: boolean
+  hasSources: boolean
+}): string {
+  if (hasDataset) return 'Pick a widget to see it here.'
+  if (!hasSources) return 'Nothing to preview yet.'
+  return 'Choose a data source to begin.'
 }
