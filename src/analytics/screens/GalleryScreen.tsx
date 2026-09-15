@@ -9,13 +9,27 @@
  * The state switcher matters as much as the size one. Loading, empty and error
  * are what a widget spends a meaningful fraction of its life in, and they are
  * the states that get designed last and worst.
+ *
+ * **Nothing here retrieves anything.** A gallery is a catalogue of widget
+ * *types*, not of data: a type is bound to a Dataset when an Author places it on
+ * a board, and not before. So every card draws from the local sample fixtures,
+ * synchronously, through `WidgetView` — the pure half that takes rows already in
+ * hand.
+ *
+ * It used to use `Widget`, which fetches its own. That was harmless while the
+ * module ran on fixtures and wrong the moment it did not: the samples name
+ * fixture Datasets, a real Catalogue has never heard of them, and `Widget`
+ * reads "no such Dataset" as a withdrawal — correctly, for a board, where the
+ * binding existed once. In a gallery nothing was ever bound, so the whole
+ * screen rendered as forty withdrawn cards. A showcase that depends on a
+ * network is not a showcase.
  */
 
 import { useState } from 'react'
-import { Widget } from '../widgets/Widget'
 import type { WidgetState } from '../widgets/WidgetCard'
 import { FAMILIES, WIDGET_TYPES, coverage, typesInFamily } from '../widgets/catalog'
 import { SAMPLES } from '../widgets/samples'
+import { SampleWidget } from '../data/SampleWidget'
 
 const SIZES = [
   { id: 'sm', label: 'Small', span: 3, height: 200 },
@@ -121,9 +135,9 @@ export function GalleryScreen() {
                     style={{ gridColumn: `span ${spanFor(type.defaultSpan, active.span)}` }}
                   >
                     <div style={{ height: heightFor(type.family, active.height) }}>
-                      <Widget
-                        spec={{ id: `gallery-${type.id}`, typeId: type.id, ...sample }}
-                        state={overrideFor(state)}
+                      <SampleWidget
+                        typeId={type.id}
+                        state={overrideFor(state) ?? 'ready'}
                         partial={state.startsWith('partial') ? SAMPLE_PARTIAL : undefined}
                       />
                     </div>
@@ -232,3 +246,4 @@ function Segmented({
     </span>
   )
 }
+
