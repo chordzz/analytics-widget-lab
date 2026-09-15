@@ -10,6 +10,7 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { AnalyticsModule } from '../analytics'
+import { httpAuthorization } from '../access/http-authorization'
 import { httpCatalogue } from '../catalogue/http-catalogue'
 import { httpRetrieval } from '../retrieval/http-retrieval'
 import { httpBoardStore } from '../dashboard/http-board-store'
@@ -107,6 +108,14 @@ function SignedIn({
       data: {
         catalogue: httpCatalogue(api),
         retrieval: httpRetrieval(api, { onRelay: reportRelay }),
+        /*
+         * Passed explicitly, because the default is wrong here. Omitting it
+         * falls back to `LocalAuthorization` — the fixtures' implementation,
+         * which answers from a hardcoded array of three people. Against a real
+         * account that decided a department board by looking a real actor up in
+         * a demo, and always said no.
+         */
+        authorization: httpAuthorization(),
         viewer: { id: actor.id, displayName: actor.fullName },
       },
       boardStore: httpBoardStore(api, {
