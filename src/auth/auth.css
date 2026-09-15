@@ -271,3 +271,12 @@
   padding: 4px var(--a-space-2);
   cursor: pointer;
 }
+
+/*
+ * A share that could not be revoked is not the same severity as a save that is
+ * retrying. One resolves itself; this one is a standing fact about who can see
+ * the board, so it takes the critical rule rather than the warning one.
+ */
+.a-unsaved--warning {
+  border-left-color: var(--a-status-critical);
+}

@@ -21,7 +21,7 @@
 import { placedWidgets, type Board, type PlacedWidget } from '../analytics/builder/boards'
 import { DASHBOARD_COLUMNS } from '../domain/composition'
 import type { Control, Placement, Section } from '../domain/composition'
-import type { DashboardScope } from '../domain/dashboard'
+import type { DashboardScope, ShareGrant } from '../domain/dashboard'
 import type { WidgetSpec, WidgetMapping } from '../analytics/widgets/Widget'
 
 export interface ApiWidget {
@@ -116,6 +116,28 @@ function widgetInputFrom(widget: PlacedWidget): ApiWidget {
     layout: { x: widget.x, y: widget.y, w: widget.w, h: widget.h },
   }
 }
+
+/**
+ * D26 — our `individual | group` against the API's `user | department`.
+ *
+ * The same idea under different names, except that `group` is the broader word
+ * and the API deliberately is not: a department is an IAM concept it holds a
+ * reference to, not an arbitrary set. So a group Grant is only meaningful where
+ * the group *is* a department, which is what `recipientId` already holds.
+ */
+export function grantInputFrom(grant: ShareGrant): {
+  target_type: 'user' | 'department'
+  target_ref: string
+} {
+  return {
+    target_type: grant.recipientKind === 'individual' ? 'user' : 'department',
+    target_ref: grant.recipientId,
+  }
+}
+
+/** Identifies a Grant by what it targets, which is all the API lets us compare. */
+export const grantKey = (grant: ShareGrant): string =>
+  `${grant.recipientKind === 'individual' ? 'user' : 'department'}:${grant.recipientId}`
 
 /** D25 — our three Scope kinds against the API's four levels. */
 export function scopeInputFrom(scope: DashboardScope): {

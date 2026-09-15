@@ -27,6 +27,8 @@
 import {
   boardFrom,
   dashboardInputFrom,
+  grantInputFrom,
+  grantKey,
   isLive,
   scopeInputFrom,
   type ApiDashboard,
@@ -34,6 +36,7 @@ import {
 import { isApiError } from '../api/errors'
 import type { ApiClient } from '../api/client'
 import type { Board } from '../analytics/builder/boards'
+import type { ShareGrant } from '../domain/dashboard'
 import type { BoardStorePort } from '../analytics/builder/store'
 
 /** A board the server has not seen yet carries one of these. */
@@ -42,11 +45,27 @@ const LOCAL_PREFIX = 'local:'
 export interface HttpBoardStoreOptions {
   /** Surfaced so a UI can say a save did not land. Defaults to a console warning. */
   onSaveFailed?: (board: Board, error: unknown) => void
+  /**
+   * An Author removed a Share Grant and the API offers no way to honour it.
+   *
+   * `POST /v1/dashboards/{id}/share-grants` is the only Grant route: there is no
+   * DELETE, and no listing either. So a Grant can be created and never revoked,
+   * and an Author who unticks a name has changed our copy and nothing else —
+   * that person still sees the board.
+   *
+   * This must not be silent. Every other gap in this store is a save that can be
+   * retried; this one is someone believing they revoked access when they did
+   * not, which is a disclosure rather than an inconvenience.
+   */
+  onGrantNotRevoked?: (board: Board, grant: ShareGrant) => void
 }
 
 export function httpBoardStore(
   api: ApiClient,
-  { onSaveFailed = warnSaveFailed }: HttpBoardStoreOptions = {},
+  {
+    onSaveFailed = warnSaveFailed,
+    onGrantNotRevoked = warnGrantNotRevoked,
+  }: HttpBoardStoreOptions = {},
 ): BoardStorePort {
   /** What we believe the server holds, by the id the client uses. */
   let baseline = new Map<string, Board>()
@@ -54,6 +73,17 @@ export function httpBoardStore(
   const assigned = new Map<string, string>()
   /** Local ids with a create in flight, so a second save does not duplicate. */
   const creating = new Set<string>()
+  /**
+   * Grants we have successfully sent, by board and target.
+   *
+   * Held here because it cannot be read back: `Dashboard` carries no
+   * `share_grants` and there is no listing route, so the server's answer to
+   * "who is this shared with" is unavailable. This map is the whole of our
+   * knowledge, and it starts empty on every reload — which is why a re-POST
+   * after a reload is expected rather than a bug. The API is explicit that it
+   * is safe: "adding the same grant twice returns the existing one".
+   */
+  const sentGrants = new Map<string, Set<string>>()
 
   const remoteId = (localId: string) => assigned.get(localId) ?? localId
 
@@ -91,6 +121,7 @@ export function httpBoardStore(
           })
           baseline.delete(id)
           assigned.delete(id)
+          sentGrants.delete(id)
         })
       }
 
@@ -110,6 +141,7 @@ export function httpBoardStore(
             if (board.status === 'published') await publish(board)
           })
           creating.delete(id)
+          await reconcileGrants(board)
           continue
         }
 
@@ -144,6 +176,8 @@ export function httpBoardStore(
             baseline.set(id, board)
           })
         }
+
+        await reconcileGrants(board)
       }
     },
 
@@ -168,6 +202,58 @@ export function httpBoardStore(
     now() {
       return new Date().toISOString().slice(0, 10)
     },
+  }
+
+  /**
+   * Send Grants that are new, and report the ones we cannot take back.
+   *
+   * Grants are a separate route from the board itself, like publication — but
+   * unlike publication the route only goes one way. What this can do is create;
+   * what it cannot do is revoke, and the difference is reported rather than
+   * absorbed.
+   *
+   * A failure here does not advance `sentGrants`, so the next save retries it,
+   * and it does not fail the board's save: the composition landed, and a Grant
+   * refused for want of `dashboard.share` is a permissions answer rather than a
+   * lost edit.
+   */
+  async function reconcileGrants(board: Board): Promise<void> {
+    const sent = sentGrants.get(board.id) ?? new Set<string>()
+    const wanted = new Map(board.shareGrants.map((grant) => [grantKey(grant), grant]))
+
+    for (const [key, grant] of wanted) {
+      if (sent.has(key)) continue
+      try {
+        await api.request(
+          `/v1/dashboards/${encodeURIComponent(remoteId(board.id))}/share-grants`,
+          { method: 'POST', body: grantInputFrom(grant) },
+        )
+        sent.add(key)
+      } catch (error) {
+        // A session ending is not a Grant problem and must keep rising.
+        if (isApiError(error) && error.kind === 'session-expired') throw error
+        onSaveFailed(board, error)
+      }
+    }
+
+    for (const key of [...sent]) {
+      if (wanted.has(key)) continue
+      /*
+       * The Author removed it and we have nowhere to send that. Forgetting the
+       * key would make the next save re-POST a Grant they deliberately removed;
+       * keeping it is the truth — the Grant is live upstream — so it stays, and
+       * the caller is told.
+       */
+      const removed = lastKnownGrant(board.id, key)
+      if (removed) onGrantNotRevoked(board, removed)
+    }
+
+    sentGrants.set(board.id, sent)
+  }
+
+  /** The Grant as it was before removal, for a message that can name someone. */
+  function lastKnownGrant(boardId: string, key: string): ShareGrant | undefined {
+    return baseline.get(boardId)?.shareGrants.find((grant) => grantKey(grant) === key)
   }
 
   async function publish(board: Board): Promise<void> {
@@ -215,5 +301,12 @@ function listOf(body: ApiDashboard[] | { dashboards?: ApiDashboard[] } | undefin
 function warnSaveFailed(board: Board, error: unknown): void {
   console.warn(
     `[analytics] "${board.name}" did not save: ${error instanceof Error ? error.message : String(error)}`,
+  )
+}
+
+function warnGrantNotRevoked(board: Board, grant: ShareGrant): void {
+  console.warn(
+    `[analytics] "${board.name}": ${grant.recipientLabel} still has access. ` +
+      'The Analytics API has no route to revoke a Share Grant.',
   )
 }

@@ -16,6 +16,8 @@ import { httpBoardStore } from '../dashboard/http-board-store'
 import { useSession } from './AuthProvider'
 import type { Actor } from './port'
 import type { ApiClient } from '../api/client'
+import type { Board } from '../analytics/builder/boards'
+import type { ShareGrant } from '../domain/dashboard'
 import { SignInScreen } from './SignInScreen'
 import './auth.css'
 
@@ -74,6 +76,7 @@ function SignedIn({
   onSignOut: () => void
 }) {
   const [unsaved, setUnsaved] = useState<string[]>([])
+  const [unrevoked, setUnrevoked] = useState<{ board: string; who: string }[]>([])
 
   const noteSaveFailed = useCallback((board: { id: string; name: string }) => {
     /*
@@ -83,6 +86,20 @@ function SignedIn({
      * retry lands.
      */
     setUnsaved((names) => (names.includes(board.name) ? names : [...names, board.name]))
+  }, [])
+
+  /*
+   * Not a dismissible note like an unsaved board, because it does not resolve
+   * itself. A failed save retries; this one cannot — the API has no route to
+   * revoke a Share Grant — so the Author is told plainly that the person still
+   * has access, and it stays until they acknowledge it.
+   */
+  const noteGrantNotRevoked = useCallback((board: Board, grant: ShareGrant) => {
+    setUnrevoked((entries) =>
+      entries.some((entry) => entry.board === board.name && entry.who === grant.recipientLabel)
+        ? entries
+        : [...entries, { board: board.name, who: grant.recipientLabel }],
+    )
   }, [])
 
   const adapters = useMemo(
@@ -96,9 +113,12 @@ function SignedIn({
         onSaveFailed: (board) => {
           noteSaveFailed(board)
         },
+        onGrantNotRevoked: (board, grant) => {
+          noteGrantNotRevoked(board, grant)
+        },
       }),
     }),
-    [api, actor.id, actor.fullName, noteSaveFailed],
+    [api, actor.id, actor.fullName, noteSaveFailed, noteGrantNotRevoked],
   )
 
   return (
@@ -117,10 +137,43 @@ function SignedIn({
           {unsaved.length > 0 && (
             <UnsavedNote names={unsaved} onDismiss={() => setUnsaved([])} />
           )}
+          {unrevoked.length > 0 && (
+            <UnrevokedNote entries={unrevoked} onDismiss={() => setUnrevoked([])} />
+          )}
           <SignOut name={actor.fullName} onSignOut={onSignOut} />
         </>
       }
     />
+  )
+}
+
+/**
+ * Someone still has access to a board the Author thinks they removed.
+ *
+ * Worded as what is true rather than as what failed. "Could not revoke" reads
+ * like a transient error worth retrying; the Author needs to know the state of
+ * the world, which is that this person can still open the board.
+ */
+export function UnrevokedNote({
+  entries,
+  onDismiss,
+}: {
+  entries: { board: string; who: string }[]
+  onDismiss: () => void
+}) {
+  const first = entries[0]
+  const more = entries.length - 1
+
+  return (
+    <button
+      type="button"
+      className="a-unsaved a-unsaved--warning"
+      onClick={onDismiss}
+      title="Revoking a share is not yet supported by the Analytics API. Dismiss"
+    >
+      {first.who} still sees &ldquo;{first.board}&rdquo;
+      {more > 0 && ` and ${String(more)} more`}
+    </button>
   )
 }
 
