@@ -228,6 +228,37 @@ export function WidgetView({
 }
 
 /**
+ * Which of the six states a card is in — the whole decision, in one place.
+ *
+ * Three ways a card can be without a Dataset, and **only one of them is a
+ * withdrawal**:
+ *
+ *   - the Catalogue *answered* "no such Dataset" — a withdrawal from a Viewer's
+ *     side, because it was bound once and so existed once. Drawing it as a
+ *     failure would say the system is broken while the system is working.
+ *   - the Catalogue *did not answer* — a failure, and the mistake this used to
+ *     make. A `503` while describing rendered "the source system has withdrawn
+ *     this dataset": a statement about a decision a publisher took, made because
+ *     IAM was briefly unreachable. Untrue, unfalsifiable from the card, and
+ *     whoever acts on it goes looking for a choice nobody made.
+ *   - we have not asked yet — loading.
+ *
+ * Exported and pure so it can be tested as itself. Left inline it could only be
+ * checked by a test that restated it, which proves the copy and not the code.
+ */
+export function stateForWidget(input: {
+  describing: boolean
+  describeFailed: boolean
+  hasDataset: boolean
+  retrieved: WidgetState
+}): WidgetState {
+  if (input.describing) return 'loading'
+  if (input.describeFailed) return 'failed'
+  if (!input.hasDataset) return 'withdrawn'
+  return input.retrieved
+}
+
+/**
  * A widget that fetches its own rows.
  *
  * One retrieval per widget, with its own state, which is FR-DA-10 made
@@ -248,7 +279,7 @@ export function Widget({
   contribution,
   partial: partialOverride,
 }: WidgetProps) {
-  const { dataset, loading: describing } = useDataset(spec.datasetId)
+  const { dataset, loading: describing, failure: catalogueFailure } = useDataset(spec.datasetId)
 
   /*
    * The Viewer's filter choices live here and go no further.
@@ -291,14 +322,12 @@ export function Widget({
     )
   }
 
-  // The Catalogue answering "no such Dataset" is a withdrawal from a Viewer's
-  // side: it was bound once, so it existed once. Reading it as a failure would
-  // say the system is broken when the system is working.
-  const state: WidgetState = describing
-    ? 'loading'
-    : !dataset
-      ? 'withdrawn'
-      : retrieved.status
+  const state = stateForWidget({
+    describing,
+    describeFailed: catalogueFailure !== null,
+    hasDataset: dataset !== null,
+    retrieved: retrieved.status,
+  })
 
   /*
    * Only while the state it qualifies is actually on screen. A withdrawn
@@ -319,7 +348,16 @@ export function Widget({
       rows={retrieved.status === 'ready' ? retrieved.rows : []}
       state={state}
       partial={partial}
-      errorMessage={retrieved.status === 'failed' ? retrieved.message : undefined}
+      /*
+       * The Catalogue's reason outranks the retrieval's. If describing failed
+       * there was no retrieval, so `retrieved` is still holding whatever it said
+       * before — and a stale message under a fresh failure sends someone after
+       * the wrong thing.
+       */
+      errorMessage={
+        catalogueFailure?.message ??
+        (retrieved.status === 'failed' ? retrieved.message : undefined)
+      }
       controls={controls}
       actions={actions}
       selected={selected}

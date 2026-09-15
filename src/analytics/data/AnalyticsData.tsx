@@ -160,18 +160,32 @@ export function useCatalogue(): { summaries: DatasetSummary[]; loading: boolean 
   return { summaries, loading }
 }
 
-/** One Dataset's full Field description. Still no records. */
+/**
+ * One Dataset's full Field description. Still no records.
+ *
+ * **`null` and "could not ask" are different answers**, and the caller cannot
+ * afford to confuse them. A `null` means the Catalogue answered and has no such
+ * Dataset — which, for a Widget already bound to one, reads as a withdrawal: it
+ * was bound once, so it existed once. A rejection means the Catalogue did not
+ * answer, and saying "the source system has withdrawn this dataset" because IAM
+ * was briefly unreachable states something about a publisher's actions that is
+ * simply untrue.
+ */
 export function useDataset(datasetId: string | undefined): {
   dataset: Dataset | null
   loading: boolean
+  /** Null when the Catalogue answered — including when it answered `null`. */
+  failure: CatalogueFailure | null
 } {
   const { catalogue, viewer } = useAnalyticsData()
   const [dataset, setDataset] = useState<Dataset | null>(null)
   const [loading, setLoading] = useState(datasetId !== undefined)
+  const [failure, setFailure] = useState<CatalogueFailure | null>(null)
 
   useEffect(() => {
     if (datasetId === undefined) {
       setDataset(null)
+      setFailure(null)
       setLoading(false)
       return
     }
@@ -180,14 +194,24 @@ export function useDataset(datasetId: string | undefined): {
     setLoading(true)
     catalogue
       .describe(datasetId, viewer)
-      .then((result) => live && (setDataset(result), setLoading(false)))
-      .catch(() => live && (setDataset(null), setLoading(false)))
+      .then((result) => {
+        if (!live) return
+        setDataset(result)
+        setFailure(null)
+        setLoading(false)
+      })
+      .catch((error) => {
+        if (!live) return
+        setDataset(null)
+        setFailure(catalogueFailure(error))
+        setLoading(false)
+      })
     return () => {
       live = false
     }
   }, [catalogue, viewer, datasetId])
 
-  return { dataset, loading }
+  return { dataset, loading, failure }
 }
 
 /**
