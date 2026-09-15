@@ -184,6 +184,12 @@ function SignedIn({
          */
         authorization: httpAuthorization(),
         viewer: { id: actor.id, displayName: actor.fullName },
+        /*
+         * What the UI may offer, straight from `/v1/me`. Absent — IAM's lookup
+         * failed, or local-auth mode — means unknown, and unknown offers
+         * everything; the API still enforces.
+         */
+        permissions: actor.permissions,
       },
       boardStore: httpBoardStore(api, {
         onSaveFailed: (board) => {
@@ -194,7 +200,7 @@ function SignedIn({
         },
       }),
     }),
-    [api, actor.id, actor.fullName, noteSaveFailed, noteGrantNotRevoked],
+    [api, actor.id, actor.fullName, actor.permissions, noteSaveFailed, noteGrantNotRevoked],
   )
 
   return (

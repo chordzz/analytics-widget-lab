@@ -39,6 +39,7 @@ import { queryFor, type ViewerChoices } from './query'
 import type { QueryContribution } from '../../composition/correspondence'
 import type { WidgetSpec } from '../widgets/Widget'
 import type { Row } from './types'
+import { decide, type Permission } from '../../auth/permissions'
 
 interface AnalyticsDataValue {
   catalogue: CataloguePort
@@ -46,6 +47,15 @@ interface AnalyticsDataValue {
   /** FR-DA-02 — FR-DA-08. Who may see which board, and who a Grant names. */
   authorization: AuthorizationPort
   viewer: ViewerIdentity
+  /**
+   * What the caller may do, from `/v1/me`.
+   *
+   * Carried beside the viewer rather than on it: `ViewerIdentity` belongs to the
+   * retrieval port and is about *who is asking*, while this is about what the UI
+   * should offer. Absent means unknown — see `auth/permissions.ts`, where the
+   * whole point is that unknown is not denied.
+   */
+  permissions?: Record<string, boolean>
   /** FR-DA-14 — the access record, for a surface that shows it. */
   recorder: AccessRecorderPort
 }
@@ -59,6 +69,8 @@ export interface AnalyticsDataProviderProps {
   retrieval?: DatasetRetrievalPort
   authorization?: AuthorizationPort
   viewer?: ViewerIdentity
+  /** Omit to offer everything — which is what an unknown permission set means. */
+  permissions?: Record<string, boolean>
   /** Fixture-only: force an outcome per Dataset, so every state is reachable. */
   scenarios?: Record<string, Scenario>
   /** Fixture-only latency, so the loading state is designed rather than glimpsed. */
@@ -73,6 +85,7 @@ export function AnalyticsDataProvider({
   retrieval,
   authorization,
   viewer = LOCAL_VIEWER,
+  permissions,
   scenarios,
   latencyMs = 0,
   accessRecorder,
@@ -92,12 +105,13 @@ export function AnalyticsDataProvider({
   const value = useMemo<AnalyticsDataValue>(
     () => ({
       viewer,
+      permissions,
       recorder,
       catalogue: catalogue ?? new FixtureCatalogue({ scenarios, latencyMs }),
       retrieval: retrieval ?? new FixtureRetrieval({ scenarios, latencyMs }, recorder),
       authorization: authorization ?? new LocalAuthorization(),
     }),
-    [catalogue, retrieval, authorization, viewer, scenarios, latencyMs, recorder],
+    [catalogue, retrieval, authorization, viewer, permissions, scenarios, latencyMs, recorder],
   )
 
   return <AnalyticsDataContext.Provider value={value}>{children}</AnalyticsDataContext.Provider>
@@ -331,4 +345,24 @@ export function useFilterValues(
   }, [retrieval, viewer, datasetId, field, declared])
 
   return declared ?? values
+}
+
+/**
+ * Whether to offer an action — FR-DA-13's spirit, from the caller's own
+ * permissions.
+ *
+ * Returns `true` when the answer is unknown, which is the deliberate asymmetry:
+ * an action wrongly offered costs a `403` the caller can read, and one wrongly
+ * hidden costs them the product with nothing on screen to explain it. The API
+ * enforces either way — this only decides what is worth showing.
+ */
+export function useMay(permission: Permission): boolean {
+  const { permissions } = useAnalyticsData()
+  return decide(permissions, permission) !== 'denied'
+}
+
+/** For copy that should appear only when the restriction is certain. */
+export function useIsDenied(permission: Permission): boolean {
+  const { permissions } = useAnalyticsData()
+  return decide(permissions, permission) === 'denied'
 }

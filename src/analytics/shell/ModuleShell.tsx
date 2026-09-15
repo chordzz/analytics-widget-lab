@@ -15,7 +15,7 @@ import { GalleryScreen } from '../screens/GalleryScreen'
 import { DataScreen } from '../screens/DataScreen'
 import { CreateScreen } from '../screens/CreateScreen'
 import { DraftsScreen } from '../screens/DraftsScreen'
-import { AnalyticsDataProvider, type AnalyticsDataProviderProps } from '../data/AnalyticsData'
+import { AnalyticsDataProvider, useMay, type AnalyticsDataProviderProps } from '../data/AnalyticsData'
 import { BoardsProvider, useBoards } from '../builder/useBoards'
 import type { BoardStorePort } from '../builder/store'
 import { ComposeIntentProvider } from '../builder/useComposeIntent'
@@ -95,11 +95,22 @@ export function ModuleShell({
  */
 function NewDashboardButton({ onNavigate }: { onNavigate: (id: ScreenId) => void }) {
   const boards = useBoards()
+  const mayCreate = useMay('dashboard.create')
 
+  /*
+   * Disabled and explained rather than removed.
+   *
+   * A button that vanishes leaves someone wondering whether they misremembered
+   * where it was, or whether the page is broken. A disabled one that says why is
+   * the same information with the question already answered — and it is the
+   * treatment the unavailable widget types already use, for the same reason.
+   */
   return (
     <button
       type="button"
       className="a-button a-button--primary"
+      disabled={!mayCreate}
+      title={mayCreate ? undefined : 'You do not have permission to create dashboards.'}
       onClick={() => {
         boards.createBoard()
         onNavigate('create')
