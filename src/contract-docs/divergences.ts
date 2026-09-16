@@ -66,6 +66,37 @@ export interface Divergence {
   endedAt?: string
 }
 
+import { WIDGET_TYPES } from '../analytics/widgets/catalog'
+import { visualizationTypes } from '../visualization/visualization-types'
+
+/**
+ * The Types §4.2 names that nothing can draw. Derived, not typed out, because
+ * D6 carries a count and a count written by hand goes stale silently — the
+ * drift test compares the *rendered* document to this module, so it can only
+ * catch a number the module computes.
+ *
+ * "No renderer" has two causes and both belong here. A Type absent from
+ * `WIDGET_TYPES` has no entry to render at all; a Type present with
+ * `built: false` has an entry that says so. Counting only the second was the
+ * mistake that made this entry wrong for a day.
+ */
+export const UNRENDERED: string[] = (() => {
+  const offered = new Map(WIDGET_TYPES.map((type) => [type.id, type.built]))
+  return visualizationTypes
+    .map((type) => type.id)
+    .filter((id) => offered.get(id) !== true)
+})()
+
+const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+const countWord = (n: number): string => WORDS[n] ?? String(n)
+const sentenceCase = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1)
+
+const asList = (ids: readonly string[]): string => {
+  const quoted = ids.map((id) => `\`${id}\``)
+  if (quoted.length <= 1) return quoted[0] ?? 'none'
+  return `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`
+}
+
 export const DIVERGENCES: Divergence[] = [
   {
     id: 'D1',
@@ -149,15 +180,17 @@ export const DIVERGENCES: Divergence[] = [
     id: 'D6',
     clause: 'FR-VZ-01',
     authority: 'frd',
-    divergence: 'One of the 42 Visualization Types has no renderer.',
+    divergence: `${sentenceCase(countWord(UNRENDERED.length))} of the ${String(
+      visualizationTypes.length,
+    )} Visualization Types ${UNRENDERED.length === 1 ? 'has' : 'have'} no renderer.`,
     status: 'temporary',
     where: 'analytics/widgets/catalog.ts',
     reason:
       'Down from eight before the merge, which brought three workbench renderers across. The ' +
-      'remaining six are `comparison-table`, `stacked-100-bar`, `violin-plot`, `heatmap-matrix`, ' +
-      '`bar-chart-race` and `choropleth-map`. The last is the standing decision about bundling ~100KB ' +
-      'of boundary geometry; the other five are ordinary work. All 13 Families are covered, and the ' +
-      'catalogue lists what is unbuilt rather than hiding it.',
+      `remaining ${countWord(UNRENDERED.length)} are ${asList(UNRENDERED)}. ` +
+      '`choropleth-map` is the standing decision about bundling ~100KB of boundary geometry; the ' +
+      'rest are ordinary work. All 13 Families are covered, and the catalogue lists what is unbuilt ' +
+      'rather than hiding it.',
   },
   {
     id: 'D7',

@@ -33,7 +33,7 @@ them. Where the two are related the entry says so.
 | **D3** | FRD | `FR-VZ-03` | Mapping slots are declared per Visualization Type as well as per Family. | Deliberate deviation |
 | **D4** | FRD | `FR-CO-02` | A Placement is `{x, y, w, h}`, not a span and an ordinal. | Deliberate deviation |
 | **D5** | FRD | `FR-VZ-05` | `Dataset.suits` promotes the Visualization Types a publisher intends. | Deliberate deviation |
-| **D6** | FRD | `FR-VZ-01` | One of the 42 Visualization Types has no renderer. | Temporary |
+| **D6** | FRD | `FR-VZ-01` | Six of the 42 Visualization Types have no renderer. | Temporary |
 | **D7** | FRD | `FR-VZ-01` | `status-list` is a 43rd Visualization Type. | Proposed extension |
 | **D9** | FRD | `FR-DA-12` | Aggregation happened in the browser. | Deliberate deviation |
 | **D12** | FRD | `FR-DP-03` | A Field carries a `format`. | Proposed extension |
@@ -109,13 +109,13 @@ Per Family is right for eligibility and too coarse for rendering: `line-chart` a
 
 The invariant holds — nothing is excluded by it and every Type whose Family the Dataset satisfies stays on offer; it only reorders the picker. It exists because role is not meaning: any table with a Dimension and a Measure satisfies a funnel, one of them is *about* funnels, and the only party who knows which is the publisher. Inferring it from names was tried and matches "Service health" for a *stat* card.
 
-### D6 — One of the 42 Visualization Types has no renderer.
+### D6 — Six of the 42 Visualization Types have no renderer.
 
 **Answers to:** FRD — `FR-VZ-01`  
 **Status:** Temporary  
 **Where:** `analytics/widgets/catalog.ts`  
 
-Down from eight before the merge, which brought three workbench renderers across. The remaining six are `comparison-table`, `stacked-100-bar`, `violin-plot`, `heatmap-matrix`, `bar-chart-race` and `choropleth-map`. The last is the standing decision about bundling ~100KB of boundary geometry; the other five are ordinary work. All 13 Families are covered, and the catalogue lists what is unbuilt rather than hiding it.
+Down from eight before the merge, which brought three workbench renderers across. The remaining six are `comparison-table`, `stacked-100-bar`, `violin-plot`, `heatmap-matrix`, `bar-chart-race` and `choropleth-map`. `choropleth-map` is the standing decision about bundling ~100KB of boundary geometry; the rest are ordinary work. All 13 Families are covered, and the catalogue lists what is unbuilt rather than hiding it.
 
 ### D7 — `status-list` is a 43rd Visualization Type.
 
