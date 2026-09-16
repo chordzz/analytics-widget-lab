@@ -17,6 +17,7 @@ import { useBoardControls } from '../builder/useBoardControls'
 import { WidgetComposer, type ComposerDraft } from '../builder/WidgetComposer'
 import { useMay } from '../data/AnalyticsData'
 import { useBoards } from '../builder/useBoards'
+import { settledName } from '../builder/boards'
 import { useComposeIntent } from '../builder/useComposeIntent'
 import { placedWidgets, widgetCountOf, type PlacedWidget } from '../builder/boards'
 import type { ScreenId } from '../shell/nav'
@@ -144,6 +145,14 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           value={editing.name}
           aria-label="Dashboard name"
           onChange={(event) => boards.renameBoard(editing.id, event.target.value)}
+          /*
+           * Settled when editing stops, not while it happens. A name has to be
+           * usable at rest — an empty one leaves an unclickable row in the
+           * drafts list — but enforcing that per keystroke made a space
+           * impossible to type and put "Untitled dashboard" under the cursor
+           * the moment the field was cleared.
+           */
+          onBlur={(event) => boards.renameBoard(editing.id, settledName(event.target.value))}
         />
 
         <div className="a-board-head__actions">

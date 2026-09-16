@@ -566,6 +566,18 @@ function TypeButton({
 }
 
 /**
+ * Whether naming the value type tells an Author anything.
+ *
+ * `From` does not say what it takes, so `date` earns its place beside it. `Date`
+ * plainly does, and "Date date" is the kind of redundancy that makes a reader
+ * distrust the rest of the label.
+ */
+function addsSomething(parameter: FilterParameter): boolean {
+  if (!parameter.valueType) return false
+  return !parameter.label.toLowerCase().includes(parameter.valueType)
+}
+
+/**
  * The control a declared value type deserves.
  *
  * `number` as well as `date`: a numeric parameter in a text box accepts letters
@@ -773,11 +785,22 @@ function ExposeControl({
                 onChange={() => onChangeFilters(toggle(filters, parameter.name))}
               />
               <span>{parameter.label}</span>
-              {parameter.required && (
-                /* Said, because it changes what unchecking means: the Author's
-                   binding still travels either way, so leaving it unexposed
-                   fixes the value rather than removing the filter. */
-                <span className="a-expose__note">you set the default</span>
+              {addsSomething(parameter) && (
+                /*
+                 * The kind of value, not the required flag.
+                 *
+                 * This said "you set the default" beside each required
+                 * parameter, which ran straight on from the label — "From  you
+                 * set the default" — and read as a broken sentence rather than
+                 * a qualifier. The fact is already on screen where it means
+                 * something: the binder above is literally where the Author
+                 * sets it.
+                 *
+                 * What is *not* on screen is what `From` takes. A parameter
+                 * name is the publisher's, and "From" alone says nothing about
+                 * whether it wants a date, a number or a word.
+                 */
+                <span className="a-expose__note">{parameter.valueType}</span>
               )}
             </label>
           ))}

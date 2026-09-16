@@ -170,6 +170,17 @@ const defaultWidthFor = (typeId: string): number => clampW(widgetType(typeId)?.d
 /** How tall, in rows. `heightForType` still speaks pixels, so convert. */
 const defaultHeightFor = (typeId: string): number => rowsForPx(heightForType(typeId))
 
+/**
+ * What a board is called once someone stops typing.
+ *
+ * The rule the reducer used to apply per keystroke, moved to where it belongs:
+ * a name has to be usable at *rest*, because an empty one leaves an unclickable
+ * row in the drafts list. While it is being edited, blank and trailing spaces
+ * are ordinary intermediate states, and enforcing against them made a space
+ * impossible to type.
+ */
+export const settledName = (typed: string): string => typed.trim() || 'Untitled dashboard'
+
 export function boardsReducer(state: BoardsState, action: BoardsAction): BoardsState {
   switch (action.type) {
     case 'replace-all':
@@ -254,8 +265,20 @@ function applyToBoard(board: Board, action: BoardsAction): Board {
 
   switch (action.type) {
     case 'rename-board':
-      // An empty name would leave an unclickable row in the drafts list.
-      return { ...board, name: action.name.trim() || 'Untitled dashboard', updated: at }
+      /*
+       * Stored as typed. Normalising here ran on every keystroke, and the two
+       * halves each broke something.
+       *
+       * `.trim()` deleted a trailing space the instant it was typed, so the
+       * name could not contain one — "Olaife test" was unreachable by typing.
+       * And `|| 'Untitled dashboard'` meant clearing the field replaced it with
+       * that string under the cursor, which then had to be deleted again.
+       *
+       * A name being momentarily blank is a legitimate state while someone is
+       * editing. It only has to be usable at *rest*, which is what `renamed`
+       * decides on blur.
+       */
+      return { ...board, name: action.name, updated: at }
 
     case 'describe-board':
       return { ...board, description: action.description, updated: at }

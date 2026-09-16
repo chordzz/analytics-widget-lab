@@ -11,7 +11,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { allowedValuesFor, filterParameterFor, requiredParameters } from '../../domain/dataset'
+import { allowedValuesFor, filterParameterFor, requiredParameters, type FilterParameter } from '../../domain/dataset'
 import { datasetFrom, filterParametersFrom, type ApiDataset } from '../../catalogue/api-dataset'
 import { requireDataset, rowsFor } from './datasets'
 import { inputTypeFor } from '../builder/WidgetComposer'
@@ -246,5 +246,36 @@ describe('the value type survives the adapter', () => {
       } as Parameters<typeof datasetFrom>[0]),
     })
     expect(odd.filterParameters?.[0].valueType).toBeUndefined()
+  })
+})
+
+describe('the value type is named only where it adds something', () => {
+  /*
+   * "From  you set the default" was the original wording, and it ran straight
+   * on from the label into a broken sentence. The replacement says what the
+   * parameter *takes*, which is the thing a publisher's name does not.
+   */
+  const hint = (label: string, valueType: FilterParameter['valueType']) =>
+    valueType !== undefined && !label.toLowerCase().includes(valueType)
+
+  test('`From` does not say it wants a date, so the type is shown', () => {
+    expect(hint('From', 'date')).toBe(true)
+    expect(hint('To', 'date')).toBe(true)
+  })
+
+  test('`Date` plainly does, so it is not repeated', () => {
+    // "Date date" is the kind of redundancy that makes a reader distrust the
+    // rest of the label.
+    expect(hint('Date', 'date')).toBe(false)
+  })
+
+  test('a publisher who did not declare a type gets no hint invented', () => {
+    expect(hint('From', undefined)).toBe(false)
+  })
+
+  test('the check is on the label, not the parameter name', () => {
+    // `settled_at` is the wire name; `Settled at` is what a person reads, and
+    // neither of them says "date".
+    expect(hint('Settled at', 'date')).toBe(true)
   })
 })

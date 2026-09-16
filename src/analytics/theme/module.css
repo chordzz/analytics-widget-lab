@@ -575,6 +575,15 @@
   cursor: pointer;
 }
 
+/* What the parameter takes, beside what it is called. Set apart in the mono
+   face and muted, so it reads as a type rather than as more of the label —
+   which is how "From  you set the default" went wrong. */
+.a-expose__note {
+  font-family: var(--a-font-mono);
+  font-size: 10.5px;
+  color: var(--a-text-muted);
+}
+
 /* --- who can see this board (FR-DA-01 to FR-DA-07) ----------------------- */
 .a-share {
   display: flex;
