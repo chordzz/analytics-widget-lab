@@ -180,6 +180,12 @@ function filterParametersFor(fields: Field[], rows: Row[], requires: string[]): 
       return {
         name: field.key,
         label: field.label,
+        /*
+         * Declared, because it picks the control. A publisher states this and
+         * ours must too, or the fixtures model a declaration nobody sends — a
+         * date parameter with no type renders as a box to type a date into.
+         */
+        valueType: valueTypeOf(field),
         required: requires.includes(field.key),
         ...(distinct.length > 0 && distinct.length <= ENUMERABLE_LIMIT
           ? { allowedValues: distinct }
@@ -187,6 +193,16 @@ function filterParametersFor(fields: Field[], rows: Row[], requires: string[]): 
       }
     })
 }
+
+/**
+ * The kind of value a Field's parameter takes.
+ *
+ * Read off the role, which is the only thing a fixture Field carries — a real
+ * declaration states it outright, and `api-dataset.ts` reads it there rather
+ * than inferring.
+ */
+const valueTypeOf = (field: Field): FilterParameter['valueType'] =>
+  field.role === 'time-dimension' ? 'date' : field.role === 'measure' ? 'number' : 'string'
 
 /** Numbers numerically, everything else as text — `10` must not sort before `9`. */
 const compareValues = (a: string | number, b: string | number): number =>

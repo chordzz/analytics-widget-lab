@@ -219,11 +219,29 @@ function permitted(
 ): { filters?: Record<string, string | number>; sort?: DatasetQuery['sort'] } {
   if (!choices) return {}
 
+  /*
+   * Checked against the Dataset's **Filter Parameters**, not its filterable
+   * Fields.
+   *
+   * These are two lists and they do not line up. `fields` describes the
+   * response — which columns come back, and whether the endpoint supports
+   * narrowing on them. `filter_parameters` describes the *request* — the query
+   * names the endpoint accepts. `peniremit.profit` is the plain case: one
+   * filterable Field, `date`, and three parameters, `from`, `to` and
+   * `granularity`. Filtering that column means sending two parameters with
+   * different names, so `filterable: true` never meant "send ?date=".
+   *
+   * Checking the Field list here is what let a Widget be composed exposing
+   * `date` and rejected on save with `"date" is not a Filter Parameter`. D24,
+   * in the last place it still lived.
+   */
   const exposed = new Set(spec.exposedFilters ?? [])
-  const entries = Object.entries(choices.filters ?? {}).filter(([key, value]) => {
+  const declared = new Set((dataset.filterParameters ?? []).map((parameter) => parameter.name))
+
+  const entries = Object.entries(choices.filters ?? {}).filter(([name, value]) => {
     if (value === '' || value === undefined) return false
-    if (!exposed.has(key)) return false
-    return fieldOf(dataset, key)?.filterable === true
+    if (!exposed.has(name)) return false
+    return declared.has(name)
   })
 
   const wanted = choices.sort

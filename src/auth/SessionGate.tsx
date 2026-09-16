@@ -18,6 +18,7 @@ import { checkTaxonomyDrift, describeDrift, inAgreement } from '../dashboard/tax
 import { useSession } from './AuthProvider'
 import type { Actor } from './port'
 import type { ApiClient } from '../api/client'
+import { isApiError } from '../api/errors'
 import type { Board } from '../analytics/builder/boards'
 import type { ShareGrant } from '../domain/dashboard'
 import { SignInScreen } from './SignInScreen'
@@ -116,17 +117,41 @@ function SignedIn({
   generation: number
   onSignOut: () => void
 }) {
-  const [unsaved, setUnsaved] = useState<string[]>([])
+  /**
+   * Boards that did not save, and whether waiting will help.
+   *
+   * `retries` is the distinction the old note flattened. A `503` or a dropped
+   * connection is worth saying "we will try again" about; a `400` will fail
+   * identically for ever, because the payload is what the API refused. Telling
+   * someone to wait for a retry that cannot succeed is worse than telling them
+   * nothing.
+   */
+  const [unsaved, setUnsaved] = useState<{ name: string; retries: boolean; why: string }[]>([])
   const [unrevoked, setUnrevoked] = useState<{ board: string; who: string }[]>([])
 
-  const noteSaveFailed = useCallback((board: { id: string; name: string }) => {
+  const noteSaveFailed = useCallback((board: { id: string; name: string }, error: unknown) => {
     /*
-     * A board that looks saved and is not is the failure worth surfacing. The
-     * store retries on the next change, so this is not an error dialog — it is
-     * a standing note that something is behind, and it clears itself when the
-     * retry lands.
+     * A board that looks saved and is not is the failure worth surfacing, so
+     * this is a standing note rather than a dialog.
+     *
+     * What it may not do is claim to be retrying. Nothing is scheduled: the
+     * store tries again on the *next save*, and a save only happens when the
+     * board changes. Stop touching it and nothing ever runs again.
      */
-    setUnsaved((names) => (names.includes(board.name) ? names : [...names, board.name]))
+    const kind = isApiError(error) ? error.kind : 'transport'
+    const retries = kind !== 'validation' && kind !== 'denied' && kind !== 'not-found'
+    const why = error instanceof Error ? error.message : 'The API refused it.'
+
+    setUnsaved((entries) =>
+      entries.some((entry) => entry.name === board.name)
+        ? entries
+        : [...entries, { name: board.name, retries, why }],
+    )
+  }, [])
+
+  /** The board reached the server after all. */
+  const noteSaved = useCallback((board: { name: string }) => {
+    setUnsaved((entries) => entries.filter((entry) => entry.name !== board.name))
   }, [])
 
   /*
@@ -192,15 +217,26 @@ function SignedIn({
         permissions: actor.permissions,
       },
       boardStore: httpBoardStore(api, {
-        onSaveFailed: (board) => {
-          noteSaveFailed(board)
+        onSaveFailed: (board, error) => {
+          noteSaveFailed(board, error)
+        },
+        onSaved: (board) => {
+          noteSaved(board)
         },
         onGrantNotRevoked: (board, grant) => {
           noteGrantNotRevoked(board, grant)
         },
       }),
     }),
-    [api, actor.id, actor.fullName, actor.permissions, noteSaveFailed, noteGrantNotRevoked],
+    [
+      api,
+      actor.id,
+      actor.fullName,
+      actor.permissions,
+      noteSaveFailed,
+      noteSaved,
+      noteGrantNotRevoked,
+    ],
   )
 
   return (
@@ -217,7 +253,7 @@ function SignedIn({
       headerActions={
         <>
           {unsaved.length > 0 && (
-            <UnsavedNote names={unsaved} onDismiss={() => setUnsaved([])} />
+            <UnsavedNote entries={unsaved} onDismiss={() => setUnsaved([])} />
           )}
           {unrevoked.length > 0 && (
             <UnrevokedNote entries={unrevoked} onDismiss={() => setUnrevoked([])} />
@@ -259,11 +295,37 @@ export function UnrevokedNote({
   )
 }
 
-function UnsavedNote({ names, onDismiss }: { names: string[]; onDismiss: () => void }) {
-  const what = names.length === 1 ? `"${names[0]}"` : `${String(names.length)} boards`
+/**
+ * A board that did not save, said as what is actually true.
+ *
+ * Two wordings, because two situations. A transient failure will be tried again
+ * — but on the next edit, not on a timer, so "retrying" overstated even that.
+ * A rejected payload will not: it fails identically every time until the widget
+ * or the board changes, and an Author waiting for a retry is waiting for
+ * nothing.
+ */
+export function UnsavedNote({
+  entries,
+  onDismiss,
+}: {
+  entries: { name: string; retries: boolean; why: string }[]
+  onDismiss: () => void
+}) {
+  const first = entries[0]
+  const more = entries.length - 1
+  const what = entries.length === 1 ? `"${first.name}"` : `${String(entries.length)} boards`
+
   return (
-    <button type="button" className="a-unsaved" onClick={onDismiss} title="Dismiss">
-      {what} did not save — retrying
+    <button
+      type="button"
+      className="a-unsaved"
+      onClick={onDismiss}
+      title={entries.every((entry) => entry.retries) ? 'Dismiss' : first.why}
+    >
+      {first.retries
+        ? `${what} did not save — will retry`
+        : `${what} was rejected — editing it will try again`}
+      {more > 0 && entries.length > 1 && ''}
     </button>
   )
 }

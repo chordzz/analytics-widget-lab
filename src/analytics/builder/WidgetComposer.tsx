@@ -730,10 +730,25 @@ function ExposeControl({
   onChangeFilters: (next: string[]) => void
   onChangeSorts: (next: string[]) => void
 }) {
-  const filterable = dataset.fields.filter((field) => field.filterable)
+  /*
+   * Filter Parameters, not filterable Fields.
+   *
+   * The two lists do not line up: `fields` says which columns come back and
+   * whether the endpoint can narrow on them, `filter_parameters` says which
+   * query names it accepts. Offering the first produced a Widget that composed
+   * happily and was rejected on save — `"date" is not a Filter Parameter of
+   * Dataset "peniremit.profit"`.
+   *
+   * Required ones are offered too. The Author binds them so the Dashboard can
+   * be built at all, and that binding is a *default* rather than a setting: a
+   * range fixed by whoever made the board does not necessarily suit whoever
+   * reads it, and `queryFor` already layers a Viewer's choice over the
+   * Author's.
+   */
+  const parameters = dataset.filterParameters ?? []
   const sortable = dataset.fields.filter((field) => field.sortable)
 
-  if (filterable.length === 0 && sortable.length === 0) return null
+  if (parameters.length === 0 && sortable.length === 0) return null
 
   const toggle = (list: string[], key: string) =>
     list.includes(key) ? list.filter((entry) => entry !== key) : [...list, key]
@@ -745,17 +760,23 @@ function ExposeControl({
         Viewers change what this widget shows for themselves. It does not change the board.
       </p>
 
-      {filterable.length > 0 && (
+      {parameters.length > 0 && (
         <fieldset className="a-expose">
           <legend className="a-expose__legend">Filter by</legend>
-          {filterable.map((field) => (
-            <label key={field.key} className="a-expose__item">
+          {parameters.map((parameter) => (
+            <label key={parameter.name} className="a-expose__item">
               <input
                 type="checkbox"
-                checked={filters.includes(field.key)}
-                onChange={() => onChangeFilters(toggle(filters, field.key))}
+                checked={filters.includes(parameter.name)}
+                onChange={() => onChangeFilters(toggle(filters, parameter.name))}
               />
-              <span>{field.label}</span>
+              <span>{parameter.label}</span>
+              {parameter.required && (
+                /* Said, because it changes what unchecking means: the Author's
+                   binding still travels either way, so leaving it unexposed
+                   fixes the value rather than removing the filter. */
+                <span className="a-expose__note">you set the default</span>
+              )}
             </label>
           ))}
         </fieldset>

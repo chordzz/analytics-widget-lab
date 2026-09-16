@@ -329,3 +329,62 @@ describe('identity', () => {
     expect(store.mintId('board')).not.toBe(store.mintId('board'))
   })
 })
+
+describe('a note about an unsaved board can learn it since saved', () => {
+  /*
+   * `onSaveFailed` had no counterpart, so a note raised by one failure stood for
+   * the rest of the session — describing a state that had stopped being true.
+   * The comment beside it claimed it "clears itself when the retry lands";
+   * nothing cleared it.
+   */
+  test('a successful save reports the board', async () => {
+    const saved: string[] = []
+    const fetchImpl = (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ status: true, message: 'OK', data: { id: 'srv-1' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )) as unknown as typeof globalThis.fetch
+
+    const api = createApiClient({
+      baseUrl: 'https://api.example.test',
+      tokens: fakeTokenProvider(),
+      fetch: fetchImpl,
+      onDiagnostic: () => {},
+    })
+    const store = httpBoardStore(api, { onSaved: (entry) => saved.push(entry.name) })
+
+    await store.save({ boards: [board({ id: 'local:b1', name: 'Finance daily' })], editingId: null })
+
+    expect(saved).toEqual(['Finance daily'])
+  })
+
+  test('a rejected one does not', async () => {
+    const saved: string[] = []
+    const failed: string[] = []
+    const fetchImpl = (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ status: false, message: 'Dashboard rejected' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )) as unknown as typeof globalThis.fetch
+
+    const api = createApiClient({
+      baseUrl: 'https://api.example.test',
+      tokens: fakeTokenProvider(),
+      fetch: fetchImpl,
+      onDiagnostic: () => {},
+    })
+    const store = httpBoardStore(api, {
+      onSaved: (entry) => saved.push(entry.name),
+      onSaveFailed: (entry) => failed.push(entry.name),
+    })
+
+    await store.save({ boards: [board({ id: 'local:b1', name: 'Finance daily' })], editingId: null })
+
+    expect(failed).toEqual(['Finance daily'])
+    expect(saved).toEqual([])
+  })
+})

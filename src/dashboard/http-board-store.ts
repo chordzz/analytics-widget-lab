@@ -47,6 +47,14 @@ export interface HttpBoardStoreOptions {
   /** Surfaced so a UI can say a save did not land. Defaults to a console warning. */
   onSaveFailed?: (board: Board, error: unknown) => void
   /**
+   * A board reached the server.
+   *
+   * The counterpart `onSaveFailed` never had. Without it a note saying a board
+   * did not save has no way to learn that it since did, so it stands for the
+   * rest of the session — describing a state that stopped being true.
+   */
+  onSaved?: (board: Board) => void
+  /**
    * An Author removed a Share Grant and the API offers no way to honour it.
    *
    * `POST /v1/dashboards/{id}/share-grants` is the only Grant route: there is no
@@ -72,6 +80,7 @@ export function httpBoardStore(
   api: ApiClient,
   {
     onSaveFailed = warnSaveFailed,
+    onSaved = () => {},
     onGrantNotRevoked = warnGrantNotRevoked,
     editingPointer = browserEditingPointer(),
   }: HttpBoardStoreOptions = {},
@@ -311,6 +320,7 @@ export function httpBoardStore(
   async function attempt(board: Board, operation: () => Promise<void>): Promise<void> {
     try {
       await operation()
+      onSaved(board)
     } catch (error) {
       if (isApiError(error) && error.kind === 'session-expired') throw error
       onSaveFailed(board, error)

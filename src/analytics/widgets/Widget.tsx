@@ -302,6 +302,9 @@ export function Widget({
         sorts={spec.exposedSorts ?? []}
         choices={choices}
         onChange={setChoices}
+        // What the Author bound, so an exposed required parameter opens on a
+        // value rather than on an empty box the endpoint would refuse.
+        bindings={spec.parameterBindings}
       />
     ) : undefined
 
