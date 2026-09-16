@@ -15,7 +15,7 @@
  * a Control moved and which it did not.
  */
 
-import type { Dataset } from '../domain/dataset'
+import { timeRangeParameters, type Dataset } from '../domain/dataset'
 import type { DatasetQuery } from '../domain/query'
 import type { Control, ControlValues, DateRangeValue } from '../domain/composition'
 import { getVisualizationType } from '../visualization/visualization-types'
@@ -48,10 +48,35 @@ export interface ControlSubject {
    * plots rather than whichever is declared first.
    */
   timeDimension?: string
+  /**
+   * Filter Parameters the Author fixed on this Widget, by name.
+   *
+   * Needed because a binding outranks a Control: the Widget's own choice is the
+   * more specific of two the same Viewer made (Finding 10), so a bound range
+   * means the Control cannot push its own to the Source System.
+   *
+   * Names only — the values decide what is fetched, not whether the Control
+   * reaches.
+   */
+  boundParameters?: readonly string[]
 }
 
 export type Correspondence =
   | { applies: true; via: string }
+  /**
+   * Reached, but only within what the Widget already asked for.
+   *
+   * A date range narrows in two places: at the Source System, by a Filter
+   * Parameter, and in the browser over the rows that came back. Where the first
+   * is unavailable only the second happens — so the Control can narrow and
+   * cannot *widen*, and a Viewer who widens past the Widget's own window gets an
+   * empty chart rather than more data.
+   *
+   * Told apart from `applies` because the difference is invisible until someone
+   * hits it, and from `applies: false` because the Control genuinely does move
+   * this Widget most of the time.
+   */
+  | { applies: true; via: string; limited: string }
   /** Why not, in words an Author or Viewer can act on. */
   | { applies: false; reason: string }
 
@@ -63,6 +88,13 @@ export type Correspondence =
  * differently for two Widgets over the same Dataset, which is not what "whose
  * bound Dataset supports it" says.
  */
+/** Whether the Author has already fixed the parameters a range would use. */
+function bindsTimeRange(widget: ControlSubject, dataset: Dataset): boolean {
+  const names = timeRangeParameters(dataset)
+  const bound = new Set(widget.boundParameters ?? [])
+  return [names.from, names.to].some((name) => name !== undefined && bound.has(name))
+}
+
 export function correspondenceFor(
   control: Control,
   widget: ControlSubject,
@@ -93,6 +125,33 @@ export function correspondenceFor(
           reason: `${field.label} is not declared filterable.`,
         }
       }
+      /*
+       * A Widget whose Author fixed the range cannot be widened past it.
+       *
+       * The binding is sent upstream and wins — Finding 10, the Widget's own
+       * choice being the more specific — so the Source System answers for the
+       * Author's window, and the Control's range is then applied in the browser
+       * over those rows. Narrowing works. Widening returns nothing, because
+       * nothing outside that window was ever fetched.
+       *
+       * Saying "affects this widget" without the qualification is how a Viewer
+       * asks for August on a card bound to September and is shown an empty
+       * chart with no reason for it.
+       *
+       * A Dataset that simply declares no range parameters is *not* limited:
+       * nothing is sent, the endpoint answers with its full default, and the
+       * range narrows locally over all of it — which is the whole set. That
+       * costs bandwidth rather than correctness, so it is not this sentence's
+       * business.
+       */
+      if (role === 'time-dimension' && bindsTimeRange(widget, dataset)) {
+        return {
+          applies: true,
+          via: field.key,
+          limited: `${dataset.name} has a fixed range on the widget, so this narrows within it rather than replacing it`,
+        }
+      }
+
       return { applies: true, via: field.key }
     }
 
@@ -253,6 +312,14 @@ export function applyContribution(
 
 export interface ControlReach {
   affected: { widgetId: string; via: string }[]
+  /**
+   * Reached, but only within what the Widget already asked for.
+   *
+   * A subset of `affected` in spirit — these Widgets do move — kept separate
+   * because the limit is invisible until a Viewer widens the range and is shown
+   * an empty chart instead of more data.
+   */
+  limited: { widgetId: string; via: string; reason: string }[]
   unaffected: { widgetId: string; reason: string }[]
 }
 
@@ -275,7 +342,7 @@ export function resolveControlReach(
    */
   context?: { value?: ControlValues[string]; hasRenderer?: (typeId: string) => boolean },
 ): ControlReach {
-  const reach: ControlReach = { affected: [], unaffected: [] }
+  const reach: ControlReach = { affected: [], limited: [], unaffected: [] }
 
   for (const widget of widgets) {
     const dataset = datasets[widget.datasetId]
@@ -295,7 +362,13 @@ export function resolveControlReach(
       correspondence = canSwitchTo(context.value, dataset, context.hasRenderer ?? (() => true))
     }
 
-    if (correspondence.applies) {
+    if (correspondence.applies && 'limited' in correspondence) {
+      reach.limited.push({
+        widgetId: widget.id,
+        via: correspondence.via,
+        reason: correspondence.limited,
+      })
+    } else if (correspondence.applies) {
       reach.affected.push({ widgetId: widget.id, via: correspondence.via })
     } else {
       reach.unaffected.push({ widgetId: widget.id, reason: correspondence.reason })

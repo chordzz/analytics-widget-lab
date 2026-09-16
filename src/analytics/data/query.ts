@@ -30,7 +30,7 @@ import {
   type ControlSubject,
   type QueryContribution,
 } from '../../composition/correspondence'
-import { requiredParameters } from '../../domain/dataset'
+import { requiredParameters, timeRangeParameters } from '../../domain/dataset'
 import type { Aggregation, Dataset, FilterParameter } from '../../domain/dataset'
 import type { DatasetQuery, MeasureSelection } from '../../domain/query'
 import type { WidgetSpec } from '../widgets/Widget'
@@ -258,27 +258,22 @@ function permitted(
 }
 
 /**
- * The declared parameter names that carry a date range, if any.
+ * A Control's range, under the names this Dataset actually accepts.
  *
- * `from` and `to` only. They are the names the API's own example uses, and
- * extending the guess to `start`/`end` or `from_date`/`to_date` would be a pile
- * of conventions nobody agreed to — each one wrong for some publisher, and
- * wrong silently. A Dataset spelling it differently needs the relationship
- * declared rather than inferred, which is a question for the API.
+ * `timeRangeParameters` decides the names; this fills them in. Empty when the
+ * publisher declared no way to take a range, in which case the range is still
+ * applied locally and `correspondenceFor` says the Control's reach is limited.
  */
-function rangeParameters(
+function rangeFor(
   dataset: Dataset,
   range: DatasetQuery['timeRange'],
 ): Record<string, string> {
   if (!range) return {}
-
-  const declared = new Set((dataset.filterParameters ?? []).map((parameter) => parameter.name))
-  const resolved: Record<string, string> = {}
-
-  if (range.from && declared.has('from')) resolved.from = range.from
-  if (range.to && declared.has('to')) resolved.to = range.to
-
-  return resolved
+  const names = timeRangeParameters(dataset)
+  return {
+    ...(range.from && names.from ? { [names.from]: range.from } : {}),
+    ...(range.to && names.to ? { [names.to]: range.to } : {}),
+  }
 }
 
 /**
@@ -370,7 +365,7 @@ export function queryFor(
      * A Dataset that declares no range parameters at all cannot be narrowed by
      * a Control, and `correspondenceFor` says so before it comes to this.
      */
-    const parameters = { ...rangeParameters(dataset, withControl.timeRange), ...withControl.parameters }
+    const parameters = { ...rangeFor(dataset, withControl.timeRange), ...withControl.parameters }
 
     /*
      * Finding 10 again, now that the two live in different places.
@@ -481,5 +476,8 @@ export function controlSubjectFor(spec: WidgetSpec, dataset: Dataset): ControlSu
     datasetId: spec.datasetId,
     visualizationTypeId: spec.typeId,
     timeDimension: mapped?.role === 'time-dimension' ? mapped.key : undefined,
+    // Through `boundParameters` rather than the raw spec, so a binding naming a
+    // parameter the Dataset does not publish cannot make a Control look blocked.
+    boundParameters: Object.keys(boundParameters(spec, dataset)),
   }
 }

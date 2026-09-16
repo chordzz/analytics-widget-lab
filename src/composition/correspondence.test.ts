@@ -20,6 +20,7 @@ import { defaultMapping } from '../authoring/mapping'
 import { executeQuery } from '../retrieval/aggregate'
 import { fixtureRows } from '../catalogue/fixture-rows'
 import type { Widget } from '../domain/widget'
+import { datasetFrom } from '../catalogue/api-dataset'
 
 
 const widgetOn = (dataset: typeof peniremitSettlements, typeId: string): Widget => ({
@@ -236,5 +237,102 @@ describe('correspondence cases deferred to Phase 5', () => {
     // Same Dataset would not matter — a trend chart has nothing to express as a
     // percentage of a whole.
     expect(correspondenceFor(control, settlementsTrend, peniremitSettlements).applies).toBe(false)
+  })
+})
+
+describe('a Control cannot widen a Widget past the range its Author fixed', () => {
+  /*
+   * The case the third bucket exists for, and it is not hypothetical:
+   * peniremit.profit requires `from` and `to`, so every Widget over it carries
+   * a binding. That binding is sent upstream and wins — Finding 10, the
+   * Widget's own choice being the more specific — so the Source System answers
+   * for the Author's window and the Control's range is then applied in the
+   * browser over those rows.
+   *
+   * Narrowing works. Widening returns nothing, because nothing outside that
+   * window was ever fetched. A Viewer asking for August on a card bound to
+   * September gets an empty chart, and "affects all widgets" would have been
+   * the only thing on screen explaining it.
+   */
+  const profit = datasetFrom({
+    id: 'peniremit.profit',
+    name: 'Profit',
+    source_system_id: 'peniremit',
+    time_dimension_field: 'date',
+    fields: [
+      { key: 'date', label: 'Date', type: 'date', role: 'dimension', filterable: true, orderable: true },
+      { key: 'usd', label: 'USD', type: 'number', role: 'measure', aggregations: ['sum'], filterable: false, orderable: true },
+    ],
+    filter_parameters: [
+      { name: 'from', type: 'date', required: true },
+      { name: 'to', type: 'date', required: true },
+    ],
+  } as Parameters<typeof datasetFrom>[0])
+
+  const control = dateRangeControl('c1', 'Period')
+
+  const subject = (boundParameters: string[]) => ({
+    id: 'w1',
+    datasetId: 'peniremit.profit',
+    visualizationTypeId: 'line-chart',
+    timeDimension: 'date',
+    boundParameters,
+  })
+
+  const reachFor = (boundParameters: string[]) =>
+    resolveControlReach(control, [subject(boundParameters)], { 'peniremit.profit': profit })
+
+  test('a bound range is reported as limited, not as fully affected', () => {
+    const reach = reachFor(['from', 'to'])
+    expect(reach.affected).toHaveLength(0)
+    expect(reach.limited).toHaveLength(1)
+    expect(reach.unaffected).toHaveLength(0)
+  })
+
+  test('and the reason says what the limit is, not that it failed', () => {
+    // It does move. What it cannot do is widen, and only the second half is
+    // news to anyone.
+    const [entry] = reachFor(['from', 'to']).limited
+    expect(entry.reason).toContain('narrows within it')
+    expect(entry.reason.toLowerCase()).not.toContain('unaffected')
+  })
+
+  test('binding one end is enough to cap it', () => {
+    // A range open at one end is still a window, and still cannot be widened
+    // past the end that is fixed.
+    expect(reachFor(['from']).limited).toHaveLength(1)
+  })
+
+  test('with nothing bound the Control reaches it fully', () => {
+    const reach = reachFor([])
+    expect(reach.affected).toHaveLength(1)
+    expect(reach.limited).toHaveLength(0)
+  })
+
+  test('a Dataset that declares no range parameters is not limited', () => {
+    /*
+     * Deliberately not flagged. Nothing is sent, the endpoint answers with its
+     * full default, and the range narrows locally over all of it — which is the
+     * whole set. That costs bandwidth, not correctness, and a caveat nobody can
+     * act on is noise.
+     */
+    const noParameters = datasetFrom({
+      id: 'd',
+      name: 'D',
+      source_system_id: 'p',
+      time_dimension_field: 'date',
+      fields: [
+        { key: 'date', label: 'Date', type: 'date', role: 'dimension', filterable: true, orderable: true },
+      ],
+      filter_parameters: [{ name: 'region', type: 'category' }],
+    } as Parameters<typeof datasetFrom>[0])
+
+    const reach = resolveControlReach(
+      control,
+      [{ id: 'w1', datasetId: 'd', visualizationTypeId: 'line-chart', timeDimension: 'date' }],
+      { d: noParameters },
+    )
+    expect(reach.affected).toHaveLength(1)
+    expect(reach.limited).toHaveLength(0)
   })
 })

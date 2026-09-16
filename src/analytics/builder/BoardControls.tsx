@@ -117,7 +117,11 @@ function ControlField({
         )}
       </div>
 
-      <Reach affected={reach.affected.length} unaffected={reach.unaffected} />
+      <Reach
+        affected={reach.affected.length}
+        limited={reach.limited}
+        unaffected={reach.unaffected}
+      />
     </div>
   )
 }
@@ -131,18 +135,34 @@ function ControlField({
  * twice and explain neither. Reasons are grouped for the same reason — an
  * Author reads this to know the gap is deliberate, not to audit ten cards.
  */
-function Reach({
+export function Reach({
   affected,
+  limited,
   unaffected,
 }: {
   affected: number
+  limited: { widgetId: string; reason: string }[]
   unaffected: { widgetId: string; reason: string }[]
 }) {
-  const total = affected + unaffected.length
+  const total = affected + limited.length + unaffected.length
   if (total === 0) return null
 
+  /*
+   * A limited widget is counted as affected, because it is — it moves. What it
+   * cannot do is *widen*, so the caveat is said rather than folded into a
+   * number. Without it a Viewer who asks for August on a card fetching
+   * September sees an empty chart and no reason for it.
+   */
+  const moved = affected + limited.length
+  const caveats = Array.from(new Set(limited.map((entry) => entry.reason))).map(trimStop)
+
   if (unaffected.length === 0) {
-    return <p className="a-controls__reach">Affects all {total} widgets.</p>
+    return (
+      <p className="a-controls__reach">
+        Affects all {total} widgets.
+        {caveats.length > 0 && ` ${caveats.join('; ')}.`}
+      </p>
+    )
   }
 
   const distinct = Array.from(new Set(unaffected.map((entry) => entry.reason)))
@@ -154,8 +174,9 @@ function Reach({
 
   return (
     <p className="a-controls__reach">
-      Affects {affected} of {total} widgets — {shown.join('; ')}
+      Affects {moved} of {total} widgets — {shown.join('; ')}
       {hidden > 0 && `; and ${hidden} more`}.
+      {caveats.length > 0 && ` ${caveats.join('; ')}.`}
     </p>
   )
 }

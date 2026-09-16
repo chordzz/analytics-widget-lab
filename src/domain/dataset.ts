@@ -322,6 +322,28 @@ export function requiredParameters(dataset: Dataset): FilterParameter[] {
  * somewhere else, the second means the publisher declared this parameter accepts
  * nothing — which is a broken declaration rather than an empty dropdown.
  */
+/**
+ * The declared parameters that carry a date range, if any.
+ *
+ * `from` and `to` only. They are the names the API's own example uses, and
+ * extending the guess to `start`/`end` or `from_date`/`to_date` would be a pile
+ * of conventions nobody agreed to — each wrong for some publisher, and wrong
+ * *silently*, since a parameter called `start` that means something else would
+ * accept a date and return the wrong rows.
+ *
+ * A Dataset spelling it differently needs the relationship declared rather than
+ * inferred, which is a question for the API rather than a gap to paper over
+ * here. One definition, because two places depend on the same answer: the query
+ * that sends the range, and the Control that says whether it reached.
+ */
+export function timeRangeParameters(dataset: Dataset): { from?: string; to?: string } {
+  const declared = new Set((dataset.filterParameters ?? []).map((parameter) => parameter.name))
+  return {
+    ...(declared.has('from') ? { from: 'from' } : {}),
+    ...(declared.has('to') ? { to: 'to' } : {}),
+  }
+}
+
 export function allowedValuesFor(
   dataset: Dataset,
   name: string,
