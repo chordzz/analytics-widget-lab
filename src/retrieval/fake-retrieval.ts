@@ -10,10 +10,12 @@
 
 import { catalogueFixtures } from '../catalogue/fixtures'
 import { fixtureRows } from '../catalogue/fixture-rows'
-import { executeQuery } from './aggregate'
+import { asEndpoint, executeQuery } from './aggregate'
 import type { DatasetQuery } from '../domain/query'
 import type { DatasetRetrievalPort, RetrievalOutcome, ViewerIdentity } from './port'
 import type { AccessRecorderPort, AuthorizationPort } from '../access/port'
+
+
 
 /** What the fake should do for a given Dataset. */
 export type RetrievalScenario =
@@ -123,7 +125,7 @@ export class FakeDatasetRetrieval implements DatasetRetrievalPort {
     const dataset = catalogueFixtures.find((d) => d.id === datasetId)
     if (!dataset) throw new Error(`No Dataset '${datasetId}' in the Catalogue.`)
 
-    const rows = executeQuery(fixtureRows[datasetId] ?? [], query)
+    const rows = executeQuery(fixtureRows[datasetId] ?? [], asEndpoint(query))
 
     // FR-DA-14 — the Viewer has been served this Dataset, so if it carries
     // personal data the access is now accountable.

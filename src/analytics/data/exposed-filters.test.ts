@@ -37,7 +37,7 @@ describe('a filter the Author exposed is honoured', () => {
   const choices: ViewerChoices = { filters: { region: someRegion } }
 
   test('it reaches the query', () => {
-    expect(queryFor(spec, regions, choices).filters).toEqual({ region: someRegion })
+    expect(queryFor(spec, regions, choices).parameters).toEqual({ region: someRegion })
   })
 
   test('and it narrows what comes back', () => {
@@ -124,7 +124,9 @@ describe('filters compose with what the widget already asked for', () => {
 
     const query = queryFor(spec, regions, { filters: { region: someRegion } })
     expect(query.measures).toEqual([{ field: 'revenue', aggregation: 'sum' }])
-    expect(query.filters).toEqual({ region: someRegion })
+    // A Viewer's exposed choice is a Filter Parameter — what the endpoint is
+    // asked — rather than a column filter applied over returned rows.
+    expect(query.parameters).toEqual({ region: someRegion })
 
     const rows = rowsForWidget(spec, regions, { filters: { region: someRegion } })
     expect(rows).toHaveLength(1)

@@ -20,6 +20,8 @@ import { dashboardInputFrom, boardFrom, type ApiDashboard } from '../../dashboar
 import { upstreamParameters } from '../../retrieval/http-retrieval'
 import type { WidgetSpec } from '../widgets/Widget'
 import type { Board } from '../builder/boards'
+import { datasetFrom } from '../../catalogue/api-dataset'
+import { asEndpoint, executeQuery } from '../../retrieval/aggregate'
 
 const transactions = requireDataset('transactions')
 const regions = requireDataset('sales-by-region')
@@ -34,9 +36,9 @@ const histogram = (overrides: Partial<WidgetSpec> = {}): WidgetSpec => ({
 })
 
 describe('a bound parameter reaches the query', () => {
-  test('it appears in the filters', () => {
+  test('it appears in the parameters, not the filters', () => {
     const spec = histogram({ parameterBindings: { channel: 'Card' } })
-    expect(queryFor(spec, transactions).filters).toMatchObject({ channel: 'Card' })
+    expect(queryFor(spec, transactions).parameters).toMatchObject({ channel: 'Card' })
   })
 
   test('and it reaches the wire', () => {
@@ -58,7 +60,7 @@ describe('a bound parameter reaches the query', () => {
       exposedFilters: ['channel'],
     })
     const query = queryFor(spec, transactions, { filters: { channel: 'Transfer' } })
-    expect(query.filters?.channel).toBe('Transfer')
+    expect(query.parameters?.channel).toBe('Transfer')
   })
 
   test('a Control on an unrelated Field does not displace it', () => {
@@ -66,7 +68,7 @@ describe('a bound parameter reaches the query', () => {
     const query = queryFor(spec, transactions, undefined, {
       timeRange: { field: 'date', from: '2026-01-01' },
     })
-    expect(query.filters?.channel).toBe('Card')
+    expect(query.parameters?.channel).toBe('Card')
   })
 })
 
@@ -96,7 +98,7 @@ describe('a binding is reduced to what the publisher declared', () => {
       datasetId: 'sales-by-region',
       mapping: { x: 'region', series: ['revenue'] },
     }
-    expect(queryFor(spec, regions).filters).toBeUndefined()
+    expect(queryFor(spec, regions).parameters).toBeUndefined()
   })
 })
 
@@ -157,5 +159,122 @@ describe('a binding survives the board round trip', () => {
     plain.widgets.w1 = histogram()
     const sent = dashboardInputFrom(plain)
     expect(JSON.stringify(sent.widgets[0].presentation_options)).not.toContain('parameterBindings')
+  })
+})
+
+describe('a parameter is not a column', () => {
+  /*
+   * The bug this separation exists for, and it was live: `peniremit.profit`
+   * takes `from` and `to`, neither of which is a column it returns. With both
+   * in `filters`, the local pass compared `row['from']` — which does not exist
+   * — against a date and dropped every row the endpoint had just returned. A
+   * widget bound to a real Dataset would have rendered *empty*, with the API
+   * answering correctly on the wire.
+   *
+   * Masked until now by a 403 on the only Dataset that has required parameters.
+   */
+  const profit = datasetFrom({
+    id: 'peniremit.profit',
+    name: 'Profit',
+    source_system_id: 'peniremit',
+    time_dimension_field: 'date',
+    fields: [
+      { key: 'date', label: 'Date', type: 'date', role: 'dimension', filterable: true, orderable: true },
+      { key: 'usd', label: 'USD', type: 'number', role: 'measure', aggregations: ['sum'], filterable: false, orderable: true },
+    ],
+    filter_parameters: [
+      { name: 'from', type: 'date', required: true },
+      { name: 'to', type: 'date', required: true },
+    ],
+  } as Parameters<typeof datasetFrom>[0])
+
+  const bound: WidgetSpec = {
+    id: 'w1',
+    typeId: 'line-chart',
+    datasetId: 'peniremit.profit',
+    mapping: { x: 'date', series: ['usd'] },
+    parameterBindings: { from: '2026-09-01', to: '2026-09-16' },
+  }
+
+  test('bindings land in parameters, never in filters', () => {
+    const query = queryFor(bound, profit)
+    expect(query.parameters).toEqual({ from: '2026-09-01', to: '2026-09-16' })
+    expect(query.filters).toBeUndefined()
+  })
+
+  test('and the rows the endpoint returned survive the local pass', () => {
+    // The whole point. `executeQuery` compares `row[key] === value`, so a key
+    // that is not a column matches nothing and empties the result.
+    const rows = [
+      { date: '2026-09-02', usd: 10 },
+      { date: '2026-09-03', usd: 20 },
+    ]
+    expect(executeQuery(rows, queryFor(bound, profit))).toHaveLength(2)
+  })
+
+  test('a fixture applies them itself, because it is the endpoint', () => {
+    /*
+     * The other half. Against a real Source System the parameters have already
+     * been applied by the time rows arrive; a fixture has nothing behind it, so
+     * `asEndpoint` does what the endpoint would have done.
+     */
+    const rows = [{ channel: 'Card', amount: 1 }, { channel: 'Transfer', amount: 2 }]
+    const query = { parameters: { channel: 'Card' } }
+    expect(executeQuery(rows, query)).toHaveLength(2)
+    expect(executeQuery(rows, asEndpoint(query))).toHaveLength(1)
+  })
+})
+
+describe('a Control reaches the endpoint only under names it declared', () => {
+  const withParameters = (names: string[]) =>
+    datasetFrom({
+      id: 'd',
+      name: 'D',
+      source_system_id: 'p',
+      time_dimension_field: 'date',
+      fields: [
+        { key: 'date', label: 'Date', type: 'date', role: 'dimension', filterable: true, orderable: true },
+        { key: 'usd', label: 'USD', type: 'number', role: 'measure', aggregations: ['sum'], filterable: false, orderable: true },
+      ],
+      filter_parameters: names.map((name) => ({ name, type: 'date' })),
+    } as Parameters<typeof datasetFrom>[0])
+
+  const spec: WidgetSpec = {
+    id: 'w1',
+    typeId: 'line-chart',
+    datasetId: 'd',
+    mapping: { x: 'date', series: ['usd'] },
+  }
+
+  const range = { timeRange: { field: 'date', from: '2026-08-01', to: '2026-08-31' } }
+
+  test('a Dataset declaring from and to gets both', () => {
+    expect(queryFor(spec, withParameters(['from', 'to']), undefined, range).parameters).toEqual({
+      from: '2026-08-01',
+      to: '2026-08-31',
+    })
+  })
+
+  test('one declaring neither gets nothing rather than a 400', () => {
+    /*
+     * This used to be written out unconditionally, on the guess that every
+     * Dataset spells a range that way. An undeclared parameter is refused
+     * before the request leaves — so the guess did not cost one filter, it
+     * failed the whole query.
+     */
+    expect(queryFor(spec, withParameters(['start', 'end']), undefined, range).parameters).toBeUndefined()
+  })
+
+  test('one declaring only `from` sends only that', () => {
+    expect(queryFor(spec, withParameters(['from']), undefined, range).parameters).toEqual({
+      from: '2026-08-01',
+    })
+  })
+
+  test('the range still narrows locally either way', () => {
+    // `timeRange` survives for the local pass, which is what keeps a fixture —
+    // and the post-fetch narrowing — working when the names do not match.
+    const query = queryFor(spec, withParameters(['start', 'end']), undefined, range)
+    expect(query.timeRange).toEqual(range.timeRange)
   })
 })

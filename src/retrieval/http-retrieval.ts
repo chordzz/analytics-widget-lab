@@ -112,22 +112,23 @@ export function httpRetrieval(api: ApiClient, { onRelay }: HttpRetrievalOptions 
  * nothing is invented.
  */
 export function upstreamParameters(query: DatasetQuery): Record<string, string | number> {
-  const parameters: Record<string, string | number> = {}
-
-  for (const [field, value] of Object.entries(query.filters ?? {})) {
-    parameters[field] = value
-  }
-
   /*
-   * `from` and `to` are the names the API's own example uses, and they are the
-   * only names available to guess with: Filter Parameter names are per-Dataset.
-   * A Dataset that spells them differently rejects these with a 400 naming the
-   * offending field — visible, and fixed by reading one real declaration.
+   * Only `parameters`, and only what was resolved against the declaration.
+   *
+   * `filters` is deliberately not sent. It is keyed by Field key — a column and
+   * the value it must equal — and the endpoint accepts parameter names, which
+   * are a different list. Sending one that happens to match by coincidence
+   * would work; sending one that does not fails the *whole* query, because an
+   * undeclared parameter is refused before the request leaves.
+   *
+   * `timeRange` is not sent either, and that is the fix rather than an
+   * omission. It used to be written out as `from` and `to` on the guess that
+   * every Dataset spells a date range that way — a convention the API's own
+   * example happens to use and nothing promises. `queryFor` now resolves it
+   * against the Dataset's declared parameters, where the names are known, and
+   * what survives arrives here already named correctly.
    */
-  if (query.timeRange?.from) parameters.from = query.timeRange.from
-  if (query.timeRange?.to) parameters.to = query.timeRange.to
-
-  return parameters
+  return { ...query.parameters }
 }
 
 export { RelayShapeError }

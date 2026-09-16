@@ -36,8 +36,27 @@ export interface DatasetQuery {
   dimensions?: string[]
   measures?: MeasureSelection[]
   timeRange?: TimeRange
-  /** Keyed by Field key. Only Fields the Dataset declared filterable (FR-DP-05). */
+  /**
+   * Keyed by **Field key** — a column and the value it must equal.
+   *
+   * Applied locally over returned rows, so every key here must be a column the
+   * Dataset actually returns. A key that is not empties the result: the
+   * comparison is `row[key] === value`, and `undefined` equals nothing.
+   */
   filters?: Record<string, string | number>
+  /**
+   * Keyed by **Filter Parameter name** — what the endpoint is asked.
+   *
+   * Kept apart from `filters` because the two are not interchangeable and
+   * conflating them silently empties widgets. `peniremit.profit` takes `from`
+   * and `to`; neither is a returned column, so applying them locally compares
+   * `row['from']` — which does not exist — against a date, and drops every row
+   * the endpoint just returned.
+   *
+   * These are the endpoint's business alone. It has already applied them by the
+   * time the rows arrive, so nothing downstream re-applies them.
+   */
+  parameters?: Record<string, string | number>
   sort?: SortSpecification[]
   limit?: number
 }

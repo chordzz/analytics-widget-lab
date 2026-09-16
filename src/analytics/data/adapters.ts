@@ -24,7 +24,7 @@
  *     than argued about in a document.
  */
 
-import { executeQuery } from '../../retrieval/aggregate'
+import { asEndpoint, executeQuery } from '../../retrieval/aggregate'
 import { summarize, type CataloguePort, type DatasetSummary } from '../../catalogue/port'
 import type {
   DatasetRetrievalPort,
@@ -36,6 +36,8 @@ import type { AccessRecorderPort, AuthorizationPort, OrgScopeRef } from '../../a
 import type { DashboardScope, ShareGrant } from '../../domain/dashboard'
 import type { DatasetQuery } from '../../domain/query'
 import { datasets, datasetById, rowsFor } from './datasets'
+
+
 
 /**
  * What the fake should do for a given Dataset.
@@ -128,7 +130,7 @@ export class FixtureRetrieval implements DatasetRetrievalPort {
     // "broken" is the more alarming of the two readings.
     if (!dataset) return { kind: 'withdrawn' }
 
-    const rows = executeQuery(rowsFor(datasetId), query)
+    const rows = executeQuery(rowsFor(datasetId), asEndpoint(query))
     if (rows.length === 0) return { kind: 'empty' }
 
     /*

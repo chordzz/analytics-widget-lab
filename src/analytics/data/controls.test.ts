@@ -158,7 +158,14 @@ describe('a Widget-level filter beats a Control on the same Field', () => {
       { filters: { region: 'Somewhere else' } },
     )
 
-    expect(withBoth.filters).toEqual({ region: chosen })
+    /*
+     * The two now live in different places — a Control contributes `filters`,
+     * keyed by Field; a Widget's exposed choice is a `parameter`, keyed by what
+     * the endpoint accepts — so "the Widget wins" means the Control's entry is
+     * dropped rather than overwritten.
+     */
+    expect(withBoth.parameters).toEqual({ region: chosen })
+    expect(withBoth.filters?.region).toBeUndefined()
   })
 
   test('a Control still reaches Fields the Widget did not claim', () => {
@@ -175,7 +182,9 @@ describe('a Widget-level filter beats a Control on the same Field', () => {
       { filters: { region: 'ignored', orders: 5 } },
     )
 
-    expect(withBoth.filters).toEqual({ region: chosen, orders: 5 })
+    expect(withBoth.parameters).toEqual({ region: chosen })
+    // The Field the Widget did not claim is still the Control's to narrow.
+    expect(withBoth.filters).toEqual({ orders: 5 })
   })
 })
 

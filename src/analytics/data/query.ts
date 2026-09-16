@@ -24,7 +24,7 @@
  * is the whole reason for the shape.
  */
 
-import { executeQuery } from '../../retrieval/aggregate'
+import { asEndpoint, executeQuery } from '../../retrieval/aggregate'
 import {
   applyContribution,
   type ControlSubject,
@@ -216,7 +216,7 @@ function permitted(
   spec: WidgetSpec,
   dataset: Dataset,
   choices: ViewerChoices | undefined,
-): { filters?: Record<string, string | number>; sort?: DatasetQuery['sort'] } {
+): { parameters?: Record<string, string | number>; sort?: DatasetQuery['sort'] } {
   if (!choices) return {}
 
   /*
@@ -251,9 +251,34 @@ function permitted(
     fieldOf(dataset, wanted.field)?.sortable === true
 
   return {
-    ...(entries.length > 0 ? { filters: Object.fromEntries(entries) } : {}),
+    // `parameters`, because these are Filter Parameter names — see `queryFor`.
+    ...(entries.length > 0 ? { parameters: Object.fromEntries(entries) } : {}),
     ...(sortable && wanted ? { sort: [wanted] } : {}),
   }
+}
+
+/**
+ * The declared parameter names that carry a date range, if any.
+ *
+ * `from` and `to` only. They are the names the API's own example uses, and
+ * extending the guess to `start`/`end` or `from_date`/`to_date` would be a pile
+ * of conventions nobody agreed to — each one wrong for some publisher, and
+ * wrong silently. A Dataset spelling it differently needs the relationship
+ * declared rather than inferred, which is a question for the API.
+ */
+function rangeParameters(
+  dataset: Dataset,
+  range: DatasetQuery['timeRange'],
+): Record<string, string> {
+  if (!range) return {}
+
+  const declared = new Set((dataset.filterParameters ?? []).map((parameter) => parameter.name))
+  const resolved: Record<string, string> = {}
+
+  if (range.from && declared.has('from')) resolved.from = range.from
+  if (range.to && declared.has('to')) resolved.to = range.to
+
+  return resolved
 }
 
 /**
@@ -299,16 +324,22 @@ export function queryFor(
   // whatever it would otherwise have asked for.
   const withChoices = (base: DatasetQuery): DatasetQuery => {
     /*
-     * Three layers, narrowest last. The Author's parameter bindings are the
-     * floor — a required one must survive every other choice, or the query is
-     * refused — and a Viewer narrowing the same Field on top of it still
-     * supplies a value, so the parameter is never lost by being overridden.
+     * Two layers, narrowest last. The Author's parameter bindings are the floor
+     * — a required one must survive every other choice, or the query is refused
+     * — and a Viewer changing the same one supplies a value in its place, so
+     * the parameter is never lost by being overridden.
+     *
+     * These land in `parameters`, not `filters`. They are named for what the
+     * *endpoint* accepts, and `peniremit.profit`'s `from` and `to` are not
+     * columns it returns — putting them in `filters` had the local pass compare
+     * `row['from']` against a date and drop every row the endpoint had just
+     * returned.
      */
-    const filters = { ...bound, ...base.filters, ...chosen.filters }
+    const chosenParameters = { ...bound, ...chosen.parameters }
 
     const own: DatasetQuery = {
       ...base,
-      ...(Object.keys(filters).length > 0 ? { filters } : {}),
+      ...(Object.keys(chosenParameters).length > 0 ? { parameters: chosenParameters } : {}),
       ...(chosen.sort ? { sort: chosen.sort } : {}),
     }
 
@@ -320,7 +351,49 @@ export function queryFor(
      * surprising outcome. `applyContribution` is where that precedence lives, so
      * it is decided once rather than per caller.
      */
-    return contribution ? applyContribution(own, contribution) : own
+    const withControl = contribution ? applyContribution(own, contribution) : own
+
+    /*
+     * A Control's date range, under the names this Dataset actually accepts.
+     *
+     * `timeRange` is how a Control reaches a Widget, and it names a *Field*.
+     * The endpoint takes *parameters*, and the two are different lists — so
+     * somewhere the range has to be translated, and that somewhere has to hold
+     * the declaration. This does; the HTTP adapter does not.
+     *
+     * It used to be translated there, by writing `from` and `to` unconditionally
+     * on the guess that every Dataset spells a range that way. The API's own
+     * example does, and nothing promises it. Now the names are checked against
+     * what the publisher declared, and a Dataset that spells them differently
+     * gets nothing rather than a 400 that fails its whole query.
+     *
+     * A Dataset that declares no range parameters at all cannot be narrowed by
+     * a Control, and `correspondenceFor` says so before it comes to this.
+     */
+    const parameters = { ...rangeParameters(dataset, withControl.timeRange), ...withControl.parameters }
+
+    /*
+     * Finding 10 again, now that the two live in different places.
+     *
+     * A Control contributes `filters`, keyed by Field; a Widget's own exposed
+     * choice is a `parameter`, keyed by what the endpoint accepts. Where those
+     * name the same thing the Widget wins — it is the more specific of two
+     * choices the same Viewer made, and silently overriding the control someone
+     * just used on a particular card is the more surprising outcome.
+     *
+     * `applyContribution` still decides this for two filters; it cannot decide
+     * it across the split, so the crossing case is settled here.
+     */
+    const contested = Object.entries(withControl.filters ?? {}).filter(
+      ([key]) => !(key in parameters),
+    )
+
+    const resolved: DatasetQuery = { ...withControl }
+    if (contested.length > 0) resolved.filters = Object.fromEntries(contested)
+    else delete resolved.filters
+    if (Object.keys(parameters).length > 0) resolved.parameters = parameters
+
+    return resolved
   }
 
   switch (typeId) {
@@ -388,7 +461,9 @@ export function rowsForWidget(
   choices?: ViewerChoices,
   contribution?: QueryContribution,
 ): Row[] {
-  return executeQuery(rowsFor(dataset.id), queryFor(spec, dataset, choices, contribution))
+  // Through `asEndpoint`, because this stands in for the Source System: the
+  // parameters have not been applied by anything else.
+  return executeQuery(rowsFor(dataset.id), asEndpoint(queryFor(spec, dataset, choices, contribution)))
 }
 
 /**

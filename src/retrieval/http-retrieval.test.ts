@@ -222,23 +222,35 @@ describe('what the wire cannot carry is finished here', () => {
 })
 
 describe('what goes upstream', () => {
-  test('filters become query parameters', () => {
-    expect(upstreamParameters({ filters: { currency: 'NGN', corridor: 'GB-NG' } })).toEqual({
-      currency: 'NGN',
-      corridor: 'GB-NG',
-    })
+  test('resolved parameters are sent', () => {
+    expect(
+      upstreamParameters({ parameters: { currency: 'NGN', corridor: 'GB-NG' } }),
+    ).toEqual({ currency: 'NGN', corridor: 'GB-NG' })
   })
 
-  test('a time range becomes from and to', () => {
+  test('column filters are not', () => {
+    /*
+     * `filters` is keyed by Field key — a column and the value it must equal —
+     * and the endpoint accepts parameter *names*, which are a different list.
+     * One that matched by coincidence would work; one that did not would fail
+     * the whole query, since an undeclared parameter is refused before the
+     * request leaves.
+     */
+    expect(upstreamParameters({ filters: { region: 'EMEA' } })).toEqual({})
+  })
+
+  test('a time range is not guessed into from and to', () => {
+    /*
+     * It used to be written out here unconditionally, on the guess that every
+     * Dataset spells a date range `from`/`to`. The API's own example does;
+     * nothing promises it. `queryFor` resolves the range against the Dataset's
+     * declared parameters — where the names are actually known — so by the time
+     * it reaches this function it is either already in `parameters` under the
+     * right name, or it was never sendable.
+     */
     expect(
       upstreamParameters({ timeRange: { field: 'day', from: '2026-08-01', to: '2026-08-31' } }),
-    ).toEqual({ from: '2026-08-01', to: '2026-08-31' })
-  })
-
-  test('an open-ended range sends only the end it has', () => {
-    expect(upstreamParameters({ timeRange: { field: 'day', from: '2026-08-01' } })).toEqual({
-      from: '2026-08-01',
-    })
+    ).toEqual({})
   })
 
   test('nothing the endpoint does not accept is invented', () => {
@@ -260,7 +272,7 @@ describe('what goes upstream', () => {
 
   test('the parameters reach the URL', async () => {
     const { port, urls } = retrievalWith(flat(rows))
-    await port.retrieve('peniremit.settlements', { filters: { currency: 'NGN' } }, viewer())
+    await port.retrieve('peniremit.settlements', { parameters: { currency: 'NGN' } }, viewer())
     expect(urls[0]).toBe(
       'https://api.example.test/v1/datasets/peniremit.settlements/query?currency=NGN',
     )
