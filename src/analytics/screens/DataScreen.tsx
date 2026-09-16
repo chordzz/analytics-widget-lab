@@ -24,6 +24,7 @@ import type { ScreenId } from '../shell/nav'
 
 export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const { summaries, loading, failure } = useCatalogue()
+  const { accessRecordIsComplete } = useAnalyticsData()
 
   if (loading) {
     return (
@@ -59,7 +60,18 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
         ))}
       </div>
 
-      <AccessRecordPanel />
+      {/*
+        Fixtures only. The access record is fed by the retrieval adapter and
+        only the fixture one feeds it, so against a real Source System it would
+        sit at zero for ever — under a heading promising every retrieval of
+        personal data. That reads as "nobody has read any", which is an
+        assertion and a false one.
+
+        FR-DA-14 binds the Source System, not us, and the API publishes no
+        endpoint for reading such a log. So there is nothing to show and no
+        panel: an explanation of its own emptiness is not content.
+      */}
+      {accessRecordIsComplete && <AccessRecordPanel />}
     </>
   )
 }

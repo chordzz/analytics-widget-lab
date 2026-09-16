@@ -14,7 +14,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { AnalyticsDataProvider } from '../data/AnalyticsData'
+import { AnalyticsDataProvider, useAnalyticsData } from '../data/AnalyticsData'
 import { AccessRecordPanel } from './AccessRecordPanel'
 import { ApiError } from '../../api/errors'
 import { grainNote, sensitivityNote } from './DataScreen'
@@ -42,35 +42,49 @@ const panelWith = (retrieval?: DatasetRetrievalPort) =>
     </AnalyticsDataProvider>,
   )
 
-describe('the access record does not claim to be one when it is not', () => {
+/** Reads the flag the Data sources screen gates the panel on. */
+function completeness(retrieval?: DatasetRetrievalPort): boolean {
+  let seen = false
+  function Probe() {
+    seen = useAnalyticsData().accessRecordIsComplete
+    return null
+  }
+  renderToStaticMarkup(
+    <AnalyticsDataProvider retrieval={retrieval}>
+      <Probe />
+    </AnalyticsDataProvider>,
+  )
+  return seen
+}
+
+describe('the access record is a fixture surface', () => {
   test('on the fixtures it shows the log', () => {
     // The fixture retrieval feeds the recorder, so an empty log genuinely means
     // nothing has been read yet.
     expect(words(panelWith())).toContain('Nothing recorded yet')
   })
 
-  test('behind a host adapter it says where the record actually lives', () => {
+  test('and the screen renders it', () => {
+    expect(completeness()).toBe(true)
+  })
+
+  test('behind a host adapter the screen leaves it out', () => {
     /*
      * The recorder is fed by the retrieval adapter and only the fixture one
-     * feeds it. Against a real Source System the log sits at zero for ever,
-     * under a heading promising every retrieval of personal data — which reads
-     * as "nobody has read any", an assertion rather than an absence.
+     * feeds it. Against a real Source System the log would sit at zero for
+     * ever, under a heading promising every retrieval of personal data — which
+     * reads as "nobody has read any", an assertion rather than an absence.
+     *
+     * It briefly rendered an explanation of its own emptiness instead. That is
+     * a panel whose entire content is an apology for existing, and the honest
+     * version is not to render it: FR-DA-14 binds the Source System, the API
+     * publishes no endpoint for reading such a log, and there is nothing to
+     * show.
      */
-    const said = words(panelWith(hostRetrieval))
-    expect(said).not.toContain('Nothing recorded yet')
-    expect(said).toContain('recorded by each Source System')
-  })
-
-  test('and it does not show a count of zero', () => {
-    // A badge reading 0 beside "access record" is the same false claim in one
-    // character.
-    expect(panelWith(hostRetrieval)).not.toContain('a-badge')
-  })
-
-  test('FR-DA-14 is named, so the obligation is traceable', () => {
-    expect(words(panelWith(hostRetrieval))).toContain('FR-DA-14')
+    expect(completeness(hostRetrieval)).toBe(false)
   })
 })
+
 
 describe('the Catalogue failing is told apart from the Catalogue being empty', () => {
   const problem = (error: unknown) =>
