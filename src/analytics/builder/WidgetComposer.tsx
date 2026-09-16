@@ -22,7 +22,7 @@ import { useEffect, useState } from 'react'
 import { Widget, type WidgetMapping, type WidgetSpec } from '../widgets/Widget'
 import { FAMILIES, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
-import { useDatasets } from '../data/AnalyticsData'
+import { useAcceptedVisualizationTypes, useDatasets } from '../data/AnalyticsData'
 import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
 import { FieldMapper, fieldSummary } from './FieldMapper'
 import {
@@ -418,9 +418,11 @@ function TypePicker({
   onQuery: (next: string) => void
   onPick: (typeId: string) => void
 }) {
+  const accepted = useAcceptedVisualizationTypes()
   const available = typesFor(dataset)
   const suggested = suggestedTypesFor(dataset)
-  const unavailable = unavailableTypesFor(dataset)
+  // The API's own list when it has arrived, our local one until then.
+  const unavailable = unavailableTypesFor(dataset, accepted)
   const term = query.trim().toLowerCase()
 
   /*

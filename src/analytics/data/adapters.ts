@@ -36,6 +36,9 @@ import type { AccessRecorderPort, AuthorizationPort, OrgScopeRef } from '../../a
 import type { DashboardScope, ShareGrant } from '../../domain/dashboard'
 import type { DatasetQuery } from '../../domain/query'
 import { datasets, datasetById, rowsFor } from './datasets'
+import { visualizationFamilies } from '../../visualization/families'
+import { visualizationTypes } from '../../visualization/visualization-types'
+import type { TaxonomyEntry } from '../../catalogue/port'
 
 
 
@@ -66,6 +69,23 @@ const wait = (ms: number) =>
   ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve()
 
 export class FixtureCatalogue implements CataloguePort {
+  /**
+   * Our own manifest, because a fixture has no API behind it.
+   *
+   * The shape the endpoint returns, built from the registry the fixtures already
+   * answer to — so fixture mode agrees with itself, and the drift check that
+   * runs against a live taxonomy has nothing to report here.
+   */
+  async visualizations(): Promise<TaxonomyEntry[]> {
+    return visualizationFamilies.map((family) => ({
+      family: family.id,
+      types: visualizationTypes
+        .filter((type) => type.familyId === family.id)
+        .map((type) => type.id),
+      requirement: family.dataShape.summary,
+    }))
+  }
+
   private readonly options: FixtureOptions
 
   constructor(options: FixtureOptions = {}) {

@@ -64,7 +64,11 @@ describe('nothing is claimed before the Catalogue answers', () => {
   })
 
   test('the first paint of a real Widget says nothing about withdrawal', () => {
-    const catalogue: CataloguePort = { browse: async () => [], describe: async () => null }
+    const catalogue: CataloguePort = {
+      browse: async () => [],
+      describe: async () => null,
+      visualizations: async () => [],
+    }
     const retrieval: DatasetRetrievalPort = {
       retrieve: async () => ({ kind: 'empty' }),
       listFilterValues: async () => [],

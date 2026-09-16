@@ -184,6 +184,45 @@ export function useCatalogue(): {
 }
 
 /**
+ * The Visualization Types the API will accept, fetched once.
+ *
+ * BE-5, adopted. `acceptedByApi` used to answer from a list compiled by hand
+ * from the change log — the same kind of local copy that let the two taxonomies
+ * drift apart in the first place: ours said `line-chart`, theirs said `line`,
+ * sixteen ids diverged, and nothing noticed until a save was refused.
+ *
+ * `null` while it loads, and `null` if the endpoint declines. Callers fall back
+ * to the local list rather than reading an absent answer as "nothing is
+ * accepted" — locking every widget in the product over one failed request would
+ * be a far worse failure than the one this prevents. `403` is the likely
+ * decline: it needs `dataset.read`, which someone who can compose might lack.
+ */
+export function useAcceptedVisualizationTypes(): ReadonlySet<string> | null {
+  const { catalogue } = useAnalyticsData()
+  const [accepted, setAccepted] = useState<ReadonlySet<string> | null>(null)
+
+  useEffect(() => {
+    let live = true
+    catalogue
+      .visualizations()
+      .then((entries) => {
+        if (!live) return
+        const ids = entries.flatMap((entry) => entry.types)
+        // An empty taxonomy is the endpoint declining, not a claim that no Type
+        // exists. Told apart, because one is a fallback and the other is a lock.
+        setAccepted(ids.length > 0 ? new Set(ids) : null)
+      })
+      .catch(() => live && setAccepted(null))
+    return () => {
+      live = false
+    }
+  }, [catalogue])
+
+  return accepted
+}
+
+
+/**
  * One Dataset's full Field description. Still no records.
  *
  * **`null` and "could not ask" are different answers**, and the caller cannot

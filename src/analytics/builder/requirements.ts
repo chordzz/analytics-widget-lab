@@ -396,11 +396,21 @@ export interface UnavailableType {
  * Ordered by how actionable the answer is: what we can fix first, then what the
  * publisher can, then what nothing can.
  */
-export function unavailableTypesFor(dataset: Dataset): UnavailableType[] {
+export function unavailableTypesFor(
+  dataset: Dataset,
+  /**
+   * The Types the API will accept, from `GET /v1/visualizations`.
+   *
+   * Omitted falls back to the local list — the endpoint may be loading, or may
+   * have declined. Treating an absent answer as "nothing is accepted" would
+   * lock every widget in the product over one failed request.
+   */
+  accepted?: ReadonlySet<string> | null,
+): UnavailableType[] {
   const offered = new Set(typesFor(dataset).map((type) => type.id))
 
   const entries = WIDGET_TYPES.filter((type) => type.built).flatMap<UnavailableType>((type) => {
-    if (!acceptedByApi(type.id)) {
+    if (accepted ? !accepted.has(type.id) : !acceptedByApi(type.id)) {
       return [
         {
           type,

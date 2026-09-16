@@ -10,16 +10,51 @@
  */
 
 import { datasetFrom, isPublished, type ApiDataset } from './api-dataset'
-import { summarize, type CataloguePort, type DatasetSummary } from './port'
+import { summarize, type CataloguePort, type DatasetSummary, type TaxonomyEntry } from './port'
 import { isApiError } from '../api/errors'
 import type { ApiClient } from '../api/client'
 import type { Dataset } from '../domain/dataset'
+
+/** `PresentationOption`, as the API spells it. */
+interface ApiTaxonomyEntry {
+  family: string
+  types?: string[]
+  requirement?: string
+  single_value?: boolean
+}
 
 export function httpCatalogue(api: ApiClient): CataloguePort {
   return {
     async browse(): Promise<DatasetSummary[]> {
       const body = await api.request<{ datasets?: ApiDataset[] } | ApiDataset[]>('/v1/datasets')
       return listOf(body).filter(isPublished).map(datasetFrom).map(summarize)
+    },
+
+    /**
+     * `GET /v1/visualizations` — BE-5, adopted.
+     *
+     * The authority for what `visualization_type` may be, so nothing here keeps
+     * a copy. A local list is exactly how the two taxonomies drifted apart:
+     * ours said `line-chart` where theirs said `line`, sixteen ids diverged,
+     * and nothing noticed until a save was refused.
+     *
+     * An empty answer is not "no types exist" — it is the endpoint declining,
+     * and `acceptedByApi` falls back rather than locking every widget in the
+     * product. `403` is the likely one: it needs `dataset.read`, which a viewer
+     * who can compose might still lack.
+     */
+    async visualizations(): Promise<TaxonomyEntry[]> {
+      try {
+        const body = await api.request<ApiTaxonomyEntry[]>('/v1/visualizations')
+        return (Array.isArray(body) ? body : []).map((entry) => ({
+          family: entry.family,
+          types: Array.isArray(entry.types) ? entry.types : [],
+          ...(entry.requirement === undefined ? {} : { requirement: entry.requirement }),
+          ...(entry.single_value === undefined ? {} : { singleValue: entry.single_value }),
+        }))
+      } catch {
+        return []
+      }
     },
 
     async describe(datasetId: string): Promise<Dataset | null> {

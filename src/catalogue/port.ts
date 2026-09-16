@@ -43,6 +43,38 @@ export interface CataloguePort {
    * Catalogue cannot be used to probe for Datasets a Viewer cannot see.
    */
   describe(datasetId: string, viewer: ViewerIdentity): Promise<Dataset | null>
+
+  /**
+   * The complete Visualization taxonomy — every Family and the Types in it.
+   *
+   * Independent of any Dataset: this is the whole universe, where
+   * `/presentation` returns the subset one Dataset satisfies. It belongs on this
+   * port because the API files it under Catalogue and because it answers the
+   * same kind of question — what exists, before anything is retrieved.
+   *
+   * It is here at all because a local copy is how two taxonomies drifted apart
+   * once already: ours said `line-chart` where theirs said `line`, and nothing
+   * noticed until a save was refused. A list we fetch cannot go stale without
+   * the fetch saying so.
+   */
+  visualizations(): Promise<TaxonomyEntry[]>
+}
+
+/** One Family of the taxonomy, as `GET /v1/visualizations` returns it. */
+export interface TaxonomyEntry {
+  family: string
+  /** The concrete Visualization Type ids in this Family. */
+  types: string[]
+  /** The Data Shape requirement, in words. */
+  requirement?: string
+  /**
+   * Whether this Family's widgets render one aggregated figure.
+   *
+   * When true the Widget wants an aggregate-shaped Dataset — the Source System
+   * returns the figure over the filters it received, and neither Analytics nor
+   * we compute it.
+   */
+  singleValue?: boolean
 }
 
 export function summarize(dataset: Dataset): DatasetSummary {
