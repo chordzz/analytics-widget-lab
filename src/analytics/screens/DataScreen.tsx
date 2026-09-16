@@ -10,12 +10,13 @@
  * card's footer, which opens the composer already bound to that source.
  */
 
-import { useState, type ReactNode } from 'react'
-import { useCatalogue, useDataset } from '../data/AnalyticsData'
+import { useId, useState, type ReactNode } from 'react'
+import { useAnalyticsData, useCatalogue, useDataset } from '../data/AnalyticsData'
 import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
 import { WidgetCard } from '../widgets/WidgetCard'
 import { typesFor } from '../builder/requirements'
 import { useComposeIntent } from '../builder/useComposeIntent'
+import { useBoards } from '../builder/useBoards'
 import { AccessRecordPanel } from './AccessRecordPanel'
 import type { Dataset, Field } from '../data/types'
 import type { DatasetSummary } from '../../catalogue/port'
@@ -84,7 +85,6 @@ function DatasetCard({
   onNavigate: (screen: ScreenId) => void
 }) {
   const [open, setOpen] = useState(false)
-  const { composeWith } = useComposeIntent()
 
   return (
     <WidgetCard
@@ -103,16 +103,7 @@ function DatasetCard({
             {summary.dimensionCount === 1 ? '' : 's'} · {summary.measureCount} measure
             {summary.measureCount === 1 ? '' : 's'}
           </span>
-          <button
-            type="button"
-            className="a-button a-button--primary"
-            onClick={() => {
-              composeWith(summary.id)
-              onNavigate('create')
-            }}
-          >
-            Build a widget
-          </button>
+          <BuildWidget datasetId={summary.id} onNavigate={onNavigate} />
         </div>
       }
     >
@@ -123,6 +114,87 @@ function DatasetCard({
         {open && <DatasetDetail datasetId={summary.id} />}
       </div>
     </WidgetCard>
+  )
+}
+
+/**
+ * Build a widget from this source, and say where it will go.
+ *
+ * The button used to navigate and leave the destination implicit — the widget
+ * landed on whichever board happened to be open, or on a blank draft the visit
+ * quietly created. Both are defensible defaults and neither was stated, so the
+ * one thing an Author could not find out was the thing the button did.
+ *
+ * The destination is chosen here rather than in the composer because it is a
+ * decision about *this source*, taken before any of the composing starts — and
+ * because a control at the end of a flow is one people discover after they have
+ * already committed.
+ */
+function BuildWidget({
+  datasetId,
+  onNavigate,
+}: {
+  datasetId: string
+  onNavigate: (screen: ScreenId) => void
+}) {
+  const { composeWith } = useComposeIntent()
+  const boards = useBoards()
+  const { viewer } = useAnalyticsData()
+  const selectId = useId()
+
+  /*
+   * Only boards this Author wrote.
+   *
+   * `published` carries every board the Viewer may *see*, which is a wider set
+   * than the ones they may add a widget to — the API gates updates on the
+   * creator, so offering someone else's board would produce a 403 at save time
+   * with the widget already composed.
+   */
+  const mine = boards.boards.filter((board) => board.authorId === viewer.id)
+
+  // The board already open is the likeliest destination and the least
+  // surprising default, since it is what the old behaviour did.
+  const [target, setTarget] = useState<string>(() => boards.editing?.id ?? '')
+
+  const chosen = mine.some((board) => board.id === target) ? target : ''
+
+  return (
+    <div className="a-source-build">
+      {mine.length > 0 && (
+        <>
+          <label className="a-source-build__label" htmlFor={selectId}>
+            Add to
+          </label>
+          <select
+            id={selectId}
+            className="a-filters__select a-source-build__select"
+            value={chosen}
+            onChange={(event) => setTarget(event.target.value)}
+          >
+            {mine.map((board) => (
+              <option key={board.id} value={board.id}>
+                {board.name}
+                {board.status === 'draft' ? ' — draft' : ''}
+              </option>
+            ))}
+            {/* An empty value is the *chosen* new board, not an absent answer —
+                `composeWith` reads it as an explicit null. */}
+            <option value="">New dashboard</option>
+          </select>
+        </>
+      )}
+
+      <button
+        type="button"
+        className="a-button a-button--primary"
+        onClick={() => {
+          composeWith(datasetId, chosen === '' ? null : chosen)
+          onNavigate('create')
+        }}
+      >
+        Build a widget
+      </button>
+    </div>
   )
 }
 

@@ -41,11 +41,23 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
     null,
   )
 
-  // "Build a widget" on Data sources navigates here and leaves the dataset
-  // behind it. Taken exactly once — see `takeIntent`.
+  /*
+   * "Build a widget" on Data sources navigates here and leaves the dataset and
+   * the destination behind it. Taken exactly once — see `takeIntent`.
+   *
+   * The destination is honoured *before* the composer opens, because the board
+   * it lands on is the board that is open when the widget is committed. A
+   * chosen `boardId` opens that board; an explicit `null` means the Author
+   * asked for a new one, and that is not the same as arriving with no
+   * preference — see `ComposeIntent`.
+   */
   useEffect(() => {
-    const datasetId = intent.takeIntent()
-    if (datasetId) setComposing({ datasetId })
+    const taken = intent.takeIntent()
+    if (!taken) return
+    if (taken.boardId) boards.openBoard(taken.boardId)
+    else boards.createBoard()
+    setComposing({ datasetId: taken.datasetId })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent])
 
   // Arriving with nothing open should start a board, not show an error. The
@@ -102,6 +114,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
   if (composing) {
     return (
       <WidgetComposer
+        boardName={editing.name}
         initial={
           isEditing(composing)
             ? {

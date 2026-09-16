@@ -809,3 +809,25 @@
 .a-type__reason--not-accepted {
   color: var(--a-status-warning);
 }
+
+/* "Add to [board] · Build a widget". The select sits before the button because
+ * it qualifies it — reading them in order is the sentence. */
+.a-source-build {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  flex-wrap: wrap;
+}
+
+.a-source-build__label {
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+/* Wider than a filter's select: these are board names, and truncating one to
+   14 characters leaves two drafts indistinguishable — "Untitled dashb…" twice.
+   Scoped to the container so it outranks `.a-filters__select` whatever order
+   the two stylesheets happen to load in. */
+.a-source-build .a-filters__select {
+  max-width: 22ch;
+}

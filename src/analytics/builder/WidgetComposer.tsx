@@ -61,6 +61,7 @@ export function WidgetComposer({
   startWith,
   onCommit,
   onCancel,
+  boardName,
 }: {
   initial?: ComposerDraft
   /**
@@ -72,6 +73,8 @@ export function WidgetComposer({
    */
   startWith?: { datasetId: string }
   onCommit: (draft: ComposerDraft) => void
+  /** The board this will land on, so the commit button can say so. */
+  boardName?: string
   onCancel: () => void
 }) {
   const { datasets, loading: loadingDatasets, failure: catalogueFailure } = useDatasets()
@@ -364,7 +367,13 @@ export function WidgetComposer({
               })
             }
           >
-            {initial ? 'Save changes' : 'Add to dashboard'}
+            {/*
+              Named rather than generic. "Add to dashboard" is true of every
+              board and tells an Author nothing about which one they are about
+              to change — and by this point they may have arrived from Data
+              sources, where they chose.
+            */}
+            {initial ? 'Save changes' : boardName ? `Add to ${boardName}` : 'Add to dashboard'}
           </button>
         </div>
       </div>
