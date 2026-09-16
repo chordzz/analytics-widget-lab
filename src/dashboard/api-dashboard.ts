@@ -74,11 +74,23 @@ const BINDINGS_KEY = 'smc.parameterBindings'
 
 // --- outbound ---------------------------------------------------------------
 
-export function dashboardInputFrom(board: Board): ApiDashboardInput {
+/**
+ * Resolves a Widget's client id to the one the API knows, or to nothing.
+ *
+ * `undefined` means *assign one* — the Widget has never been saved, and the
+ * schema says an id is "assigned on save when absent".
+ */
+export type WidgetIdResolver = (clientId: string) => string | undefined
+
+export function dashboardInputFrom(
+  board: Board,
+  /** Omitted leaves every Widget id as the client spells it. */
+  widgetId: WidgetIdResolver = (clientId) => clientId,
+): ApiDashboardInput {
   return {
     name: board.name,
     description: board.description,
-    widgets: placedWidgets(board).map(widgetInputFrom),
+    widgets: placedWidgets(board).map((widget) => widgetInputFrom(widget, widgetId)),
     /*
      * Controls and Sections travel whole. The API stores composition elements
      * verbatim for exactly this — they draw from no Dataset, which is what
@@ -90,9 +102,19 @@ export function dashboardInputFrom(board: Board): ApiDashboardInput {
   }
 }
 
-function widgetInputFrom(widget: PlacedWidget): ApiWidget {
+function widgetInputFrom(widget: PlacedWidget, widgetId: WidgetIdResolver): ApiWidget {
+  /*
+   * Omitted when the API has never seen this Widget, so it issues the id.
+   *
+   * It used to be sent as minted, which meant `local:w-4klw2vxzdo` — a client
+   * artifact, complete with the prefix that marks *our* unsaved records —
+   * persisted into their data. The board id was already handled this way; the
+   * Widget id was not, and nothing said why they should differ.
+   */
+  const assigned = widgetId(widget.id)
+
   return {
-    id: widget.id,
+    ...(assigned === undefined ? {} : { id: assigned }),
     title: widget.title,
     dataset_id: widget.datasetId,
     /*

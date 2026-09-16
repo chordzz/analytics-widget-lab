@@ -27,6 +27,7 @@
 import {
   boardFrom,
   dashboardInputFrom,
+  type WidgetIdResolver,
   grantInputFrom,
   grantKey,
   isLive,
@@ -36,7 +37,7 @@ import {
 import { browserEditingPointer, type EditingPointer } from './editing-pointer'
 import { isApiError } from '../api/errors'
 import type { ApiClient } from '../api/client'
-import type { Board } from '../analytics/builder/boards'
+import { placedWidgets, type Board } from '../analytics/builder/boards'
 import type { ShareGrant } from '../domain/dashboard'
 import type { BoardStorePort } from '../analytics/builder/store'
 
@@ -89,6 +90,19 @@ export function httpBoardStore(
   let baseline = new Map<string, Board>()
   /** Local id → the id the API assigned. */
   const assigned = new Map<string, string>()
+  /**
+   * The same translation for Widgets, per board.
+   *
+   * A Widget is minted a client id so it can be placed and edited immediately,
+   * and that id used to travel to the API — which kept it, so `local:w-…`
+   * ended up in their records, prefix and all. Now it is withheld on the first
+   * save and the API issues one, which this remembers so later saves address
+   * the Widget by the name the server knows it under.
+   *
+   * Per board because a Widget has no identity outside the Dashboard holding it
+   * — the API embeds them by value, which is D23.
+   */
+  const assignedWidgets = new Map<string, Map<string, string>>()
   /** Local ids with a create in flight, so a second save does not duplicate. */
   const creating = new Set<string>()
   /**
@@ -117,6 +131,44 @@ export function httpBoardStore(
   const sentGrants = new Map<string, Set<string>>()
 
   const remoteId = (localId: string) => assigned.get(localId) ?? localId
+
+  /**
+   * What to call a Widget on the wire.
+   *
+   * The id the API issued if it has issued one; the client's own if it was
+   * never a local mint — a Widget that arrived from a load already carries the
+   * server's name. `undefined` asks for one.
+   */
+  const widgetIdFor = (boardId: string): WidgetIdResolver => {
+    const known = assignedWidgets.get(boardId)
+    return (clientId) =>
+      known?.get(clientId) ?? (clientId.startsWith(LOCAL_PREFIX) ? undefined : clientId)
+  }
+
+  /**
+   * Record the ids the API issued, pairing by grid position.
+   *
+   * Position rather than array order: no two Widgets on a board occupy the same
+   * cell — the grid guarantees it — so `x,y` identifies one unambiguously,
+   * where order would depend on the server returning what it was sent in the
+   * order it was sent.
+   */
+  function rememberWidgetIds(board: Board, returned: ApiDashboard | undefined): void {
+    if (!returned?.widgets) return
+
+    const atPosition = new Map(
+      returned.widgets
+        .filter((widget) => typeof widget.id === 'string' && widget.id !== '')
+        .map((widget) => [`${String(widget.layout?.x)},${String(widget.layout?.y)}`, widget.id!]),
+    )
+
+    const known = assignedWidgets.get(board.id) ?? new Map<string, string>()
+    for (const widget of placedWidgets(board)) {
+      const issued = atPosition.get(`${String(widget.x)},${String(widget.y)}`)
+      if (issued !== undefined && issued !== widget.id) known.set(widget.id, issued)
+    }
+    assignedWidgets.set(board.id, known)
+  }
 
   return {
     async load(_seed, authorId) {
@@ -184,6 +236,7 @@ export function httpBoardStore(
           })
           baseline.delete(id)
           assigned.delete(id)
+          assignedWidgets.delete(id)
           sentGrants.delete(id)
         })
       }
@@ -197,9 +250,10 @@ export function httpBoardStore(
           await attempt(board, async () => {
             const created = await api.request<ApiDashboard>('/v1/dashboards', {
               method: 'POST',
-              body: dashboardInputFrom(board),
+              body: dashboardInputFrom(board, widgetIdFor(id)),
             })
             if (created?.id) assigned.set(id, created.id)
+            rememberWidgetIds(board, created)
             baseline.set(id, board)
             if (board.status === 'published') await publish(board)
           })
@@ -208,15 +262,16 @@ export function httpBoardStore(
           continue
         }
 
-        if (composesTheSame(known, board)) {
+        if (composesTheSame(known, board, widgetIdFor(id))) {
           // Nothing the API holds has changed. Publication is checked below
           // regardless, because status is not part of the composition.
         } else {
           await attempt(board, async () => {
-            await api.request(`/v1/dashboards/${encodeURIComponent(remoteId(id))}`, {
-              method: 'PATCH',
-              body: dashboardInputFrom(board),
-            })
+            const updated = await api.request<ApiDashboard>(
+              `/v1/dashboards/${encodeURIComponent(remoteId(id))}`,
+              { method: 'PATCH', body: dashboardInputFrom(board, widgetIdFor(id)) },
+            )
+            rememberWidgetIds(board, updated)
             baseline.set(id, board)
           })
         }
@@ -363,8 +418,14 @@ export function httpBoardStore(
  * sees — `updated`, which is stamped on every action — do not provoke a PATCH.
  * Without this, dragging one widget saves every board on the screen.
  */
-function composesTheSame(a: Board, b: Board): boolean {
-  return JSON.stringify(dashboardInputFrom(a)) === JSON.stringify(dashboardInputFrom(b))
+function composesTheSame(a: Board, b: Board, widgetId: WidgetIdResolver): boolean {
+  // Through the same resolver, or the first save after a Widget is issued an id
+  // would look like a change to the composition when only its name on the wire
+  // moved.
+  return (
+    JSON.stringify(dashboardInputFrom(a, widgetId)) ===
+    JSON.stringify(dashboardInputFrom(b, widgetId))
+  )
 }
 
 function listOf(body: ApiDashboard[] | { dashboards?: ApiDashboard[] } | undefined): ApiDashboard[] {

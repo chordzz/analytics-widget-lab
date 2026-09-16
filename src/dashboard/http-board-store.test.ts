@@ -472,3 +472,92 @@ describe('a store that does not know what the server holds does not guess', () =
     expect(calls).toEqual([])
   })
 })
+
+describe('a Widget is named by the server, not by us', () => {
+  /*
+   * `local:w-4klw2vxzdo` was found sitting in the API's own records. A Widget is
+   * minted a client id so it can be placed and edited immediately, and that id
+   * travelled to the API — which kept it, prefix and all, because the schema
+   * says an id is "assigned on save when absent" and ours was never absent.
+   *
+   * The board id was already handled this way. Nothing said why a Widget should
+   * differ.
+   */
+  const widgetsSent = (calls: Call[]) =>
+    calls
+      .filter((call) => call.method === 'POST' || call.method === 'PATCH')
+      .map((call) => ((call.body as { widgets?: { id?: string }[] }).widgets ?? []).map((w) => w.id))
+
+  /** A board carrying one Widget, since the default helper carries none. */
+  const withWidget = (id: string, widgetId = 'local:w-4klw2vxzdo', description = '') =>
+    board({
+      id,
+      description,
+      widgets: {
+        [widgetId]: {
+          id: widgetId,
+          typeId: 'line-chart',
+          datasetId: 'peniremit.profit',
+          mapping: { x: 'date', series: ['usd'] },
+        },
+      },
+      placements: [{ widgetId, x: 0, y: 0, w: 8, h: 7 }],
+    })
+
+  /** Answers the way the API does: an absent id comes back assigned. */
+  const assigning = (call: Call) => {
+    if (call.method === 'GET') return ok([])
+    const body = call.body as { widgets?: Record<string, unknown>[] } | null
+    return ok({
+      id: 'srv-1',
+      widgets: (body?.widgets ?? []).map((widget, index) => ({
+        ...widget,
+        id: widget.id ?? `srv-w-${String(index + 1)}`,
+      })),
+    })
+  }
+
+  test('a new Widget is sent without an id', async () => {
+    const { store, calls, ready } = storeWith(assigning)
+    await ready()
+    await store.save(state(withWidget('local:b-1')))
+
+    expect(widgetsSent(calls)).toEqual([[undefined]])
+  })
+
+  test('and later saves address it by the id the API issued', async () => {
+    /*
+     * The half that makes omitting safe. Without it, every save would omit the
+     * id again and the API would assign another — turning one Widget into a new
+     * one on each edit.
+     */
+    const { store, calls, ready } = storeWith(assigning)
+    await ready()
+    await store.save(state(withWidget('local:b-1')))
+    await store.save(state(withWidget('local:b-1', 'local:w-4klw2vxzdo', 'edited')))
+
+    expect(widgetsSent(calls)).toEqual([[undefined], ['srv-w-1']])
+  })
+
+  test('a Widget that came from a load keeps the name it arrived with', async () => {
+    // Only a local mint is withheld. An id the server issued is the server's
+    // own, and withholding it would ask for a second.
+    const { store, calls, ready } = storeWith(assigning)
+    await ready()
+    await store.save(state(withWidget('local:b-1', 'srv-w-9')))
+
+    expect(widgetsSent(calls)).toEqual([['srv-w-9']])
+  })
+
+  test('being issued an id is not itself a change to the composition', async () => {
+    // Otherwise the save after a create would PATCH a board nothing had edited,
+    // because its Widget answers to a different name on the wire.
+    const { store, traffic, ready } = storeWith(assigning)
+    await ready()
+    const unchanged = withWidget('local:b-1')
+    await store.save(state(unchanged))
+    await store.save(state(unchanged))
+
+    expect(traffic()).toEqual(['POST /v1/dashboards'])
+  })
+})
