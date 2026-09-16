@@ -10,16 +10,14 @@
  * card's footer, which opens the composer already bound to that source.
  */
 
-import { useState } from 'react'
-import { useCatalogue, useDataset, useRows } from '../data/AnalyticsData'
+import { useState, type ReactNode } from 'react'
+import { useCatalogue, useDataset } from '../data/AnalyticsData'
 import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
-import type { WidgetRenderState } from '../../retrieval/render-state'
-import { DataTable } from '../widgets/primitives'
 import { WidgetCard } from '../widgets/WidgetCard'
 import { typesFor } from '../builder/requirements'
 import { useComposeIntent } from '../builder/useComposeIntent'
 import { AccessRecordPanel } from './AccessRecordPanel'
-import type { Dataset } from '../data/types'
+import type { Dataset, Field } from '../data/types'
 import type { DatasetSummary } from '../../catalogue/port'
 import type { ScreenId } from '../shell/nav'
 
@@ -129,12 +127,19 @@ function DatasetCard({
 }
 
 /**
- * The Fields, what can be built from them, and a sample.
+ * What the publisher declared about this source — and nothing they serve.
  *
- * Mounted only while a card is open, which is what makes the listing cheap. It
- * asks the Catalogue and the retrieval port separately, because they are
- * separate ports answering separate questions — and only the second one touches
- * records.
+ * This used to end with twenty live records, which cost a query per expansion
+ * and could not work at all for a Dataset with required Filter Parameters: the
+ * panel has no Author to ask for a date range and cannot invent one, because an
+ * arbitrary slice presented as "a sample" is a claim about the data that nobody
+ * made.
+ *
+ * Records belong to the composer, where a person is making choices and the
+ * preview is the real widget answering to them. Here the question is only
+ * whether this source is worth taking further, and the declaration answers it:
+ * what the Fields are, what one row means, what can be filtered, and how much
+ * can be drawn from it.
  */
 function DatasetDetail({ datasetId }: { datasetId: string }) {
   const { dataset, loading, failure } = useDataset(datasetId)
@@ -166,109 +171,98 @@ function DatasetDetail({ datasetId }: { datasetId: string }) {
   }
 
   const buildable = typesFor(dataset).length
+  const parameters = dataset.filterParameters ?? []
 
   return (
-    <>
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 'var(--a-space-2)',
-          marginTop: 'var(--a-space-3)',
-        }}
-      >
-        {dataset.fields.map((field) => (
-          <span
-            key={field.key}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '3px 9px',
-              border: '1px solid var(--a-border)',
-              borderRadius: 999,
-              fontSize: 'var(--a-text-xs)',
-              color: 'var(--a-text)',
-            }}
-          >
-            {field.label}
-            <span style={{ color: 'var(--a-text-muted)' }}>
-              {field.role === 'time-dimension'
-                ? 'time'
-                : field.role === 'measure'
-                  ? 'measure'
-                  : 'dimension'}
+    <div className="a-source-detail">
+      <Detail label="Fields">
+        <div className="a-source-detail__pills">
+          {dataset.fields.map((field) => (
+            <span key={field.key} className="a-source-pill">
+              {field.label}
+              <span className="a-source-pill__role">{roleLabel(field.role)}</span>
+              {field.role === 'measure' && field.aggregations.length > 0 && (
+                /* What the publisher says this number can meaningfully do —
+                   FR-DP-04, and the thing that decides which widgets can use it. */
+                <span className="a-source-pill__note">{field.aggregations.join(', ')}</span>
+              )}
             </span>
-          </span>
-        ))}
-      </div>
+          ))}
+        </div>
+      </Detail>
 
-      <p
-        style={{
-          margin: 'var(--a-space-3) 0 0',
-          fontSize: 'var(--a-text-xs)',
-          color: 'var(--a-text-muted)',
-        }}
-      >
+      <Detail label="One row is">{grainNote(dataset)}</Detail>
+
+      {parameters.length > 0 && (
+        <Detail label="Filters this source accepts">
+          <div className="a-source-detail__pills">
+            {parameters.map((parameter) => (
+              <span key={parameter.name} className="a-source-pill">
+                {parameter.label}
+                {parameter.required && (
+                  /* Not a preference. The endpoint cannot answer without it, so
+                     a widget over this source must supply one at composition
+                     time or not be composable at all. */
+                  <span className="a-source-pill__role">required</span>
+                )}
+                {parameter.allowedValues && (
+                  <span className="a-source-pill__note">
+                    {parameter.allowedValues.join(' · ')}
+                  </span>
+                )}
+              </span>
+            ))}
+          </div>
+        </Detail>
+      )}
+
+      <Detail label="Sensitivity">
+        {sensitivityNote(dataset)}
+      </Detail>
+
+      <Detail label="Can be drawn as">
         {/* The useful half: whether this source is versatile or good for one thing. */}
-        {buildable} widget {buildable === 1 ? 'type' : 'types'} can show this
-      </p>
-
-      {/* `maxHeight` without `overflow` clips nothing — the sample ran on over
-          the cards below it. */}
-      <div style={{ marginTop: 'var(--a-space-4)', maxHeight: 280, overflowY: 'auto' }}>
-        <SamplePreview dataset={dataset} />
-      </div>
-    </>
+        {buildable} widget {buildable === 1 ? 'type' : 'types'}
+      </Detail>
+    </div>
   )
 }
+
+function Detail({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="a-source-detail__row">
+      <span className="a-source-detail__label">{label}</span>
+      <div className="a-source-detail__value">{children}</div>
+    </div>
+  )
+}
+
+const roleLabel = (role: Field['role']): string =>
+  role === 'time-dimension' ? 'time' : role === 'measure' ? 'measure' : 'dimension'
 
 /**
- * A few records from one source.
+ * What one row represents — BE-2, and the thing an Author most needs before
+ * binding a widget.
  *
- * Its own component because it needs a hook, and a hook cannot be called from
- * inside the list's `map`. That is a React rule rather than a design one, but
- * the split it forces is right anyway: the listing is Catalogue work and the
- * sample is retrieval work, and they are different ports.
+ * `[]` is meaningful and absent is not: an empty grain says the endpoint answers
+ * with a single summary row, which is exactly what a stat card wants and exactly
+ * what a line chart cannot use. An absent one says the publisher has not told us.
  */
-function SamplePreview({ dataset }: { dataset: Dataset }) {
-  const state = useRows(dataset.id, 20)
+export function grainNote(dataset: Dataset): string {
+  if (dataset.grain === undefined) return 'Not declared by the publisher.'
+  if (dataset.grain.length === 0) return 'A single summary row over whatever you filter to.'
 
-  if (state.status === 'ready') {
-    return <DataTable data={state.rows} columns={dataset.fields} limit={20} />
-  }
-
-  /*
-   * The same six states a Widget draws, in one line each.
-   *
-   * This used to say "No records to show" for every one of them, which told a
-   * Viewer the Dataset was empty when the truth might be that they are not
-   * allowed to read it — FR-DA-11's exact prohibition, reached through a
-   * ternary. The sample is the one place on this screen that touches real
-   * records, so it is the one place those answers differ.
-   */
-  return (
-    <p className="a-muted" style={{ margin: 0, fontSize: 'var(--a-text-xs)' }}>
-      {sampleNote(state)}
-    </p>
-  )
+  const labels = dataset.grain.map((key) => dataset.fields.find((f) => f.key === key)?.label ?? key)
+  return `One row per ${labels.join(' per ')}.`
 }
 
-export function sampleNote(state: WidgetRenderState): string {
-  switch (state.status) {
-    case 'loading':
-      return 'Loading a sample…'
-    case 'empty':
-      return 'No records to show.'
-    case 'denied':
-      // Not "no records": the Dataset may be full. What is absent is permission,
-      // and that is a different thing to tell someone.
-      return 'You do not have access to the records behind this source.'
-    case 'withdrawn':
-      return 'This source has been withdrawn by the product that publishes it.'
-    case 'failed':
-      return state.message || 'The sample could not be loaded.'
-    default:
-      return 'No records to show.'
-  }
+/** Both halves, because they answer different questions. */
+export function sensitivityNote(dataset: Dataset): string {
+  const protection = `${dataset.classification[0].toUpperCase()}${dataset.classification.slice(1)}`
+  // A Dataset can be confidential *and* personal; the API keeps them apart for
+  // that reason, so saying only one of them would be half an answer.
+  return dataset.exposesPersonalData
+    ? `${protection}, and holds personal data.`
+    : `${protection}.`
 }
+

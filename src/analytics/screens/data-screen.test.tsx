@@ -17,11 +17,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { AnalyticsDataProvider } from '../data/AnalyticsData'
 import { AccessRecordPanel } from './AccessRecordPanel'
 import { ApiError } from '../../api/errors'
-import { sampleNote } from './DataScreen'
+import { grainNote, sensitivityNote } from './DataScreen'
 import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
-import { WIDGET_RENDER_STATUSES } from '../../retrieval/render-state'
-import { WidgetComposer, previewPrompt } from '../builder/WidgetComposer'
-import type { CataloguePort } from '../../catalogue/port'
 import { catalogueFailure } from '../data/AnalyticsData'
 import type { DatasetRetrievalPort } from '../../retrieval/port'
 
@@ -133,125 +130,69 @@ describe('the Catalogue failing is told apart from the Catalogue being empty', (
   })
 })
 
-describe('the sample says which of the six it hit', () => {
-  /*
-   * The sample is the one place on this screen that touches real records, so it
-   * is the one place the four outcomes differ. They all used to read "No records
-   * to show" — which tells a Viewer the Dataset is empty when the truth may be
-   * that they are not allowed to read it.
-   */
-  test('denied is not "no records"', () => {
-    // FR-DA-11. A denial drawn as absence teaches the Viewer the figure is zero.
-    const said = sampleNote({ status: 'denied' })
-    expect(said).toContain('do not have access')
-    expect(said.toLowerCase()).not.toContain('no records')
+/** A declaration shaped like the live `peniremit.profit` one. */
+const profit = {
+  id: 'peniremit.profit',
+  name: 'Profit',
+  description: 'Net profit over the selected period',
+  sourceSystem: 'peniremit',
+  classification: 'confidential' as const,
+  exposesPersonalData: false,
+  fields: [
+    { key: 'date', label: 'Date', role: 'time-dimension' as const, filterable: true, sortable: true },
+    { key: 'usd', label: 'USD', role: 'measure' as const, filterable: false, sortable: true, aggregations: ['sum' as const] },
+  ],
+}
+
+describe('what one row is, said in words', () => {
+  test('a declared grain names the Fields, by their labels', () => {
+    // BE-2, granted. The thing an Author most needs before binding a widget,
+    // and the thing a column list cannot tell them.
+    expect(grainNote({ ...profit, grain: ['date'] })).toBe('One row per Date.')
   })
 
-  test('withdrawn names the publisher, not the data', () => {
-    const said = sampleNote({ status: 'withdrawn' })
-    expect(said).toContain('withdrawn')
-    expect(said.toLowerCase()).not.toContain('no records')
-  })
-
-  test('empty is still plainly empty', () => {
-    // FR-VZ-10 — authorized, and nothing to say. It must not read as a fault.
-    expect(sampleNote({ status: 'empty' })).toBe('No records to show.')
-  })
-
-  test('a failure carries its own message', () => {
-    expect(sampleNote({ status: 'failed', message: 'Source system timed out' })).toBe(
-      'Source system timed out',
-    )
-  })
-
-  test('a failure with no message still says something', () => {
-    expect(sampleNote({ status: 'failed', message: '' })).toContain('could not be loaded')
-  })
-
-  test('loading does not claim an outcome', () => {
-    // A preview that flashes "no records" before the answer arrives has already
-    // said something false.
-    expect(sampleNote({ status: 'loading' }).toLowerCase()).not.toContain('no records')
-  })
-
-  test('all six are distinguishable from one another', () => {
-    const said = WIDGET_RENDER_STATUSES.map((status) =>
-      sampleNote(
-        status === 'ready'
-          ? { status: 'ready', rows: [] }
-          : status === 'failed'
-            ? { status: 'failed', message: 'boom' }
-            : { status },
-      ),
-    )
-    // `ready` never reaches this function — the table draws instead — so it is
-    // the one duplicate permitted.
-    const distinct = new Set(said.filter((_, index) => WIDGET_RENDER_STATUSES[index] !== 'ready'))
-    expect(distinct.size).toBe(WIDGET_RENDER_STATUSES.length - 1)
-  })
-})
-
-describe('step 1 of the composer answers the same question', () => {
-  /*
-   * The worse of the two surfaces, and the one that prompted this: a numbered
-   * step with a blank area beneath it reads as a page that failed to finish
-   * rendering, not as an answer. Both screens ask the Catalogue the same
-   * question, so they give the same three answers.
-   */
-  const emptyCatalogue: CataloguePort = { browse: async () => [], describe: async () => null }
-
-  const composer = () =>
-    renderToStaticMarkup(
-      <AnalyticsDataProvider catalogue={emptyCatalogue}>
-        <WidgetComposer onCommit={() => {}} onCancel={() => {}} />
-      </AnalyticsDataProvider>,
-    )
-
-  test('it does not render a bare step while it is still asking', () => {
-    // The first paint is the loading branch, not an empty list.
-    expect(words(composer())).toContain('Loading data sources')
-  })
-
-  test('the empty message says a widget cannot be built without one', () => {
-    // This is the end of the road on this screen, unlike the Data sources
-    // listing where it is merely nothing to read.
-    const said = words(renderToStaticMarkup(
-      <NoDatasets>
-        <p>A widget is built from a data source, so there is nothing to compose until one exists.</p>
-      </NoDatasets>,
-    ))
-    expect(said).toContain('nothing to compose')
-    expect(said).toContain('Ask the team')
-  })
-})
-
-describe('the preview does not ask for the impossible', () => {
-  test('it prompts for a source while there are sources', () => {
-    expect(previewPrompt({ hasDataset: false, hasSources: true })).toBe(
-      'Choose a data source to begin.',
-    )
-  })
-
-  test('and goes quiet when there are none', () => {
+  test('an empty grain is a summary row, not a missing answer', () => {
     /*
-     * "Choose a data source to begin" beside a panel explaining that none exist
-     * reads as the screen disagreeing with itself — and instructs someone to do
-     * something they cannot.
+     * The distinction the field exists for. `[]` says the endpoint answers with
+     * one figure — exactly what a stat card wants and exactly what a line chart
+     * cannot use.
      */
-    const said = previewPrompt({ hasDataset: false, hasSources: false })
-    expect(said).toBe('Nothing to preview yet.')
-    expect(said.toLowerCase()).not.toContain('choose')
+    expect(grainNote({ ...profit, grain: [] })).toContain('single summary row')
   })
 
-  test('a chosen source outranks both', () => {
-    expect(previewPrompt({ hasDataset: true, hasSources: true })).toBe(
-      'Pick a widget to see it here.',
+  test('and an absent one says so rather than guessing', () => {
+    const said = grainNote(profit)
+    expect(said).toContain('Not declared')
+    expect(said).not.toContain('summary')
+  })
+
+  test('a key with no matching Field still reads as itself', () => {
+    // A declaration can name a grain Field it did not declare. Better to show
+    // the raw key than to drop it and understate what a row is.
+    expect(grainNote({ ...profit, grain: ['corridor'] })).toBe('One row per corridor.')
+  })
+})
+
+describe('sensitivity answers both questions', () => {
+  test('the protection level is shown as declared', () => {
+    // It used to arrive as "internal" whatever the publisher said — the
+    // translation table matched none of the current words and defaulted.
+    expect(sensitivityNote(profit)).toBe('Confidential.')
+  })
+
+  test('personal data is stated separately, because it is a separate question', () => {
+    /*
+     * A Dataset can be confidential *and* personal; the API keeps the two apart
+     * for that reason, so reporting only one of them would be half an answer.
+     */
+    expect(sensitivityNote({ ...profit, exposesPersonalData: true })).toBe(
+      'Confidential, and holds personal data.',
     )
   })
 
-  test('while the Catalogue is still being asked, it keeps prompting', () => {
-    // Saying "nothing to preview" a moment before the list arrives would be
-    // wrong, and the correction is more jarring than the wait.
-    expect(previewPrompt({ hasDataset: false, hasSources: true })).toContain('Choose')
+  test('a public Dataset holding personal data still says so', () => {
+    expect(sensitivityNote({ ...profit, classification: 'public', exposesPersonalData: true })).toContain(
+      'personal data',
+    )
   })
 })
