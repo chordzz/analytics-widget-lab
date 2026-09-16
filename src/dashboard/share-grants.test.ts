@@ -89,8 +89,15 @@ function storeWith(fail?: (path: string) => Response | undefined) {
 
 const grantCalls = (sent: Sent[]) => sent.filter((call) => call.path.endsWith('/share-grants'))
 
-/** Puts a board into the store's baseline, the way a load would. */
+/**
+ * Puts a board into the store's baseline, the way the real caller does.
+ *
+ * The `load` is not ceremony: a store that has never been told what the server
+ * holds now refuses to save, because a `baseline` that was never filled in makes
+ * every board look new and creates the whole workspace again.
+ */
 async function seeded(store: ReturnType<typeof storeWith>['store'], initial: Board) {
+  await store.load([], 'u1')
   await store.save({ boards: [initial], editingId: null })
 }
 

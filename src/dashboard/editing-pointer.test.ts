@@ -95,6 +95,7 @@ describe('it holds the id the server knows', () => {
      * reloaded — which is the one moment it is read.
      */
     const { store, pointer } = storeWith([], memoryEditingPointer(), 'srv-42')
+    await store.load([], 'u1')
     await store.save({ boards: [board('local:board-xyz')], editingId: 'local:board-xyz' })
     expect(pointer.read()).toBe('srv-42')
   })

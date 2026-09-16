@@ -8,7 +8,7 @@
  * click. That is why `expired` is a state distinct from `signed-out`.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnalyticsModule } from '../analytics'
 import { httpAuthorization } from '../access/http-authorization'
 import { httpCatalogue } from '../catalogue/http-catalogue'
@@ -195,6 +195,50 @@ function SignedIn({
     }
   }, [api])
 
+  /*
+   * The board store is built **once**, and never by a render.
+   *
+   * It is stateful: it remembers what the server holds, which local ids the API
+   * has assigned, and which creates are in flight. All of that lives in a
+   * closure, so a second instance believes the server is empty — and the next
+   * save creates every board again. That is not hypothetical; it produced two
+   * identical drafts, same name, same widget id, ninety minutes apart.
+   *
+   * It only took the `adapters` memo recomputing. `useBoards` schedules its save
+   * from an effect keyed on the store, and when a new one arrives the load
+   * effect's `setLoading(true)` has not rendered yet — so the save effect still
+   * sees `loading: false` and fires through a store that has never loaded.
+   *
+   * `actor.permissions` is an object, and a fresh `/v1/me` gives a fresh
+   * reference. That was enough.
+   */
+  /*
+   * The notes, read through a ref.
+   *
+   * The store must not be rebuilt by a render (below), so it cannot close over
+   * callbacks that a render might replace. These are stable today; the ref is
+   * what keeps that from being a thing to remember.
+   */
+  const notify = useRef({
+    saveFailed: noteSaveFailed,
+    saved: noteSaved,
+    grantNotRevoked: noteGrantNotRevoked,
+  })
+  notify.current = {
+    saveFailed: noteSaveFailed,
+    saved: noteSaved,
+    grantNotRevoked: noteGrantNotRevoked,
+  }
+
+  const [boardStore] = useState(() =>
+    httpBoardStore(api, {
+      // Read through a ref so a re-rendered callback cannot rebuild the store.
+      onSaveFailed: (board, error) => notify.current.saveFailed(board, error),
+      onSaved: (board) => notify.current.saved(board),
+      onGrantNotRevoked: (board, grant) => notify.current.grantNotRevoked(board, grant),
+    }),
+  )
+
   const adapters = useMemo(
     () => ({
       data: {
@@ -216,27 +260,9 @@ function SignedIn({
          */
         permissions: actor.permissions,
       },
-      boardStore: httpBoardStore(api, {
-        onSaveFailed: (board, error) => {
-          noteSaveFailed(board, error)
-        },
-        onSaved: (board) => {
-          noteSaved(board)
-        },
-        onGrantNotRevoked: (board, grant) => {
-          noteGrantNotRevoked(board, grant)
-        },
-      }),
+      boardStore,
     }),
-    [
-      api,
-      actor.id,
-      actor.fullName,
-      actor.permissions,
-      noteSaveFailed,
-      noteSaved,
-      noteGrantNotRevoked,
-    ],
+    [api, actor.id, actor.fullName, actor.permissions, boardStore],
   )
 
   return (

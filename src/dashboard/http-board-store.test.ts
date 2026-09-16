@@ -42,10 +42,26 @@ function storeWith(script: (call: Call) => Response = () => ok({})) {
     onDiagnostic: () => {},
   })
   const failures: string[] = []
+  const store = httpBoardStore(api, { onSaveFailed: (board) => failures.push(board.id) })
+
   return {
-    store: httpBoardStore(api, { onSaveFailed: (board) => failures.push(board.id) }),
+    store,
     calls,
     failures,
+    /**
+     * Load first, then forget the traffic it made.
+     *
+     * The real caller always does — `useBoards` will not save until its load
+     * resolves — and the store now refuses to save before it has been told what
+     * the server holds, because a `baseline` that was never filled in makes
+     * every board look new. Clearing the log afterwards keeps the assertions
+     * about the save rather than the setup.
+     */
+    ready: async () => {
+      await store.load([], 'u1')
+      calls.length = 0
+      return store
+    },
     /** Just the shape of the traffic, which is what these tests are about. */
     traffic: () => calls.map((call) => `${call.method} ${call.path}`),
   }
@@ -146,7 +162,8 @@ describe('an unchanged board sends nothing', () => {
 
 describe('a new board is created exactly once', () => {
   test('the first save posts it', async () => {
-    const { store, traffic } = storeWith(() => ok(remote()))
+    const { store, traffic, ready } = storeWith(() => ok(remote()))
+    await ready()
     await store.save(state(board({ id: 'local:b-1' })))
     expect(traffic()).toEqual(['POST /v1/dashboards'])
   })
@@ -154,7 +171,8 @@ describe('a new board is created exactly once', () => {
   test('the second save does not post it again', async () => {
     // The debounce fires on every change, and a board created and then
     // immediately renamed would otherwise be created twice.
-    const { store, calls, traffic } = storeWith(() => ok(remote()))
+    const { store, calls, traffic, ready } = storeWith(() => ok(remote()))
+    await ready()
     const created = board({ id: 'local:b-1' })
     await store.save(state(created))
     calls.length = 0
@@ -170,7 +188,8 @@ describe('a new board is created exactly once', () => {
      * of, which 404s — and a 404 on a save is indistinguishable from a board
      * that was deleted underneath you.
      */
-    const { store, calls } = storeWith(() => ok(remote({ id: 'srv-99' })))
+    const { store, calls, ready } = storeWith(() => ok(remote({ id: 'srv-99' })))
+    await ready()
     const created = board({ id: 'local:b-1' })
     await store.save(state(created))
     calls.length = 0
@@ -221,7 +240,8 @@ describe('publication is its own decision', () => {
   })
 
   test('a board created already published is created and then published', async () => {
-    const { store, traffic } = storeWith(() => ok(remote()))
+    const { store, traffic, ready } = storeWith(() => ok(remote()))
+    await ready()
     await store.save(state(board({ id: 'local:b-1', status: 'published' })))
     expect(traffic()).toEqual(['POST /v1/dashboards', 'POST /v1/dashboards/srv-1/publish'])
   })
@@ -354,6 +374,7 @@ describe('a note about an unsaved board can learn it since saved', () => {
       onDiagnostic: () => {},
     })
     const store = httpBoardStore(api, { onSaved: (entry) => saved.push(entry.name) })
+    await store.load([], 'u1')
 
     await store.save({ boards: [board({ id: 'local:b1', name: 'Finance daily' })], editingId: null })
 
@@ -363,12 +384,20 @@ describe('a note about an unsaved board can learn it since saved', () => {
   test('a rejected one does not', async () => {
     const saved: string[] = []
     const failed: string[] = []
-    const fetchImpl = (() =>
+    // The listing answers; only the write is rejected. A store that cannot load
+    // refuses to save at all, which would make this test pass for the wrong
+    // reason.
+    const fetchImpl = ((_input: RequestInfo | URL, init?: RequestInit) =>
       Promise.resolve(
-        new Response(JSON.stringify({ status: false, message: 'Dashboard rejected' }), {
-          status: 400,
-          headers: { 'content-type': 'application/json' },
-        }),
+        (init?.method ?? 'GET') === 'GET'
+          ? new Response(JSON.stringify({ status: true, message: 'OK', data: [] }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            })
+          : new Response(JSON.stringify({ status: false, message: 'Dashboard rejected' }), {
+              status: 400,
+              headers: { 'content-type': 'application/json' },
+            }),
       )) as unknown as typeof globalThis.fetch
 
     const api = createApiClient({
@@ -381,10 +410,65 @@ describe('a note about an unsaved board can learn it since saved', () => {
       onSaved: (entry) => saved.push(entry.name),
       onSaveFailed: (entry) => failed.push(entry.name),
     })
+    await store.load([], 'u1')
 
     await store.save({ boards: [board({ id: 'local:b1', name: 'Finance daily' })], editingId: null })
 
     expect(failed).toEqual(['Finance daily'])
     expect(saved).toEqual([])
+  })
+})
+
+describe('a store that does not know what the server holds does not guess', () => {
+  /*
+   * The duplicate-drafts bug, reproduced. Two boards appeared with the same
+   * name, the same widget id — `local:w-4klw2vxzdo` in both — and creation
+   * timestamps ninety minutes apart: one client state, sent twice as two
+   * creates.
+   *
+   * Everything in `save` diffs against `baseline`, which lives in a closure. A
+   * second store instance has an empty one, so a board still carrying a
+   * `local:` id looks new and is created again. It took only the `adapters`
+   * memo recomputing — `useBoards` schedules its save from an effect keyed on
+   * the store, and when a new one arrives the load effect's `setLoading(true)`
+   * has not rendered yet, so the save fires through a store that never loaded.
+   */
+  const local = () => board({ id: 'local:b-1', name: 'Olaife-test-dashboard' })
+
+  test('a second store does not create a board the first one already did', async () => {
+    const first = storeWith(() => ok(remote()))
+    await first.ready()
+    await first.store.save(state(local()))
+    expect(first.traffic()).toEqual(['POST /v1/dashboards'])
+
+    // The store swapped underneath its caller, which is the whole bug.
+    const second = storeWith(() => ok(remote()))
+    await second.store.save(state(local()))
+
+    expect(second.traffic()).toEqual([])
+  })
+
+  test('and once it has loaded, it updates rather than creates', async () => {
+    // The safe version of the same sequence: a fresh store that *has* asked the
+    // server knows the board already exists.
+    const { store, traffic, ready } = storeWith(() => ok([remote({ id: 'srv-1' })]))
+    await ready()
+    await store.save(state(board({ id: 'srv-1', description: 'edited' })))
+
+    expect(traffic()).toEqual(['PATCH /v1/dashboards/srv-1'])
+  })
+
+  test('a load that failed leaves the store unwilling rather than eager', async () => {
+    /*
+     * Deliberately not "assume the server is empty". A store that could not ask
+     * has exactly as little idea as one that never asked, and creating the whole
+     * workspace is the expensive way to be wrong.
+     */
+    const { store, calls } = storeWith(() => ok({ nope: true }, 503))
+    await store.load([], 'u1').catch(() => {})
+    calls.length = 0
+
+    await store.save(state(local()))
+    expect(calls).toEqual([])
   })
 })

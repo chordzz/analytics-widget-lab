@@ -92,6 +92,19 @@ export function httpBoardStore(
   /** Local ids with a create in flight, so a second save does not duplicate. */
   const creating = new Set<string>()
   /**
+   * Whether this store has ever been told what the server holds.
+   *
+   * Everything below diffs against `baseline`, so a store that has not loaded
+   * believes the server is empty and creates every board it is handed. That is
+   * not hypothetical: swap the store instance mid-session and the next save
+   * duplicates the whole workspace, because a board still carrying a `local:`
+   * id looks new to a `baseline` that was never filled in.
+   *
+   * Saving before loading is therefore a programming error rather than a state
+   * to handle, and refusing is the only answer that cannot make it worse.
+   */
+  let loaded = false
+  /**
    * Grants we have successfully sent, by board and target.
    *
    * Held here because it cannot be read back: `Dashboard` carries no
@@ -123,6 +136,7 @@ export function httpBoardStore(
 
       baseline = new Map(boards.map((board) => [board.id, board]))
       assigned.clear()
+      loaded = true
 
       /*
        * Validated against what came back, not trusted.
@@ -144,6 +158,20 @@ export function httpBoardStore(
     },
 
     async save(state) {
+      if (!loaded) {
+        /*
+         * Refused, loudly, rather than treated as "the server is empty".
+         *
+         * The one way to reach this is a store swapped underneath its caller —
+         * `useBoards` schedules its save from an effect keyed on the store, and
+         * a fresh instance has an empty `baseline`. Creating everything again is
+         * the expensive mistake; doing nothing costs one debounce, and the next
+         * save after `load` resolves does the right thing.
+         */
+        console.warn('[analytics] save before load — ignoring, the server state is unknown')
+        return
+      }
+
       const next = new Map(state.boards.map((board) => [board.id, board]))
 
       // Deletions first: a board removed and another created in the same tick
