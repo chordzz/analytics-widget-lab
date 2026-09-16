@@ -14,6 +14,7 @@ import { describe, expect, test } from 'bun:test'
 import { allowedValuesFor, filterParameterFor, requiredParameters } from '../../domain/dataset'
 import { datasetFrom, filterParametersFrom, type ApiDataset } from '../../catalogue/api-dataset'
 import { requireDataset, rowsFor } from './datasets'
+import { inputTypeFor } from '../builder/WidgetComposer'
 
 const api = (overrides: Partial<ApiDataset> = {}): ApiDataset => ({
   id: 'peniremit.settlements',
@@ -171,5 +172,79 @@ describe('the fixtures declare parameters the way a publisher should', () => {
     for (const id of ['revenue-daily', 'sales-by-region', 'product-performance']) {
       expect(requiredParameters(requireDataset(id))).toEqual([])
     }
+  })
+})
+
+describe('the declared value type picks the control', () => {
+  /*
+   * The screenshot that prompted this: `peniremit.profit` requires `from` and
+   * `to`, both declared `date`, and both rendered as text boxes reading
+   * "Required". Nobody wants to type a date in a format nobody told them.
+   */
+  test('a date parameter gets a date picker', () => {
+    expect(inputTypeFor('date')).toBe('date')
+  })
+
+  test('a number gets a number input', () => {
+    // A numeric parameter in a text box accepts letters and offers no stepper,
+    // and the query's equality check then compares a string to a number.
+    expect(inputTypeFor('number')).toBe('number')
+  })
+
+  test('anything else stays a text box', () => {
+    expect(inputTypeFor('string')).toBe('text')
+    expect(inputTypeFor('category')).toBe('text')
+    expect(inputTypeFor('location')).toBe('text')
+  })
+
+  test('an undeclared type stays a text box rather than guessing', () => {
+    // A publisher who did not say gets the control that accepts anything,
+    // rather than one that silently rejects what they meant.
+    expect(inputTypeFor(undefined)).toBe('text')
+  })
+})
+
+describe('the value type survives the adapter', () => {
+  const profit = datasetFrom({
+    id: 'peniremit.profit',
+    name: 'Profit',
+    source_system_id: 'peniremit',
+    fields: [
+      { key: 'date', label: 'Date', type: 'date', role: 'dimension', filterable: true, orderable: true },
+    ],
+    filter_parameters: [
+      { name: 'from', type: 'date', required: true },
+      { name: 'to', type: 'date', required: true },
+      { name: 'granularity', type: 'category', allowed_values: ['day', 'month'] },
+      { name: 'threshold', type: 'number' },
+    ],
+  } as Parameters<typeof datasetFrom>[0])
+
+  const parameter = (name: string) =>
+    (profit.filterParameters ?? []).find((entry) => entry.name === name)
+
+  test('a declared date arrives as one', () => {
+    expect(parameter('from')?.valueType).toBe('date')
+    expect(parameter('to')?.valueType).toBe('date')
+  })
+
+  test('so do the others', () => {
+    expect(parameter('granularity')?.valueType).toBe('category')
+    expect(parameter('threshold')?.valueType).toBe('number')
+  })
+
+  test('a type we do not recognise is dropped rather than carried through', () => {
+    // It would reach `inputTypeFor` and fall to `text` anyway, but an unchecked
+    // string in a typed field is a lie the next reader has to discover.
+    const odd = datasetFrom({
+      ...({
+        id: 'x',
+        name: 'X',
+        source_system_id: 'p',
+        fields: [{ key: 'a', label: 'A', type: 'number', role: 'measure', aggregations: ['sum'] }],
+        filter_parameters: [{ name: 'weird', type: 'money' }],
+      } as Parameters<typeof datasetFrom>[0]),
+    })
+    expect(odd.filterParameters?.[0].valueType).toBeUndefined()
   })
 })

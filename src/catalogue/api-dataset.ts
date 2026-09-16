@@ -26,8 +26,21 @@ import type {
   Dataset,
   Field,
   FilterParameter,
+  FilterValueType,
   Measure,
 } from '../domain/dataset'
+
+const FILTER_VALUE_TYPES: readonly FilterValueType[] = [
+  'string',
+  'number',
+  'date',
+  'boolean',
+  'category',
+  'location',
+]
+
+const isFilterValueType = (value: string | undefined): value is FilterValueType =>
+  (FILTER_VALUE_TYPES as readonly string[]).includes(value ?? '')
 
 /** `Dataset` as the API declares it. Only the parts we read. */
 export interface ApiDataset {
@@ -100,6 +113,12 @@ export function filterParametersFrom(api: ApiDataset): FilterParameter[] {
   return (api.filter_parameters ?? []).map((parameter) => ({
     name: parameter.name,
     label: labelFor(parameter.name),
+    /*
+     * Kept, because it decides the control rather than the value. A `date`
+     * parameter rendered as a text box asks an Author to guess a format, and
+     * the one they guess is the one their locale shows them.
+     */
+    ...(isFilterValueType(parameter.type) ? { valueType: parameter.type } : {}),
     ...(parameter.description === undefined ? {} : { description: parameter.description }),
     required: parameter.required === true,
     /*

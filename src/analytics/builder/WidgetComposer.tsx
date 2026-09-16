@@ -38,6 +38,7 @@ import {
 import { WIDGET_TYPES } from '../widgets/catalog'
 import { requiredParameters } from '../../domain/dataset'
 import type { Dataset } from '../data/types'
+import type { FilterParameter } from '../../domain/dataset'
 
 export interface ComposerDraft {
   typeId: string
@@ -563,6 +564,24 @@ function TypeButton({
 }
 
 /**
+ * The control a declared value type deserves.
+ *
+ * `number` as well as `date`: a numeric parameter in a text box accepts letters
+ * and offers no stepper, and the query's equality check then compares a string
+ * to a number and matches nothing.
+ */
+export function inputTypeFor(valueType: FilterParameter['valueType']): string {
+  switch (valueType) {
+    case 'date':
+      return 'date'
+    case 'number':
+      return 'number'
+    default:
+      return 'text'
+  }
+}
+
+/**
  * Width as columns, not pixels.
  *
  * A twelve-column board is the only thing a span means, so the control shows
@@ -662,15 +681,24 @@ function RequiredParameters({
             ) : (
               /*
                * No declared values, so no list to offer. The publisher knows what
-               * this accepts and has not said — Finding 8 — and a free field is
-               * the honest fallback rather than a guess drawn from returned rows.
+               * this accepts and has not said — Finding 8 — but the *kind* of
+               * value they did declare still picks the control.
+               *
+               * A `date` gets a date picker, and the conversion people expect
+               * here is the one that is not needed: `input[type=date]` reads and
+               * writes `YYYY-MM-DD` whatever the viewer's locale displays, which
+               * is already the ISO-8601 the API wants. Passing it through a
+               * `Date` to "format" it is how a day goes missing across a
+               * timezone, so the value travels verbatim.
                */
               <input
-                type="text"
+                type={inputTypeFor(parameter.valueType)}
                 className="a-filters__select"
                 value={current}
                 onChange={(event) => set(parameter.name, event.target.value, undefined)}
-                placeholder={parameter.description ?? 'Required'}
+                placeholder={
+                  parameter.valueType === 'date' ? undefined : (parameter.description ?? 'Required')
+                }
               />
             )}
           </label>

@@ -145,9 +145,26 @@ export interface Measure extends FieldBase {
  * which could express neither of the two facts below — and both are needed
  * before a Viewer-facing filter can work at all.
  */
+/**
+ * What kind of value a Filter Parameter takes, as the publisher declared it.
+ *
+ * Mirrors the API's `FieldType`. Carried because it decides the *control*: a
+ * date wants a date picker, and asking someone to type one means asking them to
+ * guess a format nobody told them.
+ */
+export type FilterValueType =
+  | 'string'
+  | 'number'
+  | 'date'
+  | 'boolean'
+  | 'category'
+  | 'location'
+
 export interface FilterParameter {
   /** The query parameter name sent upstream. */
   name: string
+  /** The kind of value it takes. Absent where the publisher did not say. */
+  valueType?: FilterValueType
   /** How it reads to a person. Falls back to a humanised `name`. */
   label: string
   description?: string

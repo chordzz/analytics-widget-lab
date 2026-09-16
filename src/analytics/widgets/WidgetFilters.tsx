@@ -111,6 +111,35 @@ function FilterSelect({
   const id = useId()
   const values = useFilterValues(dataset, fieldKey)
 
+  /*
+   * A date with nothing enumerated gets a date picker, not an empty dropdown.
+   *
+   * The select is right when the publisher declared the values a filter accepts.
+   * When they did not — Finding 8 — it renders with only "All" in it, and for a
+   * Time Dimension that is every date there has ever been: a control that
+   * cannot be used, offering nothing, with no way to tell it apart from a
+   * filter whose data happens to be empty.
+   *
+   * `input[type=date]` reads and writes `YYYY-MM-DD` whatever the viewer's
+   * locale displays, which is already the ISO-8601 the query compares against.
+   * The value travels verbatim — routing it through a `Date` to reformat it is
+   * how a day goes missing across a timezone.
+   */
+  if (values.length === 0 && fieldOf(dataset, fieldKey)?.role === 'time-dimension') {
+    return (
+      <label className="a-filters__field" htmlFor={id}>
+        <span className="a-filters__label">{label}</span>
+        <input
+          id={id}
+          type="date"
+          className="a-filters__select"
+          value={value === undefined ? '' : String(value)}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </label>
+    )
+  }
+
   return (
     <label className="a-filters__field" htmlFor={id}>
       <span className="a-filters__label">{label}</span>
