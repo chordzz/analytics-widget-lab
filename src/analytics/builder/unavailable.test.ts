@@ -17,7 +17,7 @@ import { typesFor, unavailableTypesFor } from './requirements'
 import { requireDataset } from '../data/datasets'
 import { datasetFrom, type ApiDataset } from '../../catalogue/api-dataset'
 import { UNMAPPED_TYPE_IDS } from '../../dashboard/api-taxonomy'
-import { WIDGET_TYPES } from '../widgets/catalog'
+import { FAMILIES, WIDGET_TYPES } from '../widgets/catalog'
 
 const regions = requireDataset('sales-by-region')
 
@@ -194,5 +194,62 @@ describe('a well-declared Dataset has little to explain', () => {
     const sales = unavailableTypesFor(requireDataset('sales-by-country'))
     const undeclared = sales.filter((entry) => entry.reason.kind === 'undeclared')
     expect(undeclared).toEqual([])
+  })
+})
+
+describe('every family survives, even when none of it can be built', () => {
+  /*
+   * The case the locked cards exist for. Measured against a real declaration it
+   * is not an edge case: `peniremit.profit` offers 20 of 37 types and three
+   * whole families disappear — Composition, Ranking & Flow and Geospatial. An
+   * Author who came to build a pie chart finds no pie chart and no explanation,
+   * and cannot tell "this product has none" from "not with this data".
+   */
+  const profit = datasetFrom(
+    apiDataset([
+      { key: 'date', label: 'Date', type: 'date', role: 'dimension', filterable: true, orderable: true },
+      { key: 'usd', label: 'USD', type: 'number', role: 'measure', aggregations: ['sum'], filterable: false, orderable: true },
+      { key: 'ngn', label: 'NGN', type: 'number', role: 'measure', aggregations: ['sum'], filterable: false, orderable: true },
+    ]),
+  )
+
+  test('a family with nothing available still has something to render', () => {
+    const offered = new Set(typesFor(profit).map((type) => type.id))
+    const locked = unavailableTypesFor(profit)
+
+    const emptied = FAMILIES.filter(
+      (family) =>
+        WIDGET_TYPES.some((type) => type.built && type.family === family.id) &&
+        !WIDGET_TYPES.some((type) => type.built && type.family === family.id && offered.has(type.id)),
+    )
+
+    expect(emptied.length).toBeGreaterThan(0)
+    for (const family of emptied) {
+      expect(locked.some((entry) => entry.type.family === family.id)).toBe(true)
+    }
+  })
+
+  test('between them, the two lists account for every built type', () => {
+    // The property that makes "shown rather than hidden" true rather than
+    // approximately true: nothing may fall out of both lists.
+    const offered = typesFor(profit).map((type) => type.id)
+    const locked = unavailableTypesFor(profit).map((entry) => entry.type.id)
+    const built = WIDGET_TYPES.filter((type) => type.built).map((type) => type.id)
+
+    expect(new Set([...offered, ...locked]).size).toBe(built.length)
+  })
+
+  test('no type is in both lists', () => {
+    const offered = new Set(typesFor(profit).map((type) => type.id))
+    expect(unavailableTypesFor(profit).every((entry) => !offered.has(entry.type.id))).toBe(true)
+  })
+
+  test('every locked type carries a reason a person could act on', () => {
+    for (const entry of unavailableTypesFor(profit)) {
+      expect(entry.reason.because.length).toBeGreaterThan(10)
+      // Named, not generic: "needs a time dimension" tells an Author what to
+      // look for in another source; "unavailable" tells them nothing.
+      expect(entry.reason.because.toLowerCase()).not.toBe('unavailable')
+    }
   })
 })

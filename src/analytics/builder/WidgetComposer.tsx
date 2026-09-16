@@ -32,6 +32,7 @@ import {
   suggestedTypesFor,
   typesFor,
   unavailableTypesFor,
+  type UnavailableReason,
   unfilledSlots,
 } from './requirements'
 import { WIDGET_TYPES } from '../widgets/catalog'
@@ -409,17 +410,34 @@ function TypePicker({
 }) {
   const available = typesFor(dataset)
   const suggested = suggestedTypesFor(dataset)
+  const unavailable = unavailableTypesFor(dataset)
   const term = query.trim().toLowerCase()
 
-  const matches = term
-    ? available.filter(
-        (type) =>
-          type.label.toLowerCase().includes(term) ||
-          type.description.toLowerCase().includes(term) ||
-          FAMILIES.find((family) => family.id === type.family)?.label.toLowerCase().includes(term),
-      )
-    : available
+  /*
+   * Every built type is rendered, and the ones this Dataset cannot fill are
+   * locked in place rather than left out.
+   *
+   * The rule used to be that an unbuildable widget is simply absent, which is
+   * right when the absence is obvious and wrong when it is not. Measured against
+   * a real declaration it is badly wrong: `peniremit.profit` offers 20 of 37
+   * types, and **three whole families disappear** — Composition, Ranking & Flow
+   * and Geospatial. An Author who came to build a pie chart finds no pie chart
+   * and no explanation, and cannot tell "this product has none" from "not with
+   * this data".
+   *
+   * So a locked card says which of those it is. The reason is the substance,
+   * because the three kinds call for different actions: one is ours to raise
+   * with the Analytics team, one is the publisher's to declare, and one is
+   * nobody's — it is simply the wrong data for that picture.
+   */
+  const matching = (type: { label: string; description: string; family: string }) =>
+    !term ||
+    type.label.toLowerCase().includes(term) ||
+    type.description.toLowerCase().includes(term) ||
+    FAMILIES.find((family) => family.id === type.family)?.label.toLowerCase().includes(term)
 
+  const matches = available.filter(matching)
+  const lockedMatches = unavailable.filter((entry) => matching(entry.type))
   const suggestedMatches = matches.filter((type) => suggested.includes(type))
 
   return (
@@ -437,7 +455,9 @@ function TypePicker({
         onChange={(event) => onQuery(event.target.value)}
       />
 
-      {matches.length === 0 && <p className="a-muted a-step__hint">Nothing matches “{query}”.</p>}
+      {matches.length === 0 && lockedMatches.length === 0 && (
+        <p className="a-muted a-step__hint">Nothing matches “{query}”.</p>
+      )}
 
       {suggestedMatches.length > 0 && (
         <div className="a-type-group">
@@ -455,7 +475,8 @@ function TypePicker({
 
       {FAMILIES.map((family) => {
         const inFamily = matches.filter((type) => type.family === family.id)
-        if (inFamily.length === 0) return null
+        const lockedInFamily = lockedMatches.filter((entry) => entry.type.family === family.id)
+        if (inFamily.length === 0 && lockedInFamily.length === 0) return null
 
         return (
           <div key={family.id} className="a-type-group">
@@ -467,88 +488,46 @@ function TypePicker({
               {inFamily.map((type) => (
                 <TypeButton key={type.id} type={type} onPick={onPick} />
               ))}
+              {/*
+                After the available ones, so the list a person came to use reads
+                first — but in the same grid, because a family whose every type
+                is locked must still appear. That is the case this exists for.
+              */}
+              {lockedInFamily.map((entry) => (
+                <LockedType key={entry.type.id} type={entry.type} reason={entry.reason} />
+              ))}
             </div>
           </div>
         )
       })}
-
-      <UnavailableTypes dataset={dataset} term={term} />
     </>
   )
 }
 
 /**
- * The widgets that are *not* on offer, and why.
+ * A widget type this Dataset cannot fill, shown rather than hidden.
  *
- * Collapsed, because the list a person came here to use is the one above it —
- * but present, because the alternative is what this replaced: two thirds of the
- * catalogue missing with nothing said, and an Author who came to build a funnel
- * left wondering whether the product has one.
- *
- * Grouped by the kind of answer rather than by Family, since the kinds call for
- * different actions. One is ours to fix with the Analytics team, one is the
- * publisher's, and one is nobody's — it is simply the wrong data for that
- * picture.
+ * Not a disabled button. A `<button disabled>` is unreachable by keyboard and
+ * carries no accessible description, so the reason — the whole point of drawing
+ * it — would be invisible to anyone not looking at it. This is a plain element
+ * that states the shortfall in text.
  */
-function UnavailableTypes({ dataset, term }: { dataset: Dataset; term: string }) {
-  const [open, setOpen] = useState(false)
-  const all = unavailableTypesFor(dataset)
-
-  const entries = term
-    ? all.filter(
-        ({ type }) =>
-          type.label.toLowerCase().includes(term) || type.description.toLowerCase().includes(term),
-      )
-    : all
-
-  if (entries.length === 0) return null
-
-  const groups = [
-    {
-      kind: 'not-accepted' as const,
-      title: 'Not available yet',
-      note: 'Built and working here, but the Analytics API has no name for them. We have asked.',
-    },
-    {
-      kind: 'undeclared' as const,
-      title: 'Needs more from the publisher',
-      note: `${dataset.name} may suit these. Its declaration cannot say so yet.`,
-    },
-    {
-      kind: 'shape' as const,
-      title: 'Not for this data',
-      note: 'These need fields this data source does not have.',
-    },
-  ].filter((group) => entries.some((entry) => entry.reason.kind === group.kind))
-
+function LockedType({
+  type,
+  reason,
+}: {
+  type: { id: string; label: string; description: string }
+  reason: UnavailableReason
+}) {
   return (
-    <div className="a-type-group">
-      <button
-        type="button"
-        className="a-unavailable__toggle"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-      >
-        {open ? 'Hide' : 'Show'} the {entries.length} that cannot show {dataset.name}
-      </button>
-
-      {open &&
-        groups.map((group) => (
-          <div key={group.kind} className="a-unavailable__group">
-            <h5 className="a-unavailable__title">{group.title}</h5>
-            <p className="a-field__help">{group.note}</p>
-            <ul className="a-unavailable__list">
-              {entries
-                .filter((entry) => entry.reason.kind === group.kind)
-                .map(({ type, reason }) => (
-                  <li key={type.id} className="a-unavailable__item">
-                    <span className="a-unavailable__name">{type.label}</span>
-                    <span className="a-muted">{reason.because}</span>
-                  </li>
-                ))}
-            </ul>
-          </div>
-        ))}
+    <div className="a-type a-type--locked">
+      {/*
+        No lock glyph. The dashed edge carries it visually and the reason
+        carries it in text, where a bare "·" beside the label read as a typo.
+      */}
+      <span className="a-type__label">{type.label}</span>
+      <span className="a-type__description">{type.description}</span>
+      <span className={`a-type__reason a-type__reason--${reason.kind}`}>{reason.because}</span>
     </div>
   )
 }

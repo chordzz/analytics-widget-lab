@@ -775,3 +775,37 @@
   font-size: 10.5px;
   color: var(--a-text-muted);
 }
+
+/* A type this data cannot fill. Present, and plainly not pickable.
+ *
+ * Dashed rather than merely dimmed: a low-contrast solid card reads as "loading"
+ * or as a rendering fault, where a dashed edge reads as a placeholder. The
+ * opacity is deliberately mild — the reason underneath has to stay readable,
+ * since it is the only part that is actually new information. */
+.a-type--locked {
+  border-style: dashed;
+  background: var(--a-surface-sunken);
+  cursor: default;
+}
+
+.a-type--locked .a-type__label {
+  color: var(--a-text-secondary);
+}
+
+.a-type--locked:hover {
+  border-color: var(--a-border);
+  background: var(--a-surface-sunken);
+}
+
+.a-type__reason {
+  margin-top: var(--a-space-1);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--a-text-muted);
+}
+
+/* The one kind that is not about the data. Tinted so an Author can tell at a
+   glance that this is ours to chase rather than a property of their source. */
+.a-type__reason--not-accepted {
+  color: var(--a-status-warning);
+}
