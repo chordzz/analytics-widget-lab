@@ -19,7 +19,7 @@ const settlements: ApiDataset = {
   description: 'Daily settlement totals by corridor.',
   source_system_id: 'peniremit',
   status: 'published',
-  classification: 'financial',
+  classification: 'confidential',
   time_dimension_field: 'day',
   exposes_personal_data: false,
   grain: ['day', 'corridor'],
@@ -135,51 +135,43 @@ describe('filterability is declared, not inferred', () => {
   })
 })
 
-describe('classification errs upward', () => {
-  test('pii becomes the most restrictive level we have', () => {
-    // Their own note: it may be raised but never lowered, because data already
-    // went out under that label.
-    const dataset = datasetFrom({ ...settlements, classification: 'pii' })
-    expect(dataset.classification).toBe('restricted')
-  })
-
-  test('financial is confidential', () => {
-    expect(datasetFrom(settlements).classification).toBe('confidential')
-  })
-
-  test('an unknown tag lands on internal rather than on nothing', () => {
-    expect(datasetFrom({ ...settlements, classification: 'novel' }).classification).toBe('internal')
-  })
-})
-
 describe('personal data is declared, not read off the classification', () => {
   /*
    * The two were separated on 15 September for a reason worth protecting: a
-   * Dataset can be `financial` *and* personal. We used to infer this flag as
+   * Dataset can be `confidential` *and* personal. We used to infer this flag as
    * `classification === 'pii'`, which answered `false` for exactly that case —
    * and since the flag drives an access-recording obligation (FR-DA-14), the
    * inference silently skipped the record.
    */
-  test('a financial Dataset can still expose personal data', () => {
-    const dataset = datasetFrom({ ...settlements, exposes_personal_data: true })
+  test('a confidential Dataset can still expose personal data', () => {
+    const dataset = datasetFrom({
+      ...settlements,
+      classification: 'confidential',
+      exposes_personal_data: true,
+    })
     expect(dataset.classification).toBe('confidential')
     expect(dataset.exposesPersonalData).toBe(true)
   })
 
-  test('and the declaration beats the classification either way', () => {
+  test('a declared `false` is honoured whatever the label says', () => {
     const dataset = datasetFrom({
       ...settlements,
-      classification: 'pii',
+      classification: 'restricted',
       exposes_personal_data: false,
     })
     expect(dataset.exposesPersonalData).toBe(false)
   })
 
-  test('an older declaration without the field falls back to the old inference', () => {
-    // Absent is not `false`. A declaration written before the field existed is
-    // better read the way it was written than treated as an assertion.
-    const legacy = { ...settlements, classification: 'pii', exposes_personal_data: undefined }
-    expect(datasetFrom(legacy).exposesPersonalData).toBe(true)
+  test('an absent field records rather than assumes it is safe', () => {
+    /*
+     * This used to fall back to `classification === 'pii'`, and `pii` was
+     * retired from the ladder — so the fallback answered `false` for every
+     * Dataset. `false` is the dangerous answer here: it drives the
+     * access-recording obligation, so a wrong one means a retrieval of personal
+     * data that nobody wrote down. An unnecessary row costs a row.
+     */
+    const undeclared = { ...settlements, exposes_personal_data: undefined }
+    expect(datasetFrom(undeclared).exposesPersonalData).toBe(true)
   })
 })
 
@@ -298,3 +290,82 @@ describe('describing one', () => {
 })
 
 const viewer = () => ({ id: 'u1', displayName: 'Test' })
+
+describe('the sensitivity ladder, now that both sides spell it the same way', () => {
+  const classified = (classification: string | undefined) =>
+    datasetFrom({
+      id: 'peniremit.profit',
+      name: 'Profit',
+      source_system_id: 'peniremit',
+      ...(classification === undefined ? {} : { classification }),
+      exposes_personal_data: false,
+      fields: [{ key: 'usd', label: 'USD', type: 'number', role: 'measure', aggregations: ['sum'] }],
+    }).classification
+
+  test('every rung survives the journey', () => {
+    /*
+     * The bug this replaces: a translation table keyed on the API's *old*
+     * words — `internal | pii | financial` — matched none of these, and the
+     * default behind it substituted `internal` for all four. A `confidential`
+     * Dataset read as ordinary company data.
+     */
+    expect(classified('public')).toBe('public')
+    expect(classified('internal')).toBe('internal')
+    expect(classified('confidential')).toBe('confidential')
+    expect(classified('restricted')).toBe('restricted')
+  })
+
+  test('a confidential Dataset is never reported as internal', () => {
+    // The specific silent downgrade, named. The API's own rule is that a
+    // classification may be raised but never lowered, because the data already
+    // went out under the higher label — and the old default lowered it on every
+    // single read.
+    expect(classified('confidential')).not.toBe('internal')
+  })
+
+  test('a word we do not know reads as the most protected, not the default', () => {
+    /*
+     * If the vocabulary drifts again, over-caution is the direction to drift
+     * in. A Dataset that looks more sensitive than it is costs a second glance;
+     * one that looks safer to spread around than it is costs more than that.
+     */
+    expect(classified('top-secret')).toBe('restricted')
+    expect(classified(undefined)).toBe('restricted')
+  })
+})
+
+describe('personal data is read, never inferred', () => {
+  const exposes = (declaration: Record<string, unknown>) =>
+    datasetFrom({
+      id: 'peniremit.profit',
+      name: 'Profit',
+      source_system_id: 'peniremit',
+      fields: [{ key: 'usd', label: 'USD', type: 'number', role: 'measure', aggregations: ['sum'] }],
+      ...declaration,
+    } as Parameters<typeof datasetFrom>[0]).exposesPersonalData
+
+  test('the declared answer is taken', () => {
+    expect(exposes({ exposes_personal_data: true })).toBe(true)
+    expect(exposes({ exposes_personal_data: false })).toBe(false)
+  })
+
+  test('a confidential Dataset may still be personal, and the label does not decide', () => {
+    // The API says so directly. The two fields answer different questions —
+    // how protected is this, and is it about an identifiable person.
+    expect(exposes({ classification: 'confidential', exposes_personal_data: true })).toBe(true)
+    expect(exposes({ classification: 'public', exposes_personal_data: true })).toBe(true)
+  })
+
+  test('an absent declaration records rather than assumes it is safe', () => {
+    /*
+     * This used to fall back to `classification === 'pii'`, and `pii` was
+     * retired from the ladder — so the fallback answered `false` for
+     * everything. `false` is the dangerous answer: it drives the
+     * access-recording obligation in FR-DA-14, so a wrong one means a
+     * retrieval of personal data that nobody wrote down. An extra row costs
+     * nothing by comparison.
+     */
+    expect(exposes({})).toBe(true)
+    expect(exposes({ classification: 'internal' })).toBe(true)
+  })
+})

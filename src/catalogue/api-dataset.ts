@@ -149,19 +149,42 @@ const AGGREGATIONS: Record<string, Aggregation> = {
 }
 
 /**
- * Their three sensitivity tags against our four.
+ * The sensitivity ladder, which both sides now spell the same way.
  *
- * The vocabularies are not nested, so this is a judgement rather than a lookup
- * and it errs upward on purpose. `pii` becomes our most restrictive level
- * because their own note says it may never be lowered — data already went out
- * under that label. `financial` becomes `confidential`. Our `public` has no
- * counterpart and is simply unreachable from the API, which is the safe
- * direction for a mapping to be lossy in.
+ * This was a translation table — their `internal | pii | financial` against our
+ * four — and it became a hazard the moment the API adopted our vocabulary. A
+ * table keyed on words nobody sends any more matches nothing, and the `??`
+ * behind it substituted `internal` for every real value: a `confidential`
+ * Dataset read as ordinary company data and a `restricted` one did too.
+ *
+ * Silent, because a missing key is not an error — the lookup returns
+ * `undefined`, the default fills in, and the type of the result is still
+ * correct. `Record<string, …>` accepts any key, so nothing could have caught it.
+ *
+ * So the values pass straight through now, and the only job left is refusing
+ * one we do not recognise.
  */
-const CLASSIFICATION: Record<string, DataClassification> = {
-  internal: 'internal',
-  financial: 'confidential',
-  pii: 'restricted',
+const CLASSIFICATIONS: readonly DataClassification[] = [
+  'public',
+  'internal',
+  'confidential',
+  'restricted',
+]
+
+/**
+ * An unrecognised label reads as the *most* protected, not the default.
+ *
+ * The API attaches one rule to this field — it may be raised but never lowered,
+ * because data already went out under the higher label — and a fallback of
+ * `internal` broke exactly that rule on every read. If the vocabulary drifts
+ * again, over-caution is the direction to drift in: the cost is a Dataset that
+ * looks more sensitive than it is, against a Dataset that looks safer to spread
+ * around than it is.
+ */
+function classificationFrom(declared: string | undefined): DataClassification {
+  return (CLASSIFICATIONS as readonly string[]).includes(declared ?? '')
+    ? (declared as DataClassification)
+    : 'restricted'
 }
 
 export function datasetFrom(api: ApiDataset): Dataset {
@@ -172,20 +195,25 @@ export function datasetFrom(api: ApiDataset): Dataset {
     name: api.name,
     description: api.description ?? '',
     sourceSystem: api.source_system_id,
-    classification: CLASSIFICATION[api.classification ?? ''] ?? 'internal',
+    classification: classificationFrom(api.classification),
     /*
-     * Read, not inferred.
+     * Read, never inferred.
      *
-     * This was `classification === 'pii'`, which under-records: the API's own
-     * note says a Dataset can be `financial` *and* personal, and the two are
-     * kept apart precisely because this flag drives an access-recording
-     * obligation (FR-DA-14). Inferring it would have silently skipped the
-     * record for every financial Dataset holding personal data.
+     * The two fields answer different questions — *how protected* is this, and
+     * *is it about an identifiable person* — and the API says so directly: a
+     * Dataset can be `confidential` **and** personal. So one has never implied
+     * the other.
      *
-     * The old inference stays as the fallback for a declaration written before
-     * the field existed — absent is not the same as `false`.
+     * This carried `classification === 'pii'` as a fallback, which is now worse
+     * than useless: `pii` was retired from the ladder, so the fallback answers
+     * `false` for everything. And `false` is the dangerous answer — it drives
+     * the access-recording obligation in FR-DA-14, so a wrong `false` means a
+     * retrieval of personal data that nobody wrote down.
+     *
+     * An absent field is therefore not a licence to guess. `true` is the safe
+     * reading: recording an access that did not need recording costs a row.
      */
-    exposesPersonalData: api.exposes_personal_data ?? api.classification === 'pii',
+    exposesPersonalData: api.exposes_personal_data ?? true,
     /*
      * BE-2, granted. `[]` is meaningful — the endpoint answers with one summary
      * row — so it is kept distinct from an absent declaration, which says
