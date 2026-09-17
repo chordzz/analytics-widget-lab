@@ -24,13 +24,14 @@
  * is the whole reason for the shape.
  */
 
-import { executeQuery } from '../../retrieval/aggregate'
+import { asEndpoint, executeQuery } from '../../retrieval/aggregate'
 import {
   applyContribution,
   type ControlSubject,
   type QueryContribution,
 } from '../../composition/correspondence'
-import type { Aggregation, Dataset } from '../../domain/dataset'
+import { requiredParameters, timeRangeParameters } from '../../domain/dataset'
+import type { Aggregation, Dataset, FilterParameter } from '../../domain/dataset'
 import type { DatasetQuery, MeasureSelection } from '../../domain/query'
 import type { WidgetSpec } from '../widgets/Widget'
 import { rowsFor } from './datasets'
@@ -165,6 +166,43 @@ export interface ViewerChoices {
 }
 
 /**
+ * The Author's bindings, reduced to parameters the publisher actually declared.
+ *
+ * Same enforcement pattern as `permitted`, and for the same reason: the form
+ * that collected the value and the query that sends it are different code, and
+ * only one of them is the enforcement point. A binding naming a parameter the
+ * Dataset does not publish is dropped rather than sent — the API refuses
+ * undeclared parameters before the request leaves, so passing one on would fail
+ * the whole query rather than the one filter.
+ */
+export function boundParameters(
+  spec: WidgetSpec,
+  dataset: Dataset,
+): Record<string, string | number> {
+  const declared = new Set((dataset.filterParameters ?? []).map((parameter) => parameter.name))
+  const bound: Record<string, string | number> = {}
+
+  for (const [name, value] of Object.entries(spec.parameterBindings ?? {})) {
+    if (value === '' || value === undefined) continue
+    if (declared.has(name)) bound[name] = value
+  }
+
+  return bound
+}
+
+/**
+ * Required parameters this Widget has not bound.
+ *
+ * Empty means the Widget can be composed. Anything else is a query the Source
+ * System will refuse, and the composer's job is to make that impossible to
+ * commit rather than to discover when the card fails.
+ */
+export function unboundRequirements(spec: WidgetSpec, dataset: Dataset): FilterParameter[] {
+  const bound = boundParameters(spec, dataset)
+  return requiredParameters(dataset).filter((parameter) => bound[parameter.name] === undefined)
+}
+
+/**
  * The Viewer's choices, reduced to what the publisher actually permits.
  *
  * Applied here rather than trusted from the UI, for the same reason
@@ -178,14 +216,32 @@ function permitted(
   spec: WidgetSpec,
   dataset: Dataset,
   choices: ViewerChoices | undefined,
-): { filters?: Record<string, string | number>; sort?: DatasetQuery['sort'] } {
+): { parameters?: Record<string, string | number>; sort?: DatasetQuery['sort'] } {
   if (!choices) return {}
 
+  /*
+   * Checked against the Dataset's **Filter Parameters**, not its filterable
+   * Fields.
+   *
+   * These are two lists and they do not line up. `fields` describes the
+   * response — which columns come back, and whether the endpoint supports
+   * narrowing on them. `filter_parameters` describes the *request* — the query
+   * names the endpoint accepts. `peniremit.profit` is the plain case: one
+   * filterable Field, `date`, and three parameters, `from`, `to` and
+   * `granularity`. Filtering that column means sending two parameters with
+   * different names, so `filterable: true` never meant "send ?date=".
+   *
+   * Checking the Field list here is what let a Widget be composed exposing
+   * `date` and rejected on save with `"date" is not a Filter Parameter`. D24,
+   * in the last place it still lived.
+   */
   const exposed = new Set(spec.exposedFilters ?? [])
-  const entries = Object.entries(choices.filters ?? {}).filter(([key, value]) => {
+  const declared = new Set((dataset.filterParameters ?? []).map((parameter) => parameter.name))
+
+  const entries = Object.entries(choices.filters ?? {}).filter(([name, value]) => {
     if (value === '' || value === undefined) return false
-    if (!exposed.has(key)) return false
-    return fieldOf(dataset, key)?.filterable === true
+    if (!exposed.has(name)) return false
+    return declared.has(name)
   })
 
   const wanted = choices.sort
@@ -195,8 +251,28 @@ function permitted(
     fieldOf(dataset, wanted.field)?.sortable === true
 
   return {
-    ...(entries.length > 0 ? { filters: Object.fromEntries(entries) } : {}),
+    // `parameters`, because these are Filter Parameter names — see `queryFor`.
+    ...(entries.length > 0 ? { parameters: Object.fromEntries(entries) } : {}),
     ...(sortable && wanted ? { sort: [wanted] } : {}),
+  }
+}
+
+/**
+ * A Control's range, under the names this Dataset actually accepts.
+ *
+ * `timeRangeParameters` decides the names; this fills them in. Empty when the
+ * publisher declared no way to take a range, in which case the range is still
+ * applied locally and `correspondenceFor` says the Control's reach is limited.
+ */
+function rangeFor(
+  dataset: Dataset,
+  range: DatasetQuery['timeRange'],
+): Record<string, string> {
+  if (!range) return {}
+  const names = timeRangeParameters(dataset)
+  return {
+    ...(range.from && names.from ? { [names.from]: range.from } : {}),
+    ...(range.to && names.to ? { [names.to]: range.to } : {}),
   }
 }
 
@@ -237,13 +313,28 @@ export function queryFor(
   const override = typeof options.aggregation === 'string' ? options.aggregation : undefined
   const timeKey = timeKeyOf(dataset, mapping)
   const chosen = permitted(spec, dataset, choices)
+  const bound = boundParameters(spec, dataset)
 
   // A Viewer's sort replaces the widget's own ordering; their filters narrow
   // whatever it would otherwise have asked for.
   const withChoices = (base: DatasetQuery): DatasetQuery => {
+    /*
+     * Two layers, narrowest last. The Author's parameter bindings are the floor
+     * — a required one must survive every other choice, or the query is refused
+     * — and a Viewer changing the same one supplies a value in its place, so
+     * the parameter is never lost by being overridden.
+     *
+     * These land in `parameters`, not `filters`. They are named for what the
+     * *endpoint* accepts, and `peniremit.profit`'s `from` and `to` are not
+     * columns it returns — putting them in `filters` had the local pass compare
+     * `row['from']` against a date and drop every row the endpoint had just
+     * returned.
+     */
+    const chosenParameters = { ...bound, ...chosen.parameters }
+
     const own: DatasetQuery = {
       ...base,
-      ...(chosen.filters ? { filters: chosen.filters } : {}),
+      ...(Object.keys(chosenParameters).length > 0 ? { parameters: chosenParameters } : {}),
       ...(chosen.sort ? { sort: chosen.sort } : {}),
     }
 
@@ -255,7 +346,49 @@ export function queryFor(
      * surprising outcome. `applyContribution` is where that precedence lives, so
      * it is decided once rather than per caller.
      */
-    return contribution ? applyContribution(own, contribution) : own
+    const withControl = contribution ? applyContribution(own, contribution) : own
+
+    /*
+     * A Control's date range, under the names this Dataset actually accepts.
+     *
+     * `timeRange` is how a Control reaches a Widget, and it names a *Field*.
+     * The endpoint takes *parameters*, and the two are different lists — so
+     * somewhere the range has to be translated, and that somewhere has to hold
+     * the declaration. This does; the HTTP adapter does not.
+     *
+     * It used to be translated there, by writing `from` and `to` unconditionally
+     * on the guess that every Dataset spells a range that way. The API's own
+     * example does, and nothing promises it. Now the names are checked against
+     * what the publisher declared, and a Dataset that spells them differently
+     * gets nothing rather than a 400 that fails its whole query.
+     *
+     * A Dataset that declares no range parameters at all cannot be narrowed by
+     * a Control, and `correspondenceFor` says so before it comes to this.
+     */
+    const parameters = { ...rangeFor(dataset, withControl.timeRange), ...withControl.parameters }
+
+    /*
+     * Finding 10 again, now that the two live in different places.
+     *
+     * A Control contributes `filters`, keyed by Field; a Widget's own exposed
+     * choice is a `parameter`, keyed by what the endpoint accepts. Where those
+     * name the same thing the Widget wins — it is the more specific of two
+     * choices the same Viewer made, and silently overriding the control someone
+     * just used on a particular card is the more surprising outcome.
+     *
+     * `applyContribution` still decides this for two filters; it cannot decide
+     * it across the split, so the crossing case is settled here.
+     */
+    const contested = Object.entries(withControl.filters ?? {}).filter(
+      ([key]) => !(key in parameters),
+    )
+
+    const resolved: DatasetQuery = { ...withControl }
+    if (contested.length > 0) resolved.filters = Object.fromEntries(contested)
+    else delete resolved.filters
+    if (Object.keys(parameters).length > 0) resolved.parameters = parameters
+
+    return resolved
   }
 
   switch (typeId) {
@@ -323,7 +456,9 @@ export function rowsForWidget(
   choices?: ViewerChoices,
   contribution?: QueryContribution,
 ): Row[] {
-  return executeQuery(rowsFor(dataset.id), queryFor(spec, dataset, choices, contribution))
+  // Through `asEndpoint`, because this stands in for the Source System: the
+  // parameters have not been applied by anything else.
+  return executeQuery(rowsFor(dataset.id), asEndpoint(queryFor(spec, dataset, choices, contribution)))
 }
 
 /**
@@ -341,5 +476,8 @@ export function controlSubjectFor(spec: WidgetSpec, dataset: Dataset): ControlSu
     datasetId: spec.datasetId,
     visualizationTypeId: spec.typeId,
     timeDimension: mapped?.role === 'time-dimension' ? mapped.key : undefined,
+    // Through `boundParameters` rather than the raw spec, so a binding naming a
+    // parameter the Dataset does not publish cannot make a Control look blocked.
+    boundParameters: Object.keys(boundParameters(spec, dataset)),
   }
 }

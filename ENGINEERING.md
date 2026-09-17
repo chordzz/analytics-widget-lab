@@ -486,10 +486,9 @@ Stage 6 landed too, so this list is much shorter than it was.
   aggregates over different windows of one query, and `Distribution` bins over
   every value. Both are registered as **D13** and **D14** with the
   `DatasetQuery` extension each would need.
-- **Replace the fixtures with HTTP.** A new pair of classes implementing
-  `CataloguePort` and `DatasetRetrievalPort`, plus a `BoardStorePort`. Every
-  call site is already async and already handles six outcomes, so this is the
-  smallest step of the six.
+- **The HTTP adapters exist** — `catalogue/http-catalogue.ts`,
+  `retrieval/http-retrieval.ts` and `dashboard/http-board-store.ts`, over the
+  real API. The fixtures remain behind `#/fixtures`.
 - **Six of the 42 Visualization Types have no renderer** (D6). Five are ordinary
   work; only the choropleth is blocked, and on the atlas decision rather than on
   anything in the model. `docs/DATA_SHAPES.md` states the reason per Type.
@@ -498,13 +497,92 @@ Stage 6 landed too, so this list is much shorter than it was.
 
 Every place this implementation does not match the FRD is numbered, with the
 clause, the reason and how long it is meant to last:
-[`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) — **14 open, 4 resolved**.
+[`docs/DIVERGENCES.md`](docs/DIVERGENCES.md) — **17 open, 10 resolved**.
 
 It is generated from `src/contract-docs/divergences.ts` by `bun run docs`, and
 `src/contract-docs/render.test.ts` fails if the committed copy drifts. A scanner
 also asserts that every `D<n>` cited anywhere in `analytics/`, `domain/`,
 `composition/` or `access/` exists in the table. So a divergence that gets fixed
 cannot stay listed, and one that gets introduced cannot stay unlisted.
+
+## 5b. Authentication
+
+The app signs in against the Analytics API itself — **passwordless email OTP**,
+one factor. The API's own words: *"No password, no second factor, no device
+approval — this is the temporary Analytics sign-in path."* Nothing in this repo
+handles a password, and `auth/SignInScreen.test.tsx` asserts that structurally.
+
+```
+src/api/
+  client.ts        the envelope, the status table, and 401-once
+  errors.ts        ApiErrorKind — denied, withdrawn, session-expired, …
+  config.ts        VITE_ANALYTICS_API_BASE_URL, read only at the root
+
+src/auth/
+  port.ts          TokenProvider · SignInClient · Actor
+  token-store.ts   localStorage, one versioned key
+  otp-provider.ts  the session: single-flight refresh, and what ends it
+  AuthProvider.tsx the state machine
+  SessionGate.tsx  what each state renders
+```
+
+Four things here are decisions rather than mechanics.
+
+**Tokens live in `localStorage`**, both of them, under
+`smc.analytics.auth.v1`. Chosen by the team: people leave a dashboard open
+across days and browser restarts. The refresh token arrives in the response body
+rather than as an httpOnly cookie, so no storage available to us keeps it out of
+reach of injected script — `localStorage` widens the window rather than opening
+it. Hence one versioned key, cleared on every exit path, never logged.
+
+**A 401 is not a widget state.** Ten widgets on a board hit it in the same tick,
+and that is one fact about the session, not ten facts about widgets. `403` and
+`410` become `denied` and `withdrawn` per card; `401` rises past the widget layer
+and becomes a banner above the board.
+
+**One refresh, not ten.** Those same ten widgets would otherwise start ten
+refreshes. If the API rotates refresh tokens — likely, and still unconfirmed —
+nine of them present one the first has already spent, and the session ends
+*because* it was being used. `otp-provider.ts` shares a single in-flight promise;
+`otp-provider.test.ts` fires ten concurrent calls and asserts one refresh.
+
+**A refused token and a dropped connection are different.** Both leave us without
+a token and they need opposite advice — sign in again, versus check your
+connection. Only a refusal clears the session.
+
+### Running without a backend
+
+`#/fixtures` runs the whole module on the fixtures, no sign-in. It is not a
+debug flag: the fixtures are the only way to reach states a live API will not
+produce on demand, like a withdrawn Dataset. `#/sign-in-preview` does the same
+for the sign-in screen, which is mostly error handling — dev will not return a
+503 or a rejected code to order.
+
+### The open question the code is waiting on
+
+`GET /v1/datasets/{id}/query` documents its 200 two ways three lines apart: as
+the Source System's envelope relayed verbatim, and as ours carrying that body in
+`data`. Those readings are a level of nesting apart.
+`retrieval/relayed-body.ts` handles both and reports which arrived, rather than
+guessing — because the rows would fail loudly at the wrong depth but
+`meta.partial` would not: read at the wrong level it is `undefined`, which is
+falsy, which means *not partial*, so a chart missing half its data renders as
+though it were whole. `SessionGate.tsx` logs the shape once per session, so the
+first real board settles it.
+
+### A seventh thing that is not a seventh state
+
+`meta.partial` reaches the card. It rides on `ready` and on `empty` as a
+qualifier rather than becoming a status, because it qualifies an answer instead
+of replacing one — the chart still draws, with a note under it saying it is not
+all of the data. It is never behind a hover: a tooltip is invisible on a
+touchscreen, on a wall display, and in a screenshot, which are three of the ways
+a wrong number travels. `WIDGET_RENDER_STATUSES` is still six, and a test says
+so.
+
+The Gallery's state switcher has **Partial** and **Partial, empty** alongside the
+six. A treatment nobody can put on screen is a treatment nobody designs, and a
+live API will not return a truncated result to order.
 
 ## 6. Enforced invariants
 

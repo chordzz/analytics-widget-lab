@@ -5,6 +5,38 @@
     "version": "2.0.0"
   },
   "paths": {
+    "/auth/refresh": {
+      "post": {
+        "summary": "Refresh an access token",
+        "responses": [
+          "200",
+          "400",
+          "401",
+          "503"
+        ]
+      }
+    },
+    "/auth/request-otp": {
+      "post": {
+        "summary": "Request an email sign-in code",
+        "responses": [
+          "200",
+          "400",
+          "503"
+        ]
+      }
+    },
+    "/auth/verify-otp": {
+      "post": {
+        "summary": "Verify an email code and receive tokens",
+        "responses": [
+          "200",
+          "400",
+          "401",
+          "503"
+        ]
+      }
+    },
     "/health": {
       "get": {
         "summary": "Liveness probe",
@@ -198,7 +230,8 @@
         "summary": "The authenticated caller",
         "responses": [
           "200",
-          "401"
+          "401",
+          "503"
         ]
       }
     },
@@ -240,12 +273,22 @@
           "403"
         ]
       }
+    },
+    "/v1/visualizations": {
+      "get": {
+        "summary": "The complete Visualization taxonomy",
+        "responses": [
+          "200",
+          "401",
+          "403"
+        ]
+      }
     }
   },
   "components": {
     "schemas": {
       "Actor": {
-        "description": "The IAM-resolved caller. Note `department_id` is not yet populated from the\ntoken, which is why department-scoped sharing currently fails closed.\n",
+        "description": "The IAM-resolved caller. On `/v1/me` the profile fields and `permissions` are\nfetched from IAM per request; in local-auth mode only `id` is populated.\n",
         "properties": {
           "department_id": {
             "type": "string"
@@ -284,8 +327,8 @@
           "sum",
           "average",
           "count",
-          "min",
-          "max",
+          "minimum",
+          "maximum",
           "distinct-count"
         ],
         "type": "string"
@@ -455,6 +498,10 @@
           "description": {
             "type": "string"
           },
+          "exposes_personal_data": {
+            "description": "Whether this Dataset exposes personal data. Stated explicitly and kept\nseparate from `classification` because it drives an access-recording\nobligation and must not be inferred.\n",
+            "type": "boolean"
+          },
           "fields": {
             "items": {
               "$ref": "#/components/schemas/Field"
@@ -465,6 +512,17 @@
           "filter_parameters": {
             "items": {
               "$ref": "#/components/schemas/FilterParameter"
+            },
+            "type": "array"
+          },
+          "grain": {
+            "description": "The row grain: the Field keys whose combination identifies one row, or an\nempty list where the endpoint answers with a single summary row. Lets an\nAuthor tell a one-row summary from thousands of records.\n",
+            "example": [
+              "day",
+              "currency"
+            ],
+            "items": {
+              "type": "string"
             },
             "type": "array"
           },
@@ -518,7 +576,9 @@
           "service_id",
           "path",
           "fields",
-          "required_permission_key"
+          "required_permission_key",
+          "exposes_personal_data",
+          "grain"
         ],
         "type": "object"
       },
@@ -561,31 +621,44 @@
             "type": "string"
           },
           "filter_operators": {
-            "description": "Must suit the Field type.",
+            "description": "How the Field may be filtered when filterable. Must suit the Field type.",
             "items": {
               "$ref": "#/components/schemas/FilterOperator"
             },
             "type": "array"
           },
-          "name": {
-            "description": "Must match the field name the Source System returns.",
+          "filterable": {
+            "description": "Must be stated explicitly — an omitted value is an undeclared Field, not a\ndefault.\n",
+            "type": "boolean"
+          },
+          "key": {
+            "description": "Stable unique identifier; must match the key the Source System returns.",
             "example": "total_amount",
             "type": "string"
           },
+          "label": {
+            "description": "Human-readable name, shown to Authors.",
+            "example": "Total amount",
+            "type": "string"
+          },
+          "orderable": {
+            "description": "Must be stated explicitly, as with filterable.",
+            "type": "boolean"
+          },
           "role": {
             "$ref": "#/components/schemas/FieldRole"
-          },
-          "sortable": {
-            "type": "boolean"
           },
           "type": {
             "$ref": "#/components/schemas/FieldType"
           }
         },
         "required": [
-          "name",
+          "key",
+          "label",
           "type",
-          "role"
+          "role",
+          "filterable",
+          "orderable"
         ],
         "type": "object"
       },
@@ -661,6 +734,10 @@
             "example": "at least one Measure and a Time Dimension",
             "type": "string"
           },
+          "single_value": {
+            "description": "True for families whose widgets render one aggregated figure (stat card,\ndelta, status badge). When true, back the Widget with an aggregate-shaped\nDataset — the Source System returns the figure over the received filters;\nAnalytics and the frontend never compute it.\n",
+            "type": "boolean"
+          },
           "types": {
             "description": "The concrete Visualization Types in this Family.",
             "example": [
@@ -682,6 +759,12 @@
             "enum": [
               "ok",
               "unavailable"
+            ],
+            "type": "string"
+          },
+          "iam": {
+            "enum": [
+              "configured"
             ],
             "type": "string"
           },
@@ -859,6 +942,28 @@
         ],
         "type": "object"
       },
+      "TokenBundle": {
+        "description": "An IAM access token plus its refresh token.",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer"
+          },
+          "refresh_token": {
+            "type": "string"
+          },
+          "token_type": {
+            "example": "Bearer",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "Violation": {
         "properties": {
           "field": {
@@ -909,7 +1014,7 @@
           },
           "visualization_type": {
             "description": "Must belong to a Family the bound Dataset's Data Shape satisfies — checked\non save, so a stored Widget can never reference a chart its Dataset could\nnot render.\n",
-            "example": "line",
+            "example": "line-chart",
             "type": "string"
           }
         },

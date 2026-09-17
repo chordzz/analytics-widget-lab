@@ -125,6 +125,16 @@
   padding: var(--a-space-1) var(--a-space-2) var(--a-space-2);
   display: flex;
   flex-direction: column;
+  /*
+   * Content stays inside its box.
+   *
+   * Charts scale to the body, but a stacked composition — a figure above a
+   * sparkline, a gauge with its own aspect — has a hard minimum, and without
+   * this it spills over whatever sits below rather than being contained. That
+   * only became visible when the partial note started taking room off the
+   * body, but the card was always one tight row away from it.
+   */
+  overflow: hidden;
 }
 
 /* Text-led widgets keep the original inset — a number butting against a border
@@ -143,6 +153,71 @@
   padding: 0 var(--a-space-3) var(--a-space-3);
   font-size: var(--a-text-xs);
   color: var(--a-text-secondary);
+}
+
+/*
+ * The partial-result note.
+ *
+ * Sits below the body so it is read after the figure it qualifies, and so a
+ * bare card — a stat tile, which has no header — still shows it. Amber rather
+ * than red: the number is real, it is just not all of it, and a red card would
+ * read as broken and be dismissed as one.
+ */
+.a-card__partial {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--a-space-2);
+  /*
+   * It never grows and never shrinks away. A three-line reason took half of a
+   * 124px stat tile and pushed the figure it was describing out of the card;
+   * shrinking to nothing would delete the warning on exactly the cards where a
+   * single wrong number is easiest to misread.
+   */
+  flex: 0 0 auto;
+  margin: 0;
+  padding: var(--a-space-2) var(--a-space-3);
+  font-size: var(--a-text-xs);
+  line-height: 1.4;
+  color: var(--a-text-secondary);
+  border-top: 1px solid var(--a-border);
+  box-shadow: inset 3px 0 0 var(--a-status-warning);
+}
+
+/*
+ * Two lines, or one on a narrow card. The container query is the card's own
+ * width — a widget at a third of the board is a different composition, not a
+ * squashed one — so the same note reads fully on a wide card and tersely on a
+ * tile. The lead clause comes first in the sentence precisely so that the half
+ * which survives truncation is the half that matters.
+ */
+.a-card__partial-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+@container (max-width: 340px) {
+  .a-card__partial-text {
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+}
+
+.a-card__partial-mark {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--a-status-warning);
+  color: var(--a-text-inverse);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 /* --- actions menu --------------------------------------------------------- */
@@ -283,8 +358,21 @@
   color: var(--a-status-neutral);
 }
 
-/* Withdrawn is cautionary: something changed underneath this widget. */
+/*
+ * Cautionary: something changed underneath this widget, or the source could not
+ * serve what was asked for.
+ *
+ * The amber is on the icon, not the sentence. `--a-status-warning` against the
+ * card surface is near 1.9:1 — fine for a mark the eye only has to notice, and
+ * not readable as prose. These messages are the whole point of the state, so the
+ * text stays in a colour someone can actually read and the tone is carried by
+ * the icon beside it.
+ */
 .a-placeholder--warning {
+  color: var(--a-text-secondary);
+}
+
+.a-placeholder--warning .a-placeholder__icon {
   color: var(--a-status-warning);
 }
 
@@ -485,6 +573,15 @@
   font-size: var(--a-text-sm);
   color: var(--a-text);
   cursor: pointer;
+}
+
+/* What the parameter takes, beside what it is called. Set apart in the mono
+   face and muted, so it reads as a type rather than as more of the label —
+   which is how "From  you set the default" went wrong. */
+.a-expose__note {
+  font-family: var(--a-font-mono);
+  font-size: 10.5px;
+  color: var(--a-text-muted);
 }
 
 /* --- who can see this board (FR-DA-01 to FR-DA-07) ----------------------- */
@@ -799,5 +896,65 @@
 
 .a-log__entry {
   padding: var(--a-space-1) 0;
+  color: var(--a-text);
+}
+
+/* --- widgets that cannot show this data, and why --------------------------
+ *
+ * Deliberately quieter than the pickable list above it. This is reference — an
+ * Author reads it once to find out whether the thing they came for exists —
+ * and styling it like a second menu would suggest these are choices.
+ */
+.a-unavailable__toggle {
+  font: inherit;
+  font-size: var(--a-text-xs);
+  color: var(--a-accent);
+  background: none;
+  border: 0;
+  padding: var(--a-space-2) 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.a-unavailable__toggle:hover {
+  text-decoration: underline;
+}
+
+.a-unavailable__toggle:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--a-radius-sm);
+}
+
+.a-unavailable__group {
+  margin-top: var(--a-space-3);
+}
+
+.a-unavailable__title {
+  margin: 0 0 2px;
+  font-size: var(--a-text-xs);
+  font-weight: 600;
+  color: var(--a-text-secondary);
+}
+
+.a-unavailable__list {
+  list-style: none;
+  margin: var(--a-space-2) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--a-space-1);
+}
+
+.a-unavailable__item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-space-2);
+  font-size: var(--a-text-xs);
+  line-height: 1.45;
+}
+
+.a-unavailable__name {
+  min-width: 11ch;
+  font-weight: 500;
   color: var(--a-text);
 }

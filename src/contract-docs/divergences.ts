@@ -66,6 +66,37 @@ export interface Divergence {
   endedAt?: string
 }
 
+import { WIDGET_TYPES } from '../analytics/widgets/catalog'
+import { visualizationTypes } from '../visualization/visualization-types'
+
+/**
+ * The Types §4.2 names that nothing can draw. Derived, not typed out, because
+ * D6 carries a count and a count written by hand goes stale silently — the
+ * drift test compares the *rendered* document to this module, so it can only
+ * catch a number the module computes.
+ *
+ * "No renderer" has two causes and both belong here. A Type absent from
+ * `WIDGET_TYPES` has no entry to render at all; a Type present with
+ * `built: false` has an entry that says so. Counting only the second was the
+ * mistake that made this entry wrong for a day.
+ */
+export const UNRENDERED: string[] = (() => {
+  const offered = new Map(WIDGET_TYPES.map((type) => [type.id, type.built]))
+  return visualizationTypes
+    .map((type) => type.id)
+    .filter((id) => offered.get(id) !== true)
+})()
+
+const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+const countWord = (n: number): string => WORDS[n] ?? String(n)
+const sentenceCase = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1)
+
+const asList = (ids: readonly string[]): string => {
+  const quoted = ids.map((id) => `\`${id}\``)
+  if (quoted.length <= 1) return quoted[0] ?? 'none'
+  return `${quoted.slice(0, -1).join(', ')} and ${quoted[quoted.length - 1]}`
+}
+
 export const DIVERGENCES: Divergence[] = [
   {
     id: 'D1',
@@ -149,15 +180,17 @@ export const DIVERGENCES: Divergence[] = [
     id: 'D6',
     clause: 'FR-VZ-01',
     authority: 'frd',
-    divergence: 'Six of the 42 Visualization Types have no renderer.',
+    divergence: `${sentenceCase(countWord(UNRENDERED.length))} of the ${String(
+      visualizationTypes.length,
+    )} Visualization Types ${UNRENDERED.length === 1 ? 'has' : 'have'} no renderer.`,
     status: 'temporary',
     where: 'analytics/widgets/catalog.ts',
     reason:
       'Down from eight before the merge, which brought three workbench renderers across. The ' +
-      'remaining six are `comparison-table`, `stacked-100-bar`, `violin-plot`, `heatmap-matrix`, ' +
-      '`bar-chart-race` and `choropleth-map`. The last is the standing decision about bundling ~100KB ' +
-      'of boundary geometry; the other five are ordinary work. All 13 Families are covered, and the ' +
-      'catalogue lists what is unbuilt rather than hiding it.',
+      `remaining ${countWord(UNRENDERED.length)} are ${asList(UNRENDERED)}. ` +
+      '`choropleth-map` is the standing decision about bundling ~100KB of boundary geometry; the ' +
+      'rest are ordinary work. All 13 Families are covered, and the catalogue lists what is unbuilt ' +
+      'rather than hiding it.',
   },
   {
     id: 'D7',
@@ -347,8 +380,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema Field.role',
     authority: 'api',
     divergence: 'A Field has three roles; the API has two, and time is a Field *type*.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'catalogue/api-dataset.ts - the role is reconstructed from `time_dimension_field`',
     findings: [18],
     where: 'domain/dataset.ts, analytics/builder/requirements.ts',
     reason:
@@ -363,8 +396,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: GET /v1/datasets/{datasetId}/query',
     authority: 'api',
     divergence: 'A query is flat filter parameters, not a `DatasetQuery`.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'retrieval/http-retrieval.ts - filters go upstream, ordering and reduction finish locally',
     findings: [19],
     where: 'analytics/data/query.ts',
     reason:
@@ -380,8 +413,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema Dashboard.widgets',
     authority: 'api',
     divergence: 'A board references its Widgets by id; the API embeds them by value.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'dashboard/api-dashboard.ts - joined on the way out, split on the way in',
     findings: [20],
     where: 'analytics/builder/boards.ts',
     reason:
@@ -396,8 +429,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema FilterParameter',
     authority: 'api',
     divergence: 'A Field carries `filterable`; the API declares Filter Parameters separately.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'catalogue/api-dataset.ts - `filterable` is read from `filter_parameters`',
     where: 'domain/dataset.ts',
     reason:
       'The API keeps two lists. `fields` describes the *response* shape — and a Field name "must ' +
@@ -413,8 +446,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema DashboardScopeLevel',
     authority: 'api',
     divergence: 'Scope has three levels; the API has four, including `role`.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'dashboard/api-dashboard.ts - `role` folds into an organizational scope',
     findings: [21],
     where: 'domain/dashboard.ts',
     reason:
@@ -429,8 +462,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema ShareGrantTarget',
     authority: 'api',
     divergence: 'A Share Grant targets an individual or a group; the API says user or department.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'dashboard/api-dashboard.ts - `grantInputFrom`',
     where: 'domain/dashboard.ts',
     reason:
       'Ours is `individual | group` with a `recipientLabel`; the API is `user | department` with a ' +
@@ -443,23 +476,29 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema Envelope',
     authority: 'api',
     divergence: 'Every response is wrapped in `{ status, message, data }`; we read bodies directly.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
-    where: 'analytics/data/adapters.ts',
+    status: 'resolved',
+    endedAt: 'widgets/WidgetCard.tsx - the note under the figure it qualifies',
+    where: 'api/client.ts, retrieval/relayed-body.ts, analytics/widgets/WidgetCard.tsx',
     reason:
       'A boolean `status`, a human `message`, and the payload under `data`. One unwrap in the ' +
       'adapter and nothing above it needs to know — which is the argument for the adapter existing ' +
       'at all. Recorded because the envelope also carries the partial-result marker: a Source System ' +
       'may answer `200` with `meta.partial` and a reason, and a widget that ignores that shows a ' +
-      'truncated series as if it were the whole one.',
+      'truncated series as if it were the whole one. Half of this is done: the client unwraps the ' +
+      'envelope once, and `relayed-body.ts` finds the marker under either of the two readings the ' +
+      'spec admits. It now reaches the card: a note under the figure it qualifies, shown on ' +
+      '`ready` and on `empty`, on a bare stat tile as well as a chart, and never behind a hover ' +
+      '- a tooltip is invisible to a touchscreen, a wall display, and a screenshot, which are ' +
+      'three of the ways a wrong number travels. It is not a seventh render state: it qualifies ' +
+      'an answer rather than replacing one, so the picture is still drawn.',
   },
   {
     id: 'D28',
     clause: 'API: schema Widget.visualization_type',
     authority: 'api',
     divergence: 'Visualization Type ids may be a third vocabulary, neither ours nor the FRD\'s.',
-    status: 'temporary',
-    endedAt: 'confirmation against a live Dataset',
+    status: 'resolved',
+    endedAt: 'the API adopted §4.2 on 15 September 2026',
     findings: [22],
     where: 'analytics/widgets/catalog.ts, analytics/widgets/taxonomy.test.ts',
     reason:
@@ -476,8 +515,8 @@ export const DIVERGENCES: Divergence[] = [
     clause: 'API: schema Aggregation',
     authority: 'api',
     divergence: 'Two aggregations are spelled `minimum` and `maximum`; the API says `min` and `max`.',
-    status: 'temporary',
-    endedAt: 'the HTTP adapter',
+    status: 'resolved',
+    endedAt: 'catalogue/api-dataset.ts - a translation table, and an unknown name is dropped',
     where: 'domain/dataset.ts, analytics/data/adapters.ts',
     reason:
       'Both enumerate the same six — sum, average, count, the two extremes, and a distinct count — ' +
@@ -486,6 +525,42 @@ export const DIVERGENCES: Divergence[] = [
       'through our switch to a silent zero rather than failing, because an aggregation we do not ' +
       'recognise looks exactly like an empty column. Two names for one operation is also how a ' +
       'board ends up averaging a count, so the translation belongs in one place.',
+  },
+  {
+    id: 'D30',
+    clause: 'API: schema Dataset',
+    authority: 'api',
+    divergence: 'A Dataset declares what one row represents; the API has nowhere to put it.',
+    status: 'resolved',
+    endedAt: '`Dataset.grain`, added by the API on 15 September 2026',
+    where: 'domain/dataset.ts, domain/publication-contract.ts (PC-08)',
+    reason:
+      'A declaration lists the columns and never says how many rows to expect. Two Datasets can ' +
+      'declare identically — same Fields, same roles, same aggregations — while one returns a ' +
+      'single summary row and the other one row per corridor per day, and those feed almost ' +
+      'disjoint sets of Visualization Types. An Author picking for a stat card cannot tell them ' +
+      'apart, and FR-DP-11 exists precisely so they do not have to retrieve the data to find out. ' +
+      "Worse, `aggregations` is the only aggregation-shaped field in a declaration, so it reads " +
+      'like the answer and is not: it says what could meaningfully be done to a figure, never what ' +
+      'was. PC-08 requires the grain; the API carrying it is the ask.',
+  },
+  {
+    id: 'D31',
+    clause: 'API: schema FilterParameter',
+    authority: 'api',
+    divergence: 'Enumerable Filter Parameters must publish their accepted values; the API leaves it optional.',
+    status: 'proposed-extension',
+    findings: [8],
+    where: 'domain/publication-contract.ts (PC-09), analytics/data/AnalyticsData.tsx',
+    reason:
+      '`allowed_values` exists on the API and is optional, so a publisher may omit it and still ' +
+      'pass validation — at which point a Viewer is offered a filter control with nothing in it. ' +
+      'Deriving the list from returned rows is the obvious substitute and the wrong one: the ' +
+      'options would then change as other filters changed, and a control that narrows itself is ' +
+      'worse than an empty one. Whether values are enumerable is the publisher\'s judgement and ' +
+      'cannot be checked from here — 365 dates are not a dropdown — so PC-09 states the obligation ' +
+      'and checks what it can, that a declared list is not empty. Narrows Finding 8 to the filters ' +
+      'a declaration genuinely cannot enumerate.',
   },
 ]
 /** Entries that still diverge. */

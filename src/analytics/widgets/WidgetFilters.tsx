@@ -17,23 +17,40 @@
  */
 
 import { useId } from 'react'
-import { useFilterValues } from '../data/AnalyticsData'
 import { fieldOf } from '../data/types'
+import type { FilterParameter } from '../../domain/dataset'
 import type { Dataset } from '../data/types'
 import type { ViewerChoices } from '../data/query'
 
 export interface WidgetFiltersProps {
   dataset: Dataset
-  /** Field keys the Author exposed. Already the Author's choice, not every Field. */
+  /** Filter Parameter names the Author exposed. Their choice, not every parameter. */
   filters: readonly string[]
   sorts: readonly string[]
   choices: ViewerChoices
   onChange: (next: ViewerChoices) => void
+  /**
+   * What the Author bound, which a Viewer's own choice overrides.
+   *
+   * Shown as the starting value rather than as an empty control, because a
+   * required parameter with no value is a query the Source System refuses — so
+   * an empty box here would offer a Viewer a way to break the widget.
+   */
+  bindings?: Record<string, string | number>
 }
 
-/** Only what the publisher permits, whatever the Author put in the spec. */
-const permittedFilters = (dataset: Dataset, keys: readonly string[]) =>
-  keys.map((key) => fieldOf(dataset, key)).filter((field) => field?.filterable === true)
+/**
+ * Only what the publisher permits, whatever the Author put in the spec.
+ *
+ * Resolved against **Filter Parameters** — the names the endpoint accepts —
+ * rather than against filterable Fields, which describe the response. The two
+ * lists do not line up, and checking the wrong one is what let a Widget be
+ * composed exposing `date` and rejected on save.
+ */
+const permittedFilters = (dataset: Dataset, names: readonly string[]) =>
+  names
+    .map((name) => (dataset.filterParameters ?? []).find((parameter) => parameter.name === name))
+    .filter((parameter): parameter is FilterParameter => parameter !== undefined)
 
 const permittedSorts = (dataset: Dataset, keys: readonly string[]) =>
   keys.map((key) => fieldOf(dataset, key)).filter((field) => field?.sortable === true)
@@ -44,11 +61,12 @@ export function WidgetFilters({
   sorts,
   choices,
   onChange,
+  bindings,
 }: WidgetFiltersProps) {
-  const filterFields = permittedFilters(dataset, filters)
+  const filterParameters = permittedFilters(dataset, filters)
   const sortFields = permittedSorts(dataset, sorts)
 
-  if (filterFields.length === 0 && sortFields.length === 0) return null
+  if (filterParameters.length === 0 && sortFields.length === 0) return null
 
   const active =
     Object.values(choices.filters ?? {}).filter((value) => value !== '').length +
@@ -56,17 +74,17 @@ export function WidgetFilters({
 
   return (
     <div className="a-filters" role="group" aria-label="Filters">
-      {filterFields.map((field) => (
-        <FilterSelect
-          key={field!.key}
-          datasetId={dataset.id}
-          fieldKey={field!.key}
-          label={field!.label}
-          value={choices.filters?.[field!.key]}
+      {filterParameters.map((parameter) => (
+        <ParameterControl
+          key={parameter.name}
+          parameter={parameter}
+          // The Author's binding is the starting point, not a floor: a Viewer
+          // changing it is the whole point of exposing it.
+          value={choices.filters?.[parameter.name] ?? bindings?.[parameter.name]}
           onChange={(value) =>
             onChange({
               ...choices,
-              filters: { ...choices.filters, [field!.key]: value },
+              filters: { ...choices.filters, [parameter.name]: value },
             })
           }
         />
@@ -95,44 +113,69 @@ export function WidgetFilters({
   )
 }
 
-function FilterSelect({
-  datasetId,
-  fieldKey,
-  label,
+/**
+ * One control for one Filter Parameter, chosen by what the publisher declared.
+ *
+ * Three shapes, in order of how much the declaration tells us:
+ *
+ *   - **enumerated values** — a select, since the publisher listed exactly what
+ *     the endpoint accepts
+ *   - **a date** — a date picker. `input[type=date]` reads and writes
+ *     `YYYY-MM-DD` whatever the viewer's locale displays, which is already the
+ *     ISO-8601 the endpoint wants, so the value travels verbatim
+ *   - **anything else** — a text or number box, which is the honest fallback
+ *     when the publisher has not said what the values are (Finding 8)
+ */
+function ParameterControl({
+  parameter,
   value,
   onChange,
 }: {
-  datasetId: string
-  fieldKey: string
-  label: string
+  parameter: FilterParameter
   value: string | number | undefined
   onChange: (value: string | number) => void
 }) {
   const id = useId()
-  const values = useFilterValues(datasetId, fieldKey)
+  const current = value === undefined ? '' : String(value)
+  const allowed = parameter.allowedValues
 
   return (
     <label className="a-filters__field" htmlFor={id}>
-      <span className="a-filters__label">{label}</span>
-      <select
-        id={id}
-        className="a-filters__select"
-        value={value === undefined ? '' : String(value)}
-        onChange={(event) => {
-          // The raw option value is a string; a numeric Field has to come back
-          // as a number or the query's equality check silently matches nothing.
-          const raw = event.target.value
-          const original = values.find((entry) => String(entry) === raw)
-          onChange(original ?? raw)
-        }}
-      >
-        <option value="">All</option>
-        {values.map((entry) => (
-          <option key={String(entry)} value={String(entry)}>
-            {String(entry)}
-          </option>
-        ))}
-      </select>
+      <span className="a-filters__label">{parameter.label}</span>
+
+      {allowed && allowed.length > 0 ? (
+        <select
+          id={id}
+          className="a-filters__select"
+          value={current}
+          onChange={(event) => {
+            // The raw option value is a string; a numeric parameter has to come
+            // back as a number or the endpoint compares a string to a number.
+            const raw = event.target.value
+            onChange(allowed.find((entry) => String(entry) === raw) ?? raw)
+          }}
+        >
+          {/*
+            A required parameter has no "All": the endpoint cannot answer
+            without a value, so offering the empty option would hand a Viewer a
+            way to break the widget.
+          */}
+          {!parameter.required && <option value="">All</option>}
+          {allowed.map((entry) => (
+            <option key={String(entry)} value={String(entry)}>
+              {String(entry)}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          id={id}
+          type={parameter.valueType === 'date' ? 'date' : parameter.valueType === 'number' ? 'number' : 'text'}
+          className="a-filters__select"
+          value={current}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      )}
     </label>
   )
 }

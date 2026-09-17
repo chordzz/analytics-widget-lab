@@ -65,6 +65,14 @@ A Dataset must carry a data classification indicating the sensitivity of the dat
 
 A Dataset must state explicitly whether it exposes personal data. This drives the access recording obligation in FR-DA-14, so it cannot be left to inference.
 
+### PC-08 — Proposed extension — D30
+
+A Dataset must declare its row grain: the Fields whose combination identifies one row, or an empty list where the endpoint answers with a single summary row. An Author choosing a Dataset cannot otherwise tell a one-row summary from two thousand records, and the two feed almost disjoint sets of Visualization Types.
+
+### PC-09 — Proposed extension — D31
+
+Every Filter Parameter must state whether it is required, and must declare its accepted values wherever those are enumerable. A parameter whose values are not declared renders as an empty control: the Viewer is offered a filter with nothing to pick.
+
 ## Enumerations
 
 | Enumeration | Permitted values |
@@ -100,6 +108,7 @@ produces:
 - **PC-05** (FR-DP-05) — Field 'amount' does not declare whether it is sortable.
 - **PC-06** (FR-DP-07) — No data classification was supplied.
 - **PC-07** (FR-DP-07) — The Dataset does not state whether it exposes personal data.
+- **PC-08** (Proposed extension — D30) — The Dataset does not declare what one row represents.
 
 ## Retrieval obligations
 
@@ -159,7 +168,7 @@ satisfy.
 
 ### Geospatial
 
-§4.2 requires a "location-typed Dimension". The published model has exactly three Field roles — Dimension, Measure, Time Dimension — and no notion of a location type. It also cannot say that two Measures are a coordinate pair rather than two figures.
+§4.2 requires a "location-typed Dimension". `FieldType` does carry `location`, and a Dataset reports `has_location_field` — but a choropleth shades *named areas* and `location` does not separate a region from a postcode or a street address, which cannot be shaded. Nor can it say that two Measures are a coordinate pair rather than two figures. The type is nearly enough here and not quite: it is the one Family where the published model already reaches for the fact and stops one step short of it.
 
 **Proposed resolution:** proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude'
 

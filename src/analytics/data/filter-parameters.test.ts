@@ -1,0 +1,281 @@
+/**
+ * Filter Parameters — D24, and the two facts a filter control cannot work
+ * without.
+ *
+ * The publication model keeps two lists on purpose. `fields` describes what
+ * comes back; `filter_parameters` describes what may be sent. We collapsed both
+ * into a boolean for most of this project's life, which could express neither
+ * *which values are accepted* nor *which parameters are mandatory* — so every
+ * Viewer-facing filter rendered an empty control, and a Dataset with a required
+ * parameter produced a Widget that could only fail.
+ */
+
+import { describe, expect, test } from 'bun:test'
+import { allowedValuesFor, filterParameterFor, requiredParameters, type FilterParameter } from '../../domain/dataset'
+import { datasetFrom, filterParametersFrom, type ApiDataset } from '../../catalogue/api-dataset'
+import { requireDataset, rowsFor } from './datasets'
+import { inputTypeFor } from '../builder/WidgetComposer'
+
+const api = (overrides: Partial<ApiDataset> = {}): ApiDataset => ({
+  id: 'peniremit.settlements',
+  name: 'Settlements',
+  source_system_id: 'peniremit',
+  time_dimension_field: 'settlement_date',
+  fields: [
+    { key: 'settlement_date', label: 'Settlement date', type: 'date', role: 'dimension' },
+    { key: 'corridor', label: 'Corridor', type: 'category', role: 'dimension' },
+    { key: 'settlement_amount', label: 'Settlement amount', type: 'number', role: 'measure', aggregations: ['sum'] },
+  ],
+  filter_parameters: [
+    { name: 'from', type: 'date', required: true },
+    { name: 'corridor', type: 'category', allowed_values: ['NG-UK', 'NG-US'] },
+  ],
+  ...overrides,
+})
+
+describe('the declaration is carried whole, not flattened', () => {
+  test('a parameter that is not a returned column survives', () => {
+    /*
+     * `from` bounds a date range and is not a column the endpoint returns, so
+     * under the old boolean-on-a-Field model it was unreachable — there was no
+     * Field to hang it from. This is the case D24 was written about.
+     */
+    const dataset = datasetFrom(api())
+    expect(filterParameterFor(dataset, 'from')).toBeDefined()
+    expect(dataset.fields.some((field) => field.key === 'from')).toBe(false)
+  })
+
+  test('required is carried', () => {
+    expect(requiredParameters(datasetFrom(api())).map((p) => p.name)).toEqual(['from'])
+  })
+
+  test('allowed values are carried', () => {
+    expect(allowedValuesFor(datasetFrom(api()), 'corridor')).toEqual(['NG-UK', 'NG-US'])
+  })
+
+  test('a parameter gets a readable label from its name', () => {
+    const [parameter] = filterParametersFrom(
+      api({ filter_parameters: [{ name: 'settlement_status', type: 'category' }] }),
+    )
+    expect(parameter.label).toBe('Settlement status')
+  })
+})
+
+describe('absent allowed values stay absent', () => {
+  test('undefined, not an empty list', () => {
+    /*
+     * The two are different claims and a control must tell them apart.
+     * `undefined` means the values are open-ended and have to come from
+     * somewhere else — Finding 8. `[]` would mean the publisher declared this
+     * parameter accepts nothing, which is a broken declaration rather than an
+     * empty dropdown, and collapsing the first into the second would silently
+     * stop us asking.
+     */
+    expect(allowedValuesFor(datasetFrom(api()), 'from')).toBeUndefined()
+  })
+
+  test('a declared empty list is kept as declared', () => {
+    const dataset = datasetFrom(
+      api({ filter_parameters: [{ name: 'corridor', type: 'category', allowed_values: [] }] }),
+    )
+    expect(allowedValuesFor(dataset, 'corridor')).toEqual([])
+  })
+
+  test('required defaults to false rather than undefined', () => {
+    // A parameter that does not say is not required. Leaving it undefined would
+    // make `requiredParameters` depend on a falsy check rather than a declared one.
+    const [parameter] = filterParametersFrom(
+      api({ filter_parameters: [{ name: 'corridor', type: 'category' }] }),
+    )
+    expect(parameter.required).toBe(false)
+  })
+})
+
+describe('a numeric parameter carries numeric values', () => {
+  test('allowed values are parsed for a number-typed parameter', () => {
+    /*
+     * `allowed_values` is declared as strings whatever the parameter's type,
+     * while rows arrive with JSON numbers. Leaving `'5'` as a string makes every
+     * comparison fail on type — the same silent mismatch the widget data
+     * contract warns publishers about from the other side.
+     */
+    const dataset = datasetFrom(
+      api({ filter_parameters: [{ name: 'tier', type: 'number', allowed_values: ['1', '2', '3'] }] }),
+    )
+    expect(allowedValuesFor(dataset, 'tier')).toEqual([1, 2, 3])
+  })
+
+  test('a non-numeric value on a number parameter is left alone', () => {
+    // Coercing it would produce NaN, which is worse than reporting what was
+    // declared and letting the mismatch be visible.
+    const dataset = datasetFrom(
+      api({ filter_parameters: [{ name: 'tier', type: 'number', allowed_values: ['1', 'gold'] }] }),
+    )
+    expect(allowedValuesFor(dataset, 'tier')).toEqual([1, 'gold'])
+  })
+
+  test('a category parameter keeps its strings', () => {
+    expect(allowedValuesFor(datasetFrom(api()), 'corridor')).toEqual(['NG-UK', 'NG-US'])
+  })
+})
+
+describe('the fixtures declare parameters the way a publisher should', () => {
+  test('every filterable Field has a parameter', () => {
+    const dataset = requireDataset('sales-by-region')
+    const declared = new Set((dataset.filterParameters ?? []).map((p) => p.name))
+    for (const field of dataset.fields.filter((f) => f.filterable)) {
+      expect(declared.has(field.key)).toBe(true)
+    }
+  })
+
+  test('an enumerable Dimension carries its values', () => {
+    const dataset = requireDataset('sales-by-region')
+    const regions = [...new Set(rowsFor('sales-by-region').map((row) => String(row.region)))]
+    expect(allowedValuesFor(dataset, 'region')?.length).toBe(regions.length)
+  })
+
+  test('a Field with too many distinct values carries none', () => {
+    /*
+     * 365 dates is not a dropdown. Declaring them would be worse than declaring
+     * nothing: it turns a control the Viewer can use into one they have to
+     * scroll, and it is the judgement a real publisher makes too.
+     */
+    expect(allowedValuesFor(requireDataset('revenue-daily'), 'date')).toBeUndefined()
+  })
+
+  test('values are ordered, and numbers numerically', () => {
+    // `10` must not sort before `9`, which is what string comparison would do
+    // and what a Viewer would read as a broken list.
+    const values = allowedValuesFor(requireDataset('sales-by-region'), 'region') ?? []
+    expect([...values].sort((a, b) => String(a).localeCompare(String(b)))).toEqual(values)
+  })
+
+  test('one fixture declares a required parameter', () => {
+    /*
+     * Deliberately exactly one. A required parameter is a state a live API will
+     * not produce on demand, and the fixtures exist to reach those — the same
+     * argument that keeps `denied`, `withdrawn` and `partial` reachable.
+     */
+    const required = requiredParameters(requireDataset('transactions'))
+    expect(required.map((p) => p.name)).toEqual(['channel'])
+  })
+
+  test('and it is required for a reason a real Dataset would share', () => {
+    // Record grain over personal financial data: an endpoint serving it should
+    // refuse to answer "all of them", so narrowing is a condition of asking.
+    const dataset = requireDataset('transactions')
+    expect(dataset.exposesPersonalData).toBe(true)
+    expect(allowedValuesFor(dataset, 'channel')).toBeDefined()
+  })
+
+  test('no other fixture requires anything', () => {
+    for (const id of ['revenue-daily', 'sales-by-region', 'product-performance']) {
+      expect(requiredParameters(requireDataset(id))).toEqual([])
+    }
+  })
+})
+
+describe('the declared value type picks the control', () => {
+  /*
+   * The screenshot that prompted this: `peniremit.profit` requires `from` and
+   * `to`, both declared `date`, and both rendered as text boxes reading
+   * "Required". Nobody wants to type a date in a format nobody told them.
+   */
+  test('a date parameter gets a date picker', () => {
+    expect(inputTypeFor('date')).toBe('date')
+  })
+
+  test('a number gets a number input', () => {
+    // A numeric parameter in a text box accepts letters and offers no stepper,
+    // and the query's equality check then compares a string to a number.
+    expect(inputTypeFor('number')).toBe('number')
+  })
+
+  test('anything else stays a text box', () => {
+    expect(inputTypeFor('string')).toBe('text')
+    expect(inputTypeFor('category')).toBe('text')
+    expect(inputTypeFor('location')).toBe('text')
+  })
+
+  test('an undeclared type stays a text box rather than guessing', () => {
+    // A publisher who did not say gets the control that accepts anything,
+    // rather than one that silently rejects what they meant.
+    expect(inputTypeFor(undefined)).toBe('text')
+  })
+})
+
+describe('the value type survives the adapter', () => {
+  const profit = datasetFrom({
+    id: 'peniremit.profit',
+    name: 'Profit',
+    source_system_id: 'peniremit',
+    fields: [
+      { key: 'date', label: 'Date', type: 'date', role: 'dimension', filterable: true, orderable: true },
+    ],
+    filter_parameters: [
+      { name: 'from', type: 'date', required: true },
+      { name: 'to', type: 'date', required: true },
+      { name: 'granularity', type: 'category', allowed_values: ['day', 'month'] },
+      { name: 'threshold', type: 'number' },
+    ],
+  } as Parameters<typeof datasetFrom>[0])
+
+  const parameter = (name: string) =>
+    (profit.filterParameters ?? []).find((entry) => entry.name === name)
+
+  test('a declared date arrives as one', () => {
+    expect(parameter('from')?.valueType).toBe('date')
+    expect(parameter('to')?.valueType).toBe('date')
+  })
+
+  test('so do the others', () => {
+    expect(parameter('granularity')?.valueType).toBe('category')
+    expect(parameter('threshold')?.valueType).toBe('number')
+  })
+
+  test('a type we do not recognise is dropped rather than carried through', () => {
+    // It would reach `inputTypeFor` and fall to `text` anyway, but an unchecked
+    // string in a typed field is a lie the next reader has to discover.
+    const odd = datasetFrom({
+      ...({
+        id: 'x',
+        name: 'X',
+        source_system_id: 'p',
+        fields: [{ key: 'a', label: 'A', type: 'number', role: 'measure', aggregations: ['sum'] }],
+        filter_parameters: [{ name: 'weird', type: 'money' }],
+      } as Parameters<typeof datasetFrom>[0]),
+    })
+    expect(odd.filterParameters?.[0].valueType).toBeUndefined()
+  })
+})
+
+describe('the value type is named only where it adds something', () => {
+  /*
+   * "From  you set the default" was the original wording, and it ran straight
+   * on from the label into a broken sentence. The replacement says what the
+   * parameter *takes*, which is the thing a publisher's name does not.
+   */
+  const hint = (label: string, valueType: FilterParameter['valueType']) =>
+    valueType !== undefined && !label.toLowerCase().includes(valueType)
+
+  test('`From` does not say it wants a date, so the type is shown', () => {
+    expect(hint('From', 'date')).toBe(true)
+    expect(hint('To', 'date')).toBe(true)
+  })
+
+  test('`Date` plainly does, so it is not repeated', () => {
+    // "Date date" is the kind of redundancy that makes a reader distrust the
+    // rest of the label.
+    expect(hint('Date', 'date')).toBe(false)
+  })
+
+  test('a publisher who did not declare a type gets no hint invented', () => {
+    expect(hint('From', undefined)).toBe(false)
+  })
+
+  test('the check is on the label, not the parameter name', () => {
+    // `settled_at` is the wire name; `Settled at` is what a person reads, and
+    // neither of them says "date".
+    expect(hint('Settled at', 'date')).toBe(true)
+  })
+})

@@ -106,6 +106,17 @@ describe('D1 — Catalogue', () => {
       'describe',
       'options',
       'visibleTo',
+      /*
+       * Named rather than tolerated. `visualizations` returns the Visualization
+       * taxonomy — Families and Type ids, no Dataset and no rows — and it lives
+       * on this port because the API files it under Catalogue and it answers
+       * the same kind of question: what exists, before anything is retrieved.
+       *
+       * The list is exhaustive on purpose. A method added here has to be
+       * argued for in this test before it can exist, which is the mechanism
+       * FR-DP-11 needs — a comment saying "no records" is not one.
+       */
+      'visualizations',
     ])
   })
 

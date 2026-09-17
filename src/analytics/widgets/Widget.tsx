@@ -16,6 +16,7 @@ import { WidgetFilters } from './WidgetFilters'
 import { singleValueOf } from '../data/query'
 import type { ViewerChoices } from '../data/query'
 import type { QueryContribution } from '../../composition/correspondence'
+import type { PartialResult } from '../../retrieval/port'
 import { fieldOf } from '../data/types'
 import {
   ActivityFeed,
@@ -90,6 +91,20 @@ export interface WidgetSpec {
   exposedFilters?: string[]
   /** FR-VZ-06 — Fields a Viewer may reorder by. Same constraint, via `sortable`. */
   exposedSorts?: string[]
+  /**
+   * Values the Author fixed for the Dataset's Filter Parameters — D24.
+   *
+   * A third kind of narrowing, and distinct from both the others. An exposed
+   * filter is the *Viewer's* to set and is never persisted; a Dashboard Control
+   * is the Viewer's too, across several Widgets. A binding is the **Author's**,
+   * it is part of what this Widget is, and it travels with the Widget.
+   *
+   * It exists because a Filter Parameter may be `required` — the Source System
+   * cannot answer without it. A Widget over such a Dataset is not a Widget with
+   * an unset filter; it is a query that will be refused. So the value is
+   * collected when the Widget is composed, or the Widget is not composable.
+   */
+  parameterBindings?: Record<string, string | number>
   /*
    * No size and no position.
    *
@@ -107,6 +122,12 @@ export interface WidgetProps {
   spec: WidgetSpec
   /** Overrides the resolved state. Used by the gallery to show loading and error. */
   state?: WidgetState
+  /**
+   * Overrides the resolved partial marker. Same slot as `state`, and needed
+   * separately because partial is a qualifier rather than a status — a gallery
+   * that could only override the six could never show this one.
+   */
+  partial?: PartialResult
   actions?: WidgetAction[]
   selected?: boolean
   onSelect?: () => void
@@ -149,6 +170,7 @@ export function WidgetView({
   onSelect,
   height,
   errorMessage,
+  partial,
   controls,
 }: WidgetViewProps) {
   const type = widgetType(spec.typeId)
@@ -191,6 +213,7 @@ export function WidgetView({
       subtitle={spec.subtitle}
       state={state}
       errorMessage={errorMessage}
+      partial={partial}
       actions={actions}
       selected={selected}
       onSelect={onSelect}
@@ -202,6 +225,37 @@ export function WidgetView({
       {state === 'ready' && dataset ? renderBody(spec, type.id, rows, dataset) : null}
     </WidgetCard>
   )
+}
+
+/**
+ * Which of the six states a card is in — the whole decision, in one place.
+ *
+ * Three ways a card can be without a Dataset, and **only one of them is a
+ * withdrawal**:
+ *
+ *   - the Catalogue *answered* "no such Dataset" — a withdrawal from a Viewer's
+ *     side, because it was bound once and so existed once. Drawing it as a
+ *     failure would say the system is broken while the system is working.
+ *   - the Catalogue *did not answer* — a failure, and the mistake this used to
+ *     make. A `503` while describing rendered "the source system has withdrawn
+ *     this dataset": a statement about a decision a publisher took, made because
+ *     IAM was briefly unreachable. Untrue, unfalsifiable from the card, and
+ *     whoever acts on it goes looking for a choice nobody made.
+ *   - we have not asked yet — loading.
+ *
+ * Exported and pure so it can be tested as itself. Left inline it could only be
+ * checked by a test that restated it, which proves the copy and not the code.
+ */
+export function stateForWidget(input: {
+  describing: boolean
+  describeFailed: boolean
+  hasDataset: boolean
+  retrieved: WidgetState
+}): WidgetState {
+  if (input.describing) return 'loading'
+  if (input.describeFailed) return 'failed'
+  if (!input.hasDataset) return 'withdrawn'
+  return input.retrieved
 }
 
 /**
@@ -223,8 +277,9 @@ export function Widget({
   onSelect,
   height,
   contribution,
+  partial: partialOverride,
 }: WidgetProps) {
-  const { dataset, loading: describing } = useDataset(spec.datasetId)
+  const { dataset, loading: describing, failure: catalogueFailure } = useDataset(spec.datasetId)
 
   /*
    * The Viewer's filter choices live here and go no further.
@@ -247,6 +302,9 @@ export function Widget({
         sorts={spec.exposedSorts ?? []}
         choices={choices}
         onChange={setChoices}
+        // What the Author bound, so an exposed required parameter opens on a
+        // value rather than on an empty box the endpoint would refuse.
+        bindings={spec.parameterBindings}
       />
     ) : undefined
 
@@ -257,6 +315,7 @@ export function Widget({
         dataset={dataset}
         rows={retrieved.status === 'ready' ? retrieved.rows : []}
         state={override}
+        partial={partialOverride}
         controls={controls}
         actions={actions}
         selected={selected}
@@ -266,14 +325,24 @@ export function Widget({
     )
   }
 
-  // The Catalogue answering "no such Dataset" is a withdrawal from a Viewer's
-  // side: it was bound once, so it existed once. Reading it as a failure would
-  // say the system is broken when the system is working.
-  const state: WidgetState = describing
-    ? 'loading'
-    : !dataset
-      ? 'withdrawn'
-      : retrieved.status
+  const state = stateForWidget({
+    describing,
+    describeFailed: catalogueFailure !== null,
+    hasDataset: dataset !== null,
+    retrieved: retrieved.status,
+  })
+
+  /*
+   * Only while the state it qualifies is actually on screen. A withdrawn
+   * Dataset whose last retrieval happened to be partial must not carry the note
+   * into a panel that is deliberately withholding figures.
+   */
+  const partial =
+    partialOverride ??
+    (state === retrieved.status &&
+    (retrieved.status === 'ready' || retrieved.status === 'empty')
+      ? retrieved.partial
+      : undefined)
 
   return (
     <WidgetView
@@ -281,7 +350,17 @@ export function Widget({
       dataset={dataset}
       rows={retrieved.status === 'ready' ? retrieved.rows : []}
       state={state}
-      errorMessage={retrieved.status === 'failed' ? retrieved.message : undefined}
+      partial={partial}
+      /*
+       * The Catalogue's reason outranks the retrieval's. If describing failed
+       * there was no retrieval, so `retrieved` is still holding whatever it said
+       * before — and a stale message under a fresh failure sends someone after
+       * the wrong thing.
+       */
+      errorMessage={
+        catalogueFailure?.message ??
+        (retrieved.status === 'failed' ? retrieved.message : undefined)
+      }
       controls={controls}
       actions={actions}
       selected={selected}

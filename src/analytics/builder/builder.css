@@ -706,3 +706,128 @@
   display: flex;
   gap: var(--a-space-2);
 }
+
+/* --- data source detail -----------------------------------------------------
+ * What the publisher declared, laid out as label-and-value rows. Deliberately
+ * text rather than a table: the rows are answers to different questions, not
+ * columns of the same kind, and a table would imply they line up.
+ */
+
+.a-source-detail {
+  display: grid;
+  gap: var(--a-space-3);
+  margin-top: var(--a-space-4);
+  padding-top: var(--a-space-4);
+  border-top: 1px solid var(--a-border);
+}
+
+.a-source-detail__row {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: var(--a-space-3);
+  align-items: baseline;
+}
+
+/* The label column collapses first: a narrow card should stack rather than
+   squeeze an answer into forty pixels. */
+@media (max-width: 560px) {
+  .a-source-detail__row {
+    grid-template-columns: 1fr;
+    gap: var(--a-space-1);
+  }
+}
+
+.a-source-detail__label {
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+.a-source-detail__value {
+  font-size: var(--a-text-sm);
+  color: var(--a-text);
+}
+
+.a-source-detail__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--a-space-2);
+}
+
+.a-source-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--a-border);
+  border-radius: 999px;
+  font-size: var(--a-text-xs);
+  color: var(--a-text);
+}
+
+.a-source-pill__role {
+  color: var(--a-text-muted);
+}
+
+/* Set in the mono face because these are the publisher's own words —
+   aggregation names and accepted values — rather than prose about them. */
+.a-source-pill__note {
+  font-family: var(--a-font-mono);
+  font-size: 10.5px;
+  color: var(--a-text-muted);
+}
+
+/* A type this data cannot fill. Present, and plainly not pickable.
+ *
+ * Dashed rather than merely dimmed: a low-contrast solid card reads as "loading"
+ * or as a rendering fault, where a dashed edge reads as a placeholder. The
+ * opacity is deliberately mild — the reason underneath has to stay readable,
+ * since it is the only part that is actually new information. */
+.a-type--locked {
+  border-style: dashed;
+  background: var(--a-surface-sunken);
+  cursor: default;
+}
+
+.a-type--locked .a-type__label {
+  color: var(--a-text-secondary);
+}
+
+.a-type--locked:hover {
+  border-color: var(--a-border);
+  background: var(--a-surface-sunken);
+}
+
+.a-type__reason {
+  margin-top: var(--a-space-1);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--a-text-muted);
+}
+
+/* The one kind that is not about the data. Tinted so an Author can tell at a
+   glance that this is ours to chase rather than a property of their source. */
+.a-type__reason--not-accepted {
+  color: var(--a-status-warning);
+}
+
+/* "Add to [board] · Build a widget". The select sits before the button because
+ * it qualifies it — reading them in order is the sentence. */
+.a-source-build {
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  flex-wrap: wrap;
+}
+
+.a-source-build__label {
+  font-size: var(--a-text-xs);
+  color: var(--a-text-muted);
+}
+
+/* Wider than a filter's select: these are board names, and truncating one to
+   14 characters leaves two drafts indistinguishable — "Untitled dashb…" twice.
+   Scoped to the container so it outranks `.a-filters__select` whatever order
+   the two stylesheets happen to load in. */
+.a-source-build .a-filters__select {
+  max-width: 22ch;
+}

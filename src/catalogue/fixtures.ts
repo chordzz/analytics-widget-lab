@@ -51,6 +51,11 @@ export const peniremitSettlements: Dataset = {
       semantic: 'additive-total',
     },
   ],
+  rowGrain: { dimensions: ['settled_at', 'corridor'] },
+  filterParameters: [
+    { name: 'settled_at', label: 'Settled at', required: false },
+    { name: 'corridor', label: 'Corridor', required: false },
+  ],
 }
 
 /**
@@ -99,6 +104,11 @@ export const payrollDisbursements: Dataset = {
       sortable: true,
     },
   ],
+  rowGrain: { dimensions: ['disbursed_on', 'cost_centre'] },
+  filterParameters: [
+    { name: 'disbursed_on', label: 'Disbursed on', required: false },
+    { name: 'cost_centre', label: 'Cost centre', required: false },
+  ],
 }
 
 /**
@@ -139,6 +149,11 @@ export const iamActiveUsers: Dataset = {
       filterable: false,
       sortable: true,
     },
+  ],
+  rowGrain: { dimensions: ['observed_on', 'product'] },
+  filterParameters: [
+    { name: 'observed_on', label: 'Observed on', required: false },
+    { name: 'product', label: 'Product', required: false },
   ],
 }
 
@@ -181,6 +196,11 @@ export const corridorCoverage: Dataset = {
       semantic: 'additive-total',
     },
   ],
+  rowGrain: { dimensions: ['destination_country', 'corridor'] },
+  filterParameters: [
+    { name: 'destination_country', label: 'Destination country', required: false },
+    { name: 'corridor', label: 'Corridor', required: false },
+  ],
 }
 
 /**
@@ -219,6 +239,12 @@ export const accountingJournal: Dataset = {
       sortable: false,
       semantic: 'state',
     },
+  ],
+  rowGrain: { dimensions: ['posted_at', 'entry_reference', 'posting_state'] },
+  filterParameters: [
+    { name: 'posted_at', label: 'Posted at', required: false },
+    { name: 'entry_reference', label: 'Entry reference', required: false },
+    { name: 'posting_state', label: 'Posting state', required: false },
   ],
 }
 

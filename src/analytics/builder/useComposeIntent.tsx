@@ -14,13 +14,26 @@
 
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
 
+/**
+ * Where a widget is headed, decided before the composer opens.
+ *
+ * `boardId` is optional and `null` is meaningful: it says *a new dashboard*,
+ * which is a choice an Author made, as against `undefined` — nobody chose, use
+ * whatever is open. Collapsing the two would make "New dashboard" silently
+ * adopt the board you last had open.
+ */
+export interface ComposeIntent {
+  datasetId: string
+  boardId: string | null
+}
+
 interface ComposeIntentValue {
   /** Dataset to open the composer on, if a screen asked for one. */
   pendingDatasetId: string | null
   /** Ask the builder to start a new widget bound to this dataset. */
-  composeWith: (datasetId: string) => void
+  composeWith: (datasetId: string, boardId?: string | null) => void
   /** Consume the intent. Returns what was pending, and clears it. */
-  takeIntent: () => string | null
+  takeIntent: () => ComposeIntent | null
 }
 
 const ComposeIntentContext = createContext<ComposeIntentValue | null>(null)
@@ -35,10 +48,10 @@ export function ComposeIntentProvider({ children }: { children: ReactNode }) {
    * alone, both passes would see the same id and the second would re-open a
    * composer the first had already opened.
    */
-  const latest = useRef<string | null>(null)
+  const latest = useRef<ComposeIntent | null>(null)
 
-  const composeWith = useCallback((datasetId: string) => {
-    latest.current = datasetId
+  const composeWith = useCallback((datasetId: string, boardId: string | null = null) => {
+    latest.current = { datasetId, boardId }
     setPending(datasetId)
   }, [])
 

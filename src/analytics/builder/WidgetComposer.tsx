@@ -22,7 +22,8 @@ import { useEffect, useState } from 'react'
 import { Widget, type WidgetMapping, type WidgetSpec } from '../widgets/Widget'
 import { FAMILIES, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
-import { useDatasets } from '../data/AnalyticsData'
+import { useAcceptedVisualizationTypes, useDatasets } from '../data/AnalyticsData'
+import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
 import { FieldMapper, fieldSummary } from './FieldMapper'
 import {
   autoMap,
@@ -30,10 +31,14 @@ import {
   satisfies,
   suggestedTypesFor,
   typesFor,
+  unavailableTypesFor,
+  type UnavailableReason,
   unfilledSlots,
 } from './requirements'
 import { WIDGET_TYPES } from '../widgets/catalog'
+import { requiredParameters } from '../../domain/dataset'
 import type { Dataset } from '../data/types'
+import type { FilterParameter } from '../../domain/dataset'
 
 export interface ComposerDraft {
   typeId: string
@@ -45,6 +50,8 @@ export interface ComposerDraft {
   /** FR-VZ-06 — Fields a Viewer may filter on and reorder by. */
   exposedFilters: string[]
   exposedSorts: string[]
+  /** D24 — values the Author fixed for the Dataset's Filter Parameters. */
+  parameterBindings: Record<string, string | number>
 }
 
 const BUILT_COUNT = WIDGET_TYPES.filter((type) => type.built).length
@@ -55,6 +62,7 @@ export function WidgetComposer({
   startWith,
   onCommit,
   onCancel,
+  boardName,
 }: {
   initial?: ComposerDraft
   /**
@@ -66,9 +74,14 @@ export function WidgetComposer({
    */
   startWith?: { datasetId: string }
   onCommit: (draft: ComposerDraft) => void
+  /** The board this will land on, so the commit button can say so. */
+  boardName?: string
   onCancel: () => void
 }) {
-  const { datasets } = useDatasets()
+  const { datasets, loading: loadingDatasets, failure: catalogueFailure } = useDatasets()
+  // Still asking is not the same as none: prompting either way beats telling
+  // someone there is nothing here a moment before the list arrives.
+  const hasSources = loadingDatasets || catalogueFailure !== null || datasets.length > 0
   const byId = (id: string) => datasets.find((entry) => entry.id === id)
 
   const [datasetId, setDatasetId] = useState(initial?.datasetId ?? startWith?.datasetId ?? '')
@@ -104,6 +117,9 @@ export function WidgetComposer({
   }, [datasets, startWith, titled])
   const [span, setSpan] = useState(initial?.span ?? 0)
   const [exposedFilters, setExposedFilters] = useState<string[]>(initial?.exposedFilters ?? [])
+  const [parameterBindings, setParameterBindings] = useState<Record<string, string | number>>(
+    initial?.parameterBindings ?? {},
+  )
   const [exposedSorts, setExposedSorts] = useState<string[]>(initial?.exposedSorts ?? [])
   const [query, setQuery] = useState('')
 
@@ -139,7 +155,15 @@ export function WidgetComposer({
     if (!titled) setTitle(dataset.name)
   }
 
-  const complete = Boolean(dataset && type) && isComplete(typeId, mapping)
+  /*
+   * A required Filter Parameter is not an unset filter — it is a query the
+   * Source System will refuse. So an unbound one blocks the commit exactly as a
+   * missing mapping slot does, rather than producing a Widget that can only
+   * ever fail with a validation error nobody can trace back to here.
+   */
+  const unbound = dataset ? requiredParameters(dataset).filter((p) => !bindingOf(parameterBindings, p.name)) : []
+
+  const complete = Boolean(dataset && type) && isComplete(typeId, mapping) && unbound.length === 0
   const missing = typeId ? unfilledSlots(typeId, mapping) : []
 
   const preview: WidgetSpec | null =
@@ -154,6 +178,7 @@ export function WidgetComposer({
           // Author is composing rather than describing it in prose.
           exposedFilters,
           exposedSorts,
+          parameterBindings,
         }
       : null
 
@@ -173,6 +198,23 @@ export function WidgetComposer({
                 Change
               </button>
             </div>
+          ) : loadingDatasets ? (
+            <p className="a-muted">Loading data sources…</p>
+          ) : catalogueFailure ? (
+            <CatalogueProblem failure={catalogueFailure} />
+          ) : datasets.length === 0 ? (
+            /*
+             * Step 1 with nothing under it was a blank area beneath a numbered
+             * heading — which reads as a page that failed to finish rendering
+             * rather than as an answer. A widget cannot be built without a
+             * source, so this is the end of the road here and it says so.
+             */
+            <NoDatasets>
+              <p style={{ margin: 'var(--a-space-2) 0 0' }}>
+                A widget is built from a data source, so there is nothing to compose until
+                one exists.
+              </p>
+            </NoDatasets>
           ) : (
             <div className="a-dataset-list">
               {datasets.map((entry) => (
@@ -248,6 +290,14 @@ export function WidgetComposer({
             <SpanControl span={span} onChange={setSpan} />
 
             {dataset && (
+              <RequiredParameters
+                dataset={dataset}
+                bindings={parameterBindings}
+                onChange={setParameterBindings}
+              />
+            )}
+
+            {dataset && (
               <ExposeControl
                 dataset={dataset}
                 filters={exposedFilters}
@@ -272,13 +322,27 @@ export function WidgetComposer({
           </div>
         ) : (
           <div className="a-empty a-empty--inline">
-            <p>{dataset ? 'Pick a widget to see it here.' : 'Choose a data source to begin.'}</p>
+            {/*
+              * Quiet when there is nothing to choose from.
+              *
+              * "Choose a data source to begin" is the right prompt while sources
+              * exist and one has not been picked. With an empty Catalogue it
+              * instructs someone to do something impossible, next to a panel on
+              * the left already explaining why they cannot — so the preview
+              * stops asking and says only what it is.
+              */}
+            <p>{previewPrompt({ hasDataset: Boolean(dataset), hasSources })}</p>
           </div>
         )}
 
-        {missing.length > 0 && (
+        {(missing.length > 0 || unbound.length > 0) && (
           <p className="a-composer__missing">
-            Still needed: {missing.map((slot) => slot.label.toLowerCase()).join(', ')}.
+            Still needed:{' '}
+            {[
+              ...missing.map((slot) => slot.label.toLowerCase()),
+              ...unbound.map((parameter) => parameter.label.toLowerCase()),
+            ].join(', ')}
+            .
           </p>
         )}
 
@@ -300,10 +364,17 @@ export function WidgetComposer({
                 span,
                 exposedFilters,
                 exposedSorts,
+                parameterBindings,
               })
             }
           >
-            {initial ? 'Save changes' : 'Add to dashboard'}
+            {/*
+              Named rather than generic. "Add to dashboard" is true of every
+              board and tells an Author nothing about which one they are about
+              to change — and by this point they may have arrived from Data
+              sources, where they chose.
+            */}
+            {initial ? 'Save changes' : boardName ? `Add to ${boardName}` : 'Add to dashboard'}
           </button>
         </div>
       </div>
@@ -347,19 +418,38 @@ function TypePicker({
   onQuery: (next: string) => void
   onPick: (typeId: string) => void
 }) {
+  const accepted = useAcceptedVisualizationTypes()
   const available = typesFor(dataset)
   const suggested = suggestedTypesFor(dataset)
+  // The API's own list when it has arrived, our local one until then.
+  const unavailable = unavailableTypesFor(dataset, accepted)
   const term = query.trim().toLowerCase()
 
-  const matches = term
-    ? available.filter(
-        (type) =>
-          type.label.toLowerCase().includes(term) ||
-          type.description.toLowerCase().includes(term) ||
-          FAMILIES.find((family) => family.id === type.family)?.label.toLowerCase().includes(term),
-      )
-    : available
+  /*
+   * Every built type is rendered, and the ones this Dataset cannot fill are
+   * locked in place rather than left out.
+   *
+   * The rule used to be that an unbuildable widget is simply absent, which is
+   * right when the absence is obvious and wrong when it is not. Measured against
+   * a real declaration it is badly wrong: `peniremit.profit` offers 20 of 37
+   * types, and **three whole families disappear** — Composition, Ranking & Flow
+   * and Geospatial. An Author who came to build a pie chart finds no pie chart
+   * and no explanation, and cannot tell "this product has none" from "not with
+   * this data".
+   *
+   * So a locked card says which of those it is. The reason is the substance,
+   * because the three kinds call for different actions: one is ours to raise
+   * with the Analytics team, one is the publisher's to declare, and one is
+   * nobody's — it is simply the wrong data for that picture.
+   */
+  const matching = (type: { label: string; description: string; family: string }) =>
+    !term ||
+    type.label.toLowerCase().includes(term) ||
+    type.description.toLowerCase().includes(term) ||
+    FAMILIES.find((family) => family.id === type.family)?.label.toLowerCase().includes(term)
 
+  const matches = available.filter(matching)
+  const lockedMatches = unavailable.filter((entry) => matching(entry.type))
   const suggestedMatches = matches.filter((type) => suggested.includes(type))
 
   return (
@@ -377,7 +467,9 @@ function TypePicker({
         onChange={(event) => onQuery(event.target.value)}
       />
 
-      {matches.length === 0 && <p className="a-muted a-step__hint">Nothing matches “{query}”.</p>}
+      {matches.length === 0 && lockedMatches.length === 0 && (
+        <p className="a-muted a-step__hint">Nothing matches “{query}”.</p>
+      )}
 
       {suggestedMatches.length > 0 && (
         <div className="a-type-group">
@@ -395,7 +487,8 @@ function TypePicker({
 
       {FAMILIES.map((family) => {
         const inFamily = matches.filter((type) => type.family === family.id)
-        if (inFamily.length === 0) return null
+        const lockedInFamily = lockedMatches.filter((entry) => entry.type.family === family.id)
+        if (inFamily.length === 0 && lockedInFamily.length === 0) return null
 
         return (
           <div key={family.id} className="a-type-group">
@@ -407,11 +500,47 @@ function TypePicker({
               {inFamily.map((type) => (
                 <TypeButton key={type.id} type={type} onPick={onPick} />
               ))}
+              {/*
+                After the available ones, so the list a person came to use reads
+                first — but in the same grid, because a family whose every type
+                is locked must still appear. That is the case this exists for.
+              */}
+              {lockedInFamily.map((entry) => (
+                <LockedType key={entry.type.id} type={entry.type} reason={entry.reason} />
+              ))}
             </div>
           </div>
         )
       })}
     </>
+  )
+}
+
+/**
+ * A widget type this Dataset cannot fill, shown rather than hidden.
+ *
+ * Not a disabled button. A `<button disabled>` is unreachable by keyboard and
+ * carries no accessible description, so the reason — the whole point of drawing
+ * it — would be invisible to anyone not looking at it. This is a plain element
+ * that states the shortfall in text.
+ */
+function LockedType({
+  type,
+  reason,
+}: {
+  type: { id: string; label: string; description: string }
+  reason: UnavailableReason
+}) {
+  return (
+    <div className="a-type a-type--locked">
+      {/*
+        No lock glyph. The dashed edge carries it visually and the reason
+        carries it in text, where a bare "·" beside the label read as a typo.
+      */}
+      <span className="a-type__label">{type.label}</span>
+      <span className="a-type__description">{type.description}</span>
+      <span className={`a-type__reason a-type__reason--${reason.kind}`}>{reason.because}</span>
+    </div>
   )
 }
 
@@ -434,6 +563,36 @@ function TypeButton({
       <span className="a-type__description">{type.description}</span>
     </button>
   )
+}
+
+/**
+ * Whether naming the value type tells an Author anything.
+ *
+ * `From` does not say what it takes, so `date` earns its place beside it. `Date`
+ * plainly does, and "Date date" is the kind of redundancy that makes a reader
+ * distrust the rest of the label.
+ */
+function addsSomething(parameter: FilterParameter): boolean {
+  if (!parameter.valueType) return false
+  return !parameter.label.toLowerCase().includes(parameter.valueType)
+}
+
+/**
+ * The control a declared value type deserves.
+ *
+ * `number` as well as `date`: a numeric parameter in a text box accepts letters
+ * and offers no stepper, and the query's equality check then compares a string
+ * to a number and matches nothing.
+ */
+export function inputTypeFor(valueType: FilterParameter['valueType']): string {
+  switch (valueType) {
+    case 'date':
+      return 'date'
+    case 'number':
+      return 'number'
+    default:
+      return 'text'
+  }
 }
 
 /**
@@ -467,6 +626,102 @@ function SpanControl({ span, onChange }: { span: number; onChange: (next: number
   )
 }
 
+/** A binding counts only when it holds a value; `''` is an empty select. */
+const bindingOf = (bindings: Record<string, string | number>, name: string) => {
+  const value = bindings[name]
+  return value === '' || value === undefined ? undefined : value
+}
+
+/**
+ * Values the Author fixes for the Dataset's Filter Parameters — D24.
+ *
+ * Only the required ones are collected here. An optional parameter is better
+ * served by exposing it to Viewers, and offering an Author a form field for
+ * every parameter a Dataset publishes would bury the two that matter.
+ *
+ * This reads as a question rather than a setting because that is what it is:
+ * the Source System has said it cannot answer without this, so the Author is
+ * being asked to complete the query, not to configure a preference.
+ */
+function RequiredParameters({
+  dataset,
+  bindings,
+  onChange,
+}: {
+  dataset: Dataset
+  bindings: Record<string, string | number>
+  onChange: (next: Record<string, string | number>) => void
+}) {
+  const required = requiredParameters(dataset)
+  if (required.length === 0) return null
+
+  const set = (name: string, raw: string, allowed: (string | number)[] | undefined) => {
+    // A numeric parameter's values are compared against JSON numbers upstream,
+    // so the original is recovered from the declared list rather than left as
+    // the string the select handed back.
+    const original = allowed?.find((entry) => String(entry) === raw)
+    onChange({ ...bindings, [name]: original ?? raw })
+  }
+
+  return (
+    <div className="a-field">
+      <span className="a-field__label">This data source needs</span>
+      <p className="a-field__help">
+        {dataset.name} cannot answer without {required.length === 1 ? 'this' : 'these'}. Viewers do
+        not change {required.length === 1 ? 'it' : 'them'} — {required.length === 1 ? 'it is' : 'they are'} part
+        of what this widget asks for.
+      </p>
+
+      {required.map((parameter) => {
+        const value = bindings[parameter.name]
+        const current = value === undefined ? '' : String(value)
+
+        return (
+          <label key={parameter.name} className="a-filters__field">
+            <span className="a-filters__label">{parameter.label}</span>
+            {parameter.allowedValues && parameter.allowedValues.length > 0 ? (
+              <select
+                className="a-filters__select"
+                value={current}
+                onChange={(event) => set(parameter.name, event.target.value, parameter.allowedValues)}
+              >
+                <option value="">Choose one</option>
+                {parameter.allowedValues.map((entry) => (
+                  <option key={String(entry)} value={String(entry)}>
+                    {String(entry)}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              /*
+               * No declared values, so no list to offer. The publisher knows what
+               * this accepts and has not said — Finding 8 — but the *kind* of
+               * value they did declare still picks the control.
+               *
+               * A `date` gets a date picker, and the conversion people expect
+               * here is the one that is not needed: `input[type=date]` reads and
+               * writes `YYYY-MM-DD` whatever the viewer's locale displays, which
+               * is already the ISO-8601 the API wants. Passing it through a
+               * `Date` to "format" it is how a day goes missing across a
+               * timezone, so the value travels verbatim.
+               */
+              <input
+                type={inputTypeFor(parameter.valueType)}
+                className="a-filters__select"
+                value={current}
+                onChange={(event) => set(parameter.name, event.target.value, undefined)}
+                placeholder={
+                  parameter.valueType === 'date' ? undefined : (parameter.description ?? 'Required')
+                }
+              />
+            )}
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
 /**
  * Which of a Dataset's Fields a Viewer may act on — FR-VZ-06.
  *
@@ -489,10 +744,25 @@ function ExposeControl({
   onChangeFilters: (next: string[]) => void
   onChangeSorts: (next: string[]) => void
 }) {
-  const filterable = dataset.fields.filter((field) => field.filterable)
+  /*
+   * Filter Parameters, not filterable Fields.
+   *
+   * The two lists do not line up: `fields` says which columns come back and
+   * whether the endpoint can narrow on them, `filter_parameters` says which
+   * query names it accepts. Offering the first produced a Widget that composed
+   * happily and was rejected on save — `"date" is not a Filter Parameter of
+   * Dataset "peniremit.profit"`.
+   *
+   * Required ones are offered too. The Author binds them so the Dashboard can
+   * be built at all, and that binding is a *default* rather than a setting: a
+   * range fixed by whoever made the board does not necessarily suit whoever
+   * reads it, and `queryFor` already layers a Viewer's choice over the
+   * Author's.
+   */
+  const parameters = dataset.filterParameters ?? []
   const sortable = dataset.fields.filter((field) => field.sortable)
 
-  if (filterable.length === 0 && sortable.length === 0) return null
+  if (parameters.length === 0 && sortable.length === 0) return null
 
   const toggle = (list: string[], key: string) =>
     list.includes(key) ? list.filter((entry) => entry !== key) : [...list, key]
@@ -504,17 +774,34 @@ function ExposeControl({
         Viewers change what this widget shows for themselves. It does not change the board.
       </p>
 
-      {filterable.length > 0 && (
+      {parameters.length > 0 && (
         <fieldset className="a-expose">
           <legend className="a-expose__legend">Filter by</legend>
-          {filterable.map((field) => (
-            <label key={field.key} className="a-expose__item">
+          {parameters.map((parameter) => (
+            <label key={parameter.name} className="a-expose__item">
               <input
                 type="checkbox"
-                checked={filters.includes(field.key)}
-                onChange={() => onChangeFilters(toggle(filters, field.key))}
+                checked={filters.includes(parameter.name)}
+                onChange={() => onChangeFilters(toggle(filters, parameter.name))}
               />
-              <span>{field.label}</span>
+              <span>{parameter.label}</span>
+              {addsSomething(parameter) && (
+                /*
+                 * The kind of value, not the required flag.
+                 *
+                 * This said "you set the default" beside each required
+                 * parameter, which ran straight on from the label — "From  you
+                 * set the default" — and read as a broken sentence rather than
+                 * a qualifier. The fact is already on screen where it means
+                 * something: the binder above is literally where the Author
+                 * sets it.
+                 *
+                 * What is *not* on screen is what `From` takes. A parameter
+                 * name is the publisher's, and "From" alone says nothing about
+                 * whether it wants a date, a number or a word.
+                 */
+                <span className="a-expose__note">{parameter.valueType}</span>
+              )}
             </label>
           ))}
         </fieldset>
@@ -537,4 +824,24 @@ function ExposeControl({
       )}
     </div>
   )
+}
+
+/**
+ * What the preview says before there is anything to draw.
+ *
+ * Three states rather than two. The prompt to choose a source is only useful
+ * when there is one to choose — with an empty Catalogue it asks for something
+ * impossible, beside a panel already explaining why, which reads as the screen
+ * disagreeing with itself.
+ */
+export function previewPrompt({
+  hasDataset,
+  hasSources,
+}: {
+  hasDataset: boolean
+  hasSources: boolean
+}): string {
+  if (hasDataset) return 'Pick a widget to see it here.'
+  if (!hasSources) return 'Nothing to preview yet.'
+  return 'Choose a data source to begin.'
 }

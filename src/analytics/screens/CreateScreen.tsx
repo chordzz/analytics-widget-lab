@@ -15,13 +15,16 @@ import { SharePanel } from '../builder/SharePanel'
 import { BoardControls } from '../builder/BoardControls'
 import { useBoardControls } from '../builder/useBoardControls'
 import { WidgetComposer, type ComposerDraft } from '../builder/WidgetComposer'
+import { useMay } from '../data/AnalyticsData'
 import { useBoards } from '../builder/useBoards'
+import { settledName } from '../builder/boards'
 import { useComposeIntent } from '../builder/useComposeIntent'
 import { placedWidgets, widgetCountOf, type PlacedWidget } from '../builder/boards'
 import type { ScreenId } from '../shell/nav'
 
 export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const boards = useBoards()
+  const mayPublish = useMay('dashboard.publish')
   const { editing } = boards
   const controls = useBoardControls(editing)
 
@@ -39,11 +42,23 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
     null,
   )
 
-  // "Build a widget" on Data sources navigates here and leaves the dataset
-  // behind it. Taken exactly once — see `takeIntent`.
+  /*
+   * "Build a widget" on Data sources navigates here and leaves the dataset and
+   * the destination behind it. Taken exactly once — see `takeIntent`.
+   *
+   * The destination is honoured *before* the composer opens, because the board
+   * it lands on is the board that is open when the widget is committed. A
+   * chosen `boardId` opens that board; an explicit `null` means the Author
+   * asked for a new one, and that is not the same as arriving with no
+   * preference — see `ComposeIntent`.
+   */
   useEffect(() => {
-    const datasetId = intent.takeIntent()
-    if (datasetId) setComposing({ datasetId })
+    const taken = intent.takeIntent()
+    if (!taken) return
+    if (taken.boardId) boards.openBoard(taken.boardId)
+    else boards.createBoard()
+    setComposing({ datasetId: taken.datasetId })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [intent])
 
   // Arriving with nothing open should start a board, not show an error. The
@@ -74,6 +89,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           mapping: draft.mapping,
           exposedFilters: draft.exposedFilters,
           exposedSorts: draft.exposedSorts,
+          parameterBindings: draft.parameterBindings,
         },
         { w: draft.span },
       )
@@ -88,6 +104,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           mapping: draft.mapping,
           exposedFilters: draft.exposedFilters,
           exposedSorts: draft.exposedSorts,
+          parameterBindings: draft.parameterBindings,
         },
         draft.span,
       )
@@ -98,6 +115,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
   if (composing) {
     return (
       <WidgetComposer
+        boardName={editing.name}
         initial={
           isEditing(composing)
             ? {
@@ -108,6 +126,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
                 span: composing.w,
                 exposedFilters: composing.exposedFilters ?? [],
                 exposedSorts: composing.exposedSorts ?? [],
+                parameterBindings: composing.parameterBindings ?? {},
               }
             : undefined
         }
@@ -126,6 +145,14 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           value={editing.name}
           aria-label="Dashboard name"
           onChange={(event) => boards.renameBoard(editing.id, event.target.value)}
+          /*
+           * Settled when editing stops, not while it happens. A name has to be
+           * usable at rest — an empty one leaves an unclickable row in the
+           * drafts list — but enforcing that per keystroke made a space
+           * impossible to type and put "Untitled dashboard" under the cursor
+           * the moment the field was cleared.
+           */
+          onBlur={(event) => boards.renameBoard(editing.id, settledName(event.target.value))}
         />
 
         <div className="a-board-head__actions">
@@ -156,7 +183,14 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
             <button
               type="button"
               className="a-button a-button--primary"
-              disabled={widgetCountOf(editing) === 0}
+              /*
+               * Two reasons this can be off, and they are told apart on purpose.
+               * An empty board is something the Author can fix in the next
+               * minute; a missing permission is not, and offering "add a widget"
+               * as the implied remedy for it would waste their time.
+               */
+              disabled={widgetCountOf(editing) === 0 || !mayPublish}
+              title={mayPublish ? undefined : 'You do not have permission to publish dashboards.'}
               onClick={() => {
                 boards.publishBoard(editing.id)
                 onNavigate('dashboards')
@@ -168,6 +202,8 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
             <button
               type="button"
               className="a-button"
+              disabled={!mayPublish}
+              title={mayPublish ? undefined : 'You do not have permission to publish dashboards.'}
               onClick={() => boards.unpublishBoard(editing.id)}
             >
               Unpublish

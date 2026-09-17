@@ -24,7 +24,7 @@
  *     than argued about in a document.
  */
 
-import { executeQuery } from '../../retrieval/aggregate'
+import { asEndpoint, executeQuery } from '../../retrieval/aggregate'
 import { summarize, type CataloguePort, type DatasetSummary } from '../../catalogue/port'
 import type {
   DatasetRetrievalPort,
@@ -36,6 +36,11 @@ import type { AccessRecorderPort, AuthorizationPort, OrgScopeRef } from '../../a
 import type { DashboardScope, ShareGrant } from '../../domain/dashboard'
 import type { DatasetQuery } from '../../domain/query'
 import { datasets, datasetById, rowsFor } from './datasets'
+import { visualizationFamilies } from '../../visualization/families'
+import { visualizationTypes } from '../../visualization/visualization-types'
+import type { TaxonomyEntry } from '../../catalogue/port'
+
+
 
 /**
  * What the fake should do for a given Dataset.
@@ -64,6 +69,23 @@ const wait = (ms: number) =>
   ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve()
 
 export class FixtureCatalogue implements CataloguePort {
+  /**
+   * Our own manifest, because a fixture has no API behind it.
+   *
+   * The shape the endpoint returns, built from the registry the fixtures already
+   * answer to — so fixture mode agrees with itself, and the drift check that
+   * runs against a live taxonomy has nothing to report here.
+   */
+  async visualizations(): Promise<TaxonomyEntry[]> {
+    return visualizationFamilies.map((family) => ({
+      family: family.id,
+      types: visualizationTypes
+        .filter((type) => type.familyId === family.id)
+        .map((type) => type.id),
+      requirement: family.dataShape.summary,
+    }))
+  }
+
   private readonly options: FixtureOptions
 
   constructor(options: FixtureOptions = {}) {
@@ -128,7 +150,7 @@ export class FixtureRetrieval implements DatasetRetrievalPort {
     // "broken" is the more alarming of the two readings.
     if (!dataset) return { kind: 'withdrawn' }
 
-    const rows = executeQuery(rowsFor(datasetId), query)
+    const rows = executeQuery(rowsFor(datasetId), asEndpoint(query))
     if (rows.length === 0) return { kind: 'empty' }
 
     /*

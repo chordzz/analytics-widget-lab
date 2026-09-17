@@ -24,7 +24,7 @@ import { WIDGET_TYPES } from '../analytics/widgets/catalog'
 import { SAMPLES } from '../analytics/widgets/samples'
 import { queryFor } from '../analytics/data/query'
 import { requireDataset } from '../analytics/data/datasets'
-import { DIVERGENCES, openDivergences, resolvedDivergences } from './divergences'
+import { DIVERGENCES, UNRENDERED, openDivergences, resolvedDivergences } from './divergences'
 
 const ROOT = join(import.meta.dir, '..', '..')
 const docsDir = join(ROOT, 'docs')
@@ -127,6 +127,34 @@ describe('build status in the documentation', () => {
     )
     for (const type of visualizationTypes.filter((t) => built.has(t.id))) {
       expect(stillToBuild).not.toContain(`- **${type.name}**`)
+    }
+  })
+
+  /*
+   * D6 states a count, and a count in prose goes stale without anything
+   * noticing: the drift guard above compares the rendered document to the
+   * register, so both move together and neither is checked against the
+   * catalogue. It was wrong for a day because "no renderer" was read as
+   * `built: false` alone, missing the five Types that have no catalogue entry
+   * to carry the flag. This ties the entry to the definition the rest of this
+   * block already uses.
+   */
+  test('D6 counts the Types this document calls Not built', () => {
+    const d6 = DIVERGENCES.find((entry) => entry.id === 'D6')
+    expect(d6).toBeDefined()
+
+    const notBuilt = visualizationTypes.filter((type) => !built.has(type.id))
+    expect(UNRENDERED).toEqual(notBuilt.map((type) => type.id))
+
+    // The wording, not just the array behind it. Spelled from the count here
+    // too, so building one of the six corrects the entry instead of failing.
+    const words = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight']
+    expect(d6!.divergence).toBe(
+      `${words[notBuilt.length]!} of the ${String(visualizationTypes.length)} Visualization Types ` +
+        `${notBuilt.length === 1 ? 'has' : 'have'} no renderer.`,
+    )
+    for (const type of notBuilt) {
+      expect(d6!.reason).toContain(`\`${type.id}\``)
     }
   })
 

@@ -1,0 +1,563 @@
+/**
+ * The diffing store, which is where a board can quietly fail to save.
+ *
+ * The port hands over the whole state on every write and the API takes one
+ * board at a time, so this store decides what changed. Four properties matter,
+ * and each has a way of being wrong that looks like nothing being wrong:
+ *
+ *   - an unchanged board sends nothing   → dragging one widget must not PATCH ten boards
+ *   - a new board is created exactly once → a second save must not duplicate it
+ *   - a failed save is retried            → a board that looks saved and is not
+ *   - publication is its own call         → a board must never go public as a side effect
+ */
+
+import { describe, expect, test } from 'bun:test'
+import { httpBoardStore } from './http-board-store'
+import { createApiClient } from '../api/client'
+import { fakeTokenProvider } from '../auth/fake-provider'
+import type { Board, BoardsState } from '../analytics/builder/boards'
+
+interface Call {
+  method: string
+  path: string
+  body: unknown
+}
+
+function storeWith(script: (call: Call) => Response = () => ok({})) {
+  const calls: Call[] = []
+  const fetchImpl = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const call: Call = {
+      method: init?.method ?? 'GET',
+      path: String(input).replace('https://api.example.test', ''),
+      body: typeof init?.body === 'string' ? JSON.parse(init.body) : null,
+    }
+    calls.push(call)
+    return Promise.resolve(script(call))
+  }) as typeof globalThis.fetch
+
+  const api = createApiClient({
+    baseUrl: 'https://api.example.test',
+    tokens: fakeTokenProvider(),
+    fetch: fetchImpl,
+    onDiagnostic: () => {},
+  })
+  const failures: string[] = []
+  const store = httpBoardStore(api, { onSaveFailed: (board) => failures.push(board.id) })
+
+  return {
+    store,
+    calls,
+    failures,
+    /**
+     * Load first, then forget the traffic it made.
+     *
+     * The real caller always does — `useBoards` will not save until its load
+     * resolves — and the store now refuses to save before it has been told what
+     * the server holds, because a `baseline` that was never filled in makes
+     * every board look new. Clearing the log afterwards keeps the assertions
+     * about the save rather than the setup.
+     */
+    ready: async () => {
+      await store.load([], 'u1')
+      calls.length = 0
+      return store
+    },
+    /** Just the shape of the traffic, which is what these tests are about. */
+    traffic: () => calls.map((call) => `${call.method} ${call.path}`),
+  }
+}
+
+const ok = (data: unknown, status = 200) =>
+  new Response(JSON.stringify({ status: status < 400, message: 'OK', data }), {
+    status,
+    headers: { 'content-type': 'application/json' },
+  })
+
+const board = (overrides: Partial<Board> = {}): Board => ({
+  id: 'b1',
+  name: 'Finance daily',
+  description: '',
+  authorId: 'actor-1',
+  status: 'draft',
+  scope: { kind: 'personal' },
+  shareGrants: [],
+  updated: '2026-09-01',
+  widgets: {},
+  placements: [],
+  controls: [],
+  sections: [],
+  ...overrides,
+})
+
+const state = (...boards: Board[]): BoardsState => ({ boards, editingId: null })
+
+const remote = (overrides: Record<string, unknown> = {}) => ({
+  id: 'srv-1',
+  name: 'Finance daily',
+  creator_actor_id: 'actor-1',
+  widgets: [],
+  ...overrides,
+})
+
+describe('loading', () => {
+  test('the seed is never written into a real account', async () => {
+    /*
+     * The one line in this file that is a product decision rather than
+     * plumbing. `LocalBoardStore` falls back to demo boards when storage is
+     * empty, which is right for a lab. An empty list from the API means this
+     * person has no dashboards, and inventing three is not a friendlier way of
+     * saying that — it is a lie they then have to delete.
+     */
+    const { store } = storeWith(() => ok([]))
+    const loaded = await store.load([board({ id: 'seed' })], 'actor-1')
+    expect(loaded.boards).toEqual([])
+  })
+
+  test('deleted boards do not come back', async () => {
+    const { store } = storeWith(() => ok([remote(), remote({ id: 'srv-2', deleted: true })]))
+    expect((await store.load([], 'actor-1')).boards.map((b) => b.id)).toEqual(['srv-1'])
+  })
+
+  test('a named collection is accepted as well as a bare array', async () => {
+    const { store } = storeWith(() => ok({ dashboards: [remote()] }))
+    expect((await store.load([], 'actor-1')).boards).toHaveLength(1)
+  })
+})
+
+describe('an unchanged board sends nothing', () => {
+  test('saving the state it was loaded from is silent', async () => {
+    /*
+     * Without this, every debounce tick PATCHes every board on the screen —
+     * one widget dragged, ten requests, and the last one to land wins.
+     */
+    const { store, calls, traffic } = storeWith(() => ok([remote()]))
+    const loaded = await store.load([], 'actor-1')
+    calls.length = 0
+
+    await store.save(loaded)
+    expect(traffic()).toEqual([])
+  })
+
+  test('a field the API never sees does not provoke a save', async () => {
+    // `updated` is stamped on every action by `useBoards`, so comparing boards
+    // rather than payloads would make every keystroke a PATCH.
+    const { store, calls, traffic } = storeWith(() => ok([remote()]))
+    const loaded = await store.load([], 'actor-1')
+    calls.length = 0
+
+    await store.save(state({ ...loaded.boards[0], updated: '2099-01-01' }))
+    expect(traffic()).toEqual([])
+  })
+
+  test('but a real edit does', async () => {
+    const { store, calls, traffic } = storeWith(() => ok([remote()]))
+    const loaded = await store.load([], 'actor-1')
+    calls.length = 0
+
+    await store.save(state({ ...loaded.boards[0], name: 'Renamed' }))
+    expect(traffic()).toEqual(['PATCH /v1/dashboards/srv-1'])
+    expect(calls[0].body).toMatchObject({ name: 'Renamed' })
+  })
+})
+
+describe('a new board is created exactly once', () => {
+  test('the first save posts it', async () => {
+    const { store, traffic, ready } = storeWith(() => ok(remote()))
+    await ready()
+    await store.save(state(board({ id: 'local:b-1' })))
+    expect(traffic()).toEqual(['POST /v1/dashboards'])
+  })
+
+  test('the second save does not post it again', async () => {
+    // The debounce fires on every change, and a board created and then
+    // immediately renamed would otherwise be created twice.
+    const { store, calls, traffic, ready } = storeWith(() => ok(remote()))
+    await ready()
+    const created = board({ id: 'local:b-1' })
+    await store.save(state(created))
+    calls.length = 0
+
+    await store.save(state({ ...created, name: 'Renamed' }))
+    expect(traffic()).toEqual(['PATCH /v1/dashboards/srv-1'])
+  })
+
+  test('and later edits address it by the id the API assigned', async () => {
+    /*
+     * The client goes on calling the board by its local name; the store
+     * translates. Getting this wrong PATCHes a path the server has never heard
+     * of, which 404s — and a 404 on a save is indistinguishable from a board
+     * that was deleted underneath you.
+     */
+    const { store, calls, ready } = storeWith(() => ok(remote({ id: 'srv-99' })))
+    await ready()
+    const created = board({ id: 'local:b-1' })
+    await store.save(state(created))
+    calls.length = 0
+
+    await store.save(state({ ...created, description: 'edited' }))
+    expect(calls[0].path).toBe('/v1/dashboards/srv-99')
+  })
+})
+
+describe('publication is its own decision', () => {
+  test('a draft becoming published calls publish, not patch', async () => {
+    // FR-CO-04 makes publication a deliberate act after review, and the API
+    // agrees by giving it a route rather than a field. Folding it into a save
+    // is how a board becomes visible as a side effect of editing it.
+    const { store, calls, traffic } = storeWith(() => ok([remote()]))
+    const loaded = await store.load([], 'actor-1')
+    calls.length = 0
+
+    await store.save(state({ ...loaded.boards[0], status: 'published' }))
+    expect(traffic()).toEqual(['POST /v1/dashboards/srv-1/publish'])
+    expect(calls[0].body).toEqual({ scope_level: 'personal' })
+  })
+
+  test('a scope moved on a published board republishes with the new floor', async () => {
+    const { store, calls } = storeWith(() => ok([remote({ status: 'published' })]))
+    const loaded = await store.load([], 'actor-1')
+    calls.length = 0
+
+    await store.save(
+      state({
+        ...loaded.boards[0],
+        scope: { kind: 'organizational-scope', scopeId: 'dept-finance', label: 'Finance' },
+      }),
+    )
+    expect(calls.at(-1)?.body).toEqual({
+      scope_level: 'department',
+      scope_organizational_ref: 'dept-finance',
+    })
+  })
+
+  test('a published board saved unchanged does not republish', async () => {
+    const { store, calls, traffic } = storeWith(() => ok([remote({ status: 'published' })]))
+    const loaded = await store.load([], 'actor-1')
+    calls.length = 0
+
+    await store.save(loaded)
+    expect(traffic()).toEqual([])
+  })
+
+  test('a board created already published is created and then published', async () => {
+    const { store, traffic, ready } = storeWith(() => ok(remote()))
+    await ready()
+    await store.save(state(board({ id: 'local:b-1', status: 'published' })))
+    expect(traffic()).toEqual(['POST /v1/dashboards', 'POST /v1/dashboards/srv-1/publish'])
+  })
+})
+
+describe('deleting', () => {
+  test('a board dropped from state is deleted upstream', async () => {
+    const { store, traffic } = storeWith(() => ok([remote()]))
+    await store.load([], 'actor-1')
+    await store.save(state())
+    expect(traffic().at(-1)).toBe('DELETE /v1/dashboards/srv-1')
+  })
+
+  test('and is not deleted twice', async () => {
+    const { store, calls } = storeWith(() => ok([remote()]))
+    await store.load([], 'actor-1')
+    await store.save(state())
+    calls.length = 0
+
+    await store.save(state())
+    expect(calls).toHaveLength(0)
+  })
+})
+
+describe('a failed save is retried, never swallowed', () => {
+  test('the baseline does not advance past a request that failed', async () => {
+    /*
+     * The failure mode worth engineering against: a board that looks saved and
+     * is not. If the baseline advanced on failure the next save would see no
+     * difference and send nothing, and the edit would be lost the moment the
+     * tab closed.
+     */
+    let fail = true
+    const { store, calls, traffic } = storeWith((call) => {
+      if (call.method === 'PATCH' && fail) return ok({ message: 'nope' }, 503)
+      return call.method === 'GET' ? ok([remote()]) : ok(remote())
+    })
+
+    const loaded = await store.load([], 'actor-1')
+    const edited = state({ ...loaded.boards[0], name: 'Renamed' })
+    calls.length = 0
+
+    await store.save(edited)
+    fail = false
+    await store.save(edited)
+
+    expect(traffic()).toEqual(['PATCH /v1/dashboards/srv-1', 'PATCH /v1/dashboards/srv-1'])
+  })
+
+  test('and the caller is told which board it was', async () => {
+    const { store, failures } = storeWith((call) =>
+      call.method === 'GET' ? ok([remote()]) : ok({ message: 'nope' }, 503),
+    )
+    const loaded = await store.load([], 'actor-1')
+    await store.save(state({ ...loaded.boards[0], name: 'Renamed' }))
+    expect(failures).toEqual(['srv-1'])
+  })
+
+  test('one board failing does not stop the next from saving', async () => {
+    const { store, calls } = storeWith((call) => {
+      if (call.method === 'GET') return ok([remote(), remote({ id: 'srv-2', name: 'Other' })])
+      return call.path.endsWith('srv-1') ? ok({ message: 'nope' }, 503) : ok(remote())
+    })
+
+    const loaded = await store.load([], 'actor-1')
+    calls.length = 0
+
+    await store.save(
+      state(...loaded.boards.map((entry) => ({ ...entry, description: 'touched' }))),
+    )
+    expect(calls.map((call) => call.path)).toEqual([
+      '/v1/dashboards/srv-1',
+      '/v1/dashboards/srv-2',
+    ])
+  })
+
+  test('a session ending is not a save failure and keeps rising', async () => {
+    // The banner above the board is the right place for it. Reporting it as
+    // "this board did not save" sends someone to retry an edit when what they
+    // need to do is sign in.
+    const { store, failures } = storeWith((call) =>
+      call.method === 'GET'
+        ? ok([remote()])
+        : ok({ message: 'Invalid or expired token' }, 401),
+    )
+    const loaded = await store.load([], 'actor-1')
+
+    expect(store.save(state({ ...loaded.boards[0], name: 'Renamed' }))).rejects.toMatchObject({
+      kind: 'session-expired',
+    })
+    expect(failures).toEqual([])
+  })
+})
+
+describe('identity', () => {
+  test('a minted id says it is local', async () => {
+    // It is what lets `save` tell "never sent" from "sent, and this is what the
+    // API called it".
+    const { store } = storeWith()
+    expect(store.mintId('board')).toMatch(/^local:board-/)
+  })
+
+  test('and two are different', async () => {
+    const { store } = storeWith()
+    expect(store.mintId('board')).not.toBe(store.mintId('board'))
+  })
+})
+
+describe('a note about an unsaved board can learn it since saved', () => {
+  /*
+   * `onSaveFailed` had no counterpart, so a note raised by one failure stood for
+   * the rest of the session — describing a state that had stopped being true.
+   * The comment beside it claimed it "clears itself when the retry lands";
+   * nothing cleared it.
+   */
+  test('a successful save reports the board', async () => {
+    const saved: string[] = []
+    const fetchImpl = (() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ status: true, message: 'OK', data: { id: 'srv-1' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )) as unknown as typeof globalThis.fetch
+
+    const api = createApiClient({
+      baseUrl: 'https://api.example.test',
+      tokens: fakeTokenProvider(),
+      fetch: fetchImpl,
+      onDiagnostic: () => {},
+    })
+    const store = httpBoardStore(api, { onSaved: (entry) => saved.push(entry.name) })
+    await store.load([], 'u1')
+
+    await store.save({ boards: [board({ id: 'local:b1', name: 'Finance daily' })], editingId: null })
+
+    expect(saved).toEqual(['Finance daily'])
+  })
+
+  test('a rejected one does not', async () => {
+    const saved: string[] = []
+    const failed: string[] = []
+    // The listing answers; only the write is rejected. A store that cannot load
+    // refuses to save at all, which would make this test pass for the wrong
+    // reason.
+    const fetchImpl = ((_input: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(
+        (init?.method ?? 'GET') === 'GET'
+          ? new Response(JSON.stringify({ status: true, message: 'OK', data: [] }), {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            })
+          : new Response(JSON.stringify({ status: false, message: 'Dashboard rejected' }), {
+              status: 400,
+              headers: { 'content-type': 'application/json' },
+            }),
+      )) as unknown as typeof globalThis.fetch
+
+    const api = createApiClient({
+      baseUrl: 'https://api.example.test',
+      tokens: fakeTokenProvider(),
+      fetch: fetchImpl,
+      onDiagnostic: () => {},
+    })
+    const store = httpBoardStore(api, {
+      onSaved: (entry) => saved.push(entry.name),
+      onSaveFailed: (entry) => failed.push(entry.name),
+    })
+    await store.load([], 'u1')
+
+    await store.save({ boards: [board({ id: 'local:b1', name: 'Finance daily' })], editingId: null })
+
+    expect(failed).toEqual(['Finance daily'])
+    expect(saved).toEqual([])
+  })
+})
+
+describe('a store that does not know what the server holds does not guess', () => {
+  /*
+   * The duplicate-drafts bug, reproduced. Two boards appeared with the same
+   * name, the same widget id — `local:w-4klw2vxzdo` in both — and creation
+   * timestamps ninety minutes apart: one client state, sent twice as two
+   * creates.
+   *
+   * Everything in `save` diffs against `baseline`, which lives in a closure. A
+   * second store instance has an empty one, so a board still carrying a
+   * `local:` id looks new and is created again. It took only the `adapters`
+   * memo recomputing — `useBoards` schedules its save from an effect keyed on
+   * the store, and when a new one arrives the load effect's `setLoading(true)`
+   * has not rendered yet, so the save fires through a store that never loaded.
+   */
+  const local = () => board({ id: 'local:b-1', name: 'Olaife-test-dashboard' })
+
+  test('a second store does not create a board the first one already did', async () => {
+    const first = storeWith(() => ok(remote()))
+    await first.ready()
+    await first.store.save(state(local()))
+    expect(first.traffic()).toEqual(['POST /v1/dashboards'])
+
+    // The store swapped underneath its caller, which is the whole bug.
+    const second = storeWith(() => ok(remote()))
+    await second.store.save(state(local()))
+
+    expect(second.traffic()).toEqual([])
+  })
+
+  test('and once it has loaded, it updates rather than creates', async () => {
+    // The safe version of the same sequence: a fresh store that *has* asked the
+    // server knows the board already exists.
+    const { store, traffic, ready } = storeWith(() => ok([remote({ id: 'srv-1' })]))
+    await ready()
+    await store.save(state(board({ id: 'srv-1', description: 'edited' })))
+
+    expect(traffic()).toEqual(['PATCH /v1/dashboards/srv-1'])
+  })
+
+  test('a load that failed leaves the store unwilling rather than eager', async () => {
+    /*
+     * Deliberately not "assume the server is empty". A store that could not ask
+     * has exactly as little idea as one that never asked, and creating the whole
+     * workspace is the expensive way to be wrong.
+     */
+    const { store, calls } = storeWith(() => ok({ nope: true }, 503))
+    await store.load([], 'u1').catch(() => {})
+    calls.length = 0
+
+    await store.save(state(local()))
+    expect(calls).toEqual([])
+  })
+})
+
+describe('a Widget is named by the server, not by us', () => {
+  /*
+   * `local:w-4klw2vxzdo` was found sitting in the API's own records. A Widget is
+   * minted a client id so it can be placed and edited immediately, and that id
+   * travelled to the API — which kept it, prefix and all, because the schema
+   * says an id is "assigned on save when absent" and ours was never absent.
+   *
+   * The board id was already handled this way. Nothing said why a Widget should
+   * differ.
+   */
+  const widgetsSent = (calls: Call[]) =>
+    calls
+      .filter((call) => call.method === 'POST' || call.method === 'PATCH')
+      .map((call) => ((call.body as { widgets?: { id?: string }[] }).widgets ?? []).map((w) => w.id))
+
+  /** A board carrying one Widget, since the default helper carries none. */
+  const withWidget = (id: string, widgetId = 'local:w-4klw2vxzdo', description = '') =>
+    board({
+      id,
+      description,
+      widgets: {
+        [widgetId]: {
+          id: widgetId,
+          typeId: 'line-chart',
+          datasetId: 'peniremit.profit',
+          mapping: { x: 'date', series: ['usd'] },
+        },
+      },
+      placements: [{ widgetId, x: 0, y: 0, w: 8, h: 7 }],
+    })
+
+  /** Answers the way the API does: an absent id comes back assigned. */
+  const assigning = (call: Call) => {
+    if (call.method === 'GET') return ok([])
+    const body = call.body as { widgets?: Record<string, unknown>[] } | null
+    return ok({
+      id: 'srv-1',
+      widgets: (body?.widgets ?? []).map((widget, index) => ({
+        ...widget,
+        id: widget.id ?? `srv-w-${String(index + 1)}`,
+      })),
+    })
+  }
+
+  test('a new Widget is sent without an id', async () => {
+    const { store, calls, ready } = storeWith(assigning)
+    await ready()
+    await store.save(state(withWidget('local:b-1')))
+
+    expect(widgetsSent(calls)).toEqual([[undefined]])
+  })
+
+  test('and later saves address it by the id the API issued', async () => {
+    /*
+     * The half that makes omitting safe. Without it, every save would omit the
+     * id again and the API would assign another — turning one Widget into a new
+     * one on each edit.
+     */
+    const { store, calls, ready } = storeWith(assigning)
+    await ready()
+    await store.save(state(withWidget('local:b-1')))
+    await store.save(state(withWidget('local:b-1', 'local:w-4klw2vxzdo', 'edited')))
+
+    expect(widgetsSent(calls)).toEqual([[undefined], ['srv-w-1']])
+  })
+
+  test('a Widget that came from a load keeps the name it arrived with', async () => {
+    // Only a local mint is withheld. An id the server issued is the server's
+    // own, and withholding it would ask for a second.
+    const { store, calls, ready } = storeWith(assigning)
+    await ready()
+    await store.save(state(withWidget('local:b-1', 'srv-w-9')))
+
+    expect(widgetsSent(calls)).toEqual([['srv-w-9']])
+  })
+
+  test('being issued an id is not itself a change to the composition', async () => {
+    // Otherwise the save after a create would PATCH a board nothing had edited,
+    // because its Widget answers to a different name on the wire.
+    const { store, traffic, ready } = storeWith(assigning)
+    await ready()
+    const unchanged = withWidget('local:b-1')
+    await store.save(state(unchanged))
+    await store.save(state(unchanged))
+
+    expect(traffic()).toEqual(['POST /v1/dashboards'])
+  })
+})

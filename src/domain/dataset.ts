@@ -131,6 +131,61 @@ export interface Measure extends FieldBase {
   aggregations: Aggregation[]
 }
 
+/**
+ * A parameter the Dataset's endpoint accepts — D24.
+ *
+ * Separate from `Field` because the publication model keeps two lists and they
+ * answer different questions. `fields` describes what comes *back*, and a Field
+ * name must match the key the Source System returns. A Filter Parameter
+ * describes what may be *sent*, and the two overlap without being the same set:
+ * a `from` bounding a date range is rarely a returned column, and a returned
+ * column is not automatically accepted as a filter.
+ *
+ * We collapsed both into a boolean on the Field for most of this project's life,
+ * which could express neither of the two facts below — and both are needed
+ * before a Viewer-facing filter can work at all.
+ */
+/**
+ * What kind of value a Filter Parameter takes, as the publisher declared it.
+ *
+ * Mirrors the API's `FieldType`. Carried because it decides the *control*: a
+ * date wants a date picker, and asking someone to type one means asking them to
+ * guess a format nobody told them.
+ */
+export type FilterValueType =
+  | 'string'
+  | 'number'
+  | 'date'
+  | 'boolean'
+  | 'category'
+  | 'location'
+
+export interface FilterParameter {
+  /** The query parameter name sent upstream. */
+  name: string
+  /** The kind of value it takes. Absent where the publisher did not say. */
+  valueType?: FilterValueType
+  /** How it reads to a person. Falls back to a humanised `name`. */
+  label: string
+  description?: string
+  /**
+   * The endpoint cannot answer without it.
+   *
+   * An unbound required parameter is not a filter left at "All" — it is a query
+   * the Source System will refuse, so a Widget over such a Dataset must supply
+   * one at composition time or not be composable.
+   */
+  required: boolean
+  /**
+   * The values this parameter accepts, when they are enumerable.
+   *
+   * This is what populates a Viewer's filter control. Absent means the values
+   * are open-ended rather than that there are none — see Finding 8, which is
+   * about the case the declaration cannot answer.
+   */
+  allowedValues?: (string | number)[]
+}
+
 export type Field = Dimension | TimeDimension | Measure
 export type FieldRole = Field['role']
 
@@ -146,6 +201,42 @@ export interface Dataset {
   exposesPersonalData: boolean
   /** FR-DP-03 */
   fields: Field[]
+  /**
+   * What one row represents — D30.
+   *
+   * The Fields whose combination identifies a row, or an empty list where the
+   * endpoint answers with a single summary row. A declaration lists the columns
+   * and, without this, never says how many rows to expect — so an Author cannot
+   * tell a one-row summary from two thousand records, and the two feed almost
+   * disjoint sets of Visualization Types.
+   *
+   * Optional on the type because the deployed API does not carry it yet; PC-08
+   * requires it, so a Dataset arriving without one is a Dataset we can say is
+   * incompletely declared rather than one we have to guess about.
+   */
+  rowGrain?: { dimensions: string[] }
+  /**
+   * What the endpoint accepts as query input — D24.
+   *
+   * Optional because the fixtures predate it and a Dataset may legitimately
+   * accept nothing. `filterableFields` derives the older boolean view from it,
+   * so callers that only ask "may I filter on this Field" keep working.
+   */
+  filterParameters?: FilterParameter[]
+  /**
+   * What one row represents: the Field keys whose combination identifies it.
+   *
+   * An empty array is meaningful and is not the same as an absent one — `[]`
+   * says the endpoint answers with a *single summary row*, where absent says the
+   * publisher has not declared a grain at all.
+   *
+   * This is the fact an Author needs at the moment they pick a Dataset and
+   * could not previously get: two declarations with identical Fields can answer
+   * with one summary row or with thousands of records, and the choice decides
+   * whether the widget they are building is correct. Asked for as D30 and
+   * granted on 15 September.
+   */
+  grain?: string[]
   /**
    * PROPOSED — Finding 1. The Distribution Family requires "one Measure across
    * many records"; record volume is not expressible in the published model.
@@ -200,4 +291,62 @@ export function fieldsWithSemantic(dataset: Dataset, semantic: FieldSemantic): F
 
 export function geographicFields(dataset: Dataset): Field[] {
   return dataset.fields.filter(isGeographic)
+}
+
+// --- Filter Parameters (D24) -----------------------------------------------
+
+export function filterParameterFor(
+  dataset: Dataset,
+  name: string,
+): FilterParameter | undefined {
+  return dataset.filterParameters?.find((parameter) => parameter.name === name)
+}
+
+/**
+ * Parameters the endpoint cannot answer without.
+ *
+ * A Widget bound to a Dataset with any of these must supply every one of them,
+ * every time — an unbound required parameter is a guaranteed rejection rather
+ * than a filter left unset.
+ */
+export function requiredParameters(dataset: Dataset): FilterParameter[] {
+  return (dataset.filterParameters ?? []).filter((parameter) => parameter.required)
+}
+
+/**
+ * The values a filter control may offer, or `undefined` when the declaration
+ * does not say.
+ *
+ * `undefined` and `[]` are different answers and the caller must be able to tell
+ * them apart: the first means the values are open-ended and have to come from
+ * somewhere else, the second means the publisher declared this parameter accepts
+ * nothing — which is a broken declaration rather than an empty dropdown.
+ */
+/**
+ * The declared parameters that carry a date range, if any.
+ *
+ * `from` and `to` only. They are the names the API's own example uses, and
+ * extending the guess to `start`/`end` or `from_date`/`to_date` would be a pile
+ * of conventions nobody agreed to — each wrong for some publisher, and wrong
+ * *silently*, since a parameter called `start` that means something else would
+ * accept a date and return the wrong rows.
+ *
+ * A Dataset spelling it differently needs the relationship declared rather than
+ * inferred, which is a question for the API rather than a gap to paper over
+ * here. One definition, because two places depend on the same answer: the query
+ * that sends the range, and the Control that says whether it reached.
+ */
+export function timeRangeParameters(dataset: Dataset): { from?: string; to?: string } {
+  const declared = new Set((dataset.filterParameters ?? []).map((parameter) => parameter.name))
+  return {
+    ...(declared.has('from') ? { from: 'from' } : {}),
+    ...(declared.has('to') ? { to: 'to' } : {}),
+  }
+}
+
+export function allowedValuesFor(
+  dataset: Dataset,
+  name: string,
+): (string | number)[] | undefined {
+  return filterParameterFor(dataset, name)?.allowedValues
 }

@@ -21,7 +21,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import { useAnalyticsData } from '../data/AnalyticsData'
+import { useAnalyticsData, useMay } from '../data/AnalyticsData'
 import { useBoards } from './useBoards'
 import type { Board, DashboardScope } from './boards'
 import type { OrgScopeRef } from '../../access/port'
@@ -97,6 +97,7 @@ export function SharePanel({ board }: { board: Board }) {
   // Granting to yourself is a control that can only be a no-op — the Author
   // always sees their own board.
   const grantable = people.filter((person) => person.id !== board.authorId)
+  const mayShare = useMay('dashboard.share')
   const granted = new Set(board.shareGrants.map((grant) => grant.recipientId))
 
   return (
@@ -109,6 +110,9 @@ export function SharePanel({ board }: { board: Board }) {
           id="board-scope"
           className="a-select"
           value={scopeValue}
+          // Scope decides who can see the board, so it is the same decision the
+          // grant list expresses and sits behind the same permission.
+          disabled={!mayShare}
           onChange={(event) => chooseScope(event.target.value)}
         >
           <option value="personal">Only you</option>
@@ -131,7 +135,19 @@ export function SharePanel({ board }: { board: Board }) {
         )}
       </p>
 
-      {board.scope.kind !== 'personal' && grantable.length > 0 && (
+      {!mayShare && (
+        /*
+         * Said once, above the controls, rather than as a tooltip on each.
+         * Sharing is a single decision expressed through a scope select and a
+         * list of names, and repeating the same sentence on every row would
+         * bury it.
+         */
+        <p className="a-field__help">
+          You do not have permission to change who can see this dashboard.
+        </p>
+      )}
+
+      {mayShare && board.scope.kind !== 'personal' && grantable.length > 0 && (
         <div className="a-share__grants">
           <p className="a-field__help">
             Naming people <strong>narrows</strong> it to them. With nobody named, everyone in the

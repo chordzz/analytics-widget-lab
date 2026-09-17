@@ -16,6 +16,17 @@
  * The log is append-only by construction: `InMemoryAccessRecorder` has no method
  * to amend or remove an entry, because a record that can be edited establishes
  * nothing.
+ *
+ * **Fixtures only.** The recorder is fed by the retrieval adapter, and only the
+ * fixture one feeds it — against a real Source System every retrieval goes
+ * straight past and the log would sit at zero for ever. `DataScreen` decides
+ * whether to render this at all; it briefly rendered an explanation of its own
+ * emptiness instead, which is a panel whose entire content is an apology for
+ * existing.
+ *
+ * FR-DA-14 binds the Source System rather than us — the publication contract
+ * lists it under retrieval obligations — and the API publishes no endpoint for
+ * reading such a log. So there is nothing to fetch and nothing to show.
  */
 
 import { useEffect, useState } from 'react'

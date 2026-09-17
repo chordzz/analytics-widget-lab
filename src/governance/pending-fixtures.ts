@@ -44,6 +44,11 @@ export const peniremitActiveUsers: Dataset = {
       sortable: true,
     },
   ],
+  rowGrain: { dimensions: ['observed_on', 'corridor'] },
+  filterParameters: [
+    { name: 'observed_on', label: 'Observed on', required: false },
+    { name: 'corridor', label: 'Corridor', required: false },
+  ],
 }
 
 /**
@@ -61,6 +66,10 @@ export const malformedSubmission = {
   fields: [
     { key: 'exported_at', label: 'Exported at', role: 'time-dimension' },
     { key: 'amount', label: 'Amount', role: 'measure' },
+  ],
+  rowGrain: { dimensions: ['exported_at'] },
+  filterParameters: [
+,
   ],
 } as unknown as Dataset
 

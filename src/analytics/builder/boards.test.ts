@@ -19,6 +19,7 @@ import {
   loadState,
   publishedBoards,
   saveState,
+  settledName,
   type Board,
   type BoardsState,
   type PlacedWidget,
@@ -111,14 +112,31 @@ describe('boards', () => {
     expect(next.boards[0].name).toBe('Untitled dashboard')
   })
 
-  test('renaming to blank keeps a usable name', () => {
+  test('renaming stores what was typed, spaces and all', () => {
+    /*
+     * The reducer used to `.trim()` here, which ran on every keystroke and
+     * deleted a trailing space the instant it was typed — "Olaife test" was
+     * unreachable. A blank or half-typed name is a legitimate state while
+     * someone is editing.
+     */
     const next = boardsReducer(stateWith(board()), {
       type: 'rename-board',
       id: 'b1',
-      name: '   ',
+      name: 'Olaife ',
       at: AT,
     })
-    expect(next.boards[0].name).toBe('Untitled dashboard')
+    expect(next.boards[0].name).toBe('Olaife ')
+  })
+
+  test('and a blank one is settled when editing stops', () => {
+    // The rule still holds, at rest: an empty name leaves an unclickable row in
+    // the drafts list.
+    expect(settledName('   ')).toBe('Untitled dashboard')
+    expect(settledName('')).toBe('Untitled dashboard')
+  })
+
+  test('settling trims the edges and keeps the middle', () => {
+    expect(settledName('  Olaife test dashboard  ')).toBe('Olaife test dashboard')
   })
 
   test('deleting the board being edited clears the selection', () => {
