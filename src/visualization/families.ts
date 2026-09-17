@@ -197,9 +197,13 @@ export const visualizationFamilies: VisualizationFamily[] = [
           },
           undecidable: {
             requirement:
-              '§4.2 requires a "location-typed Dimension". The published model has exactly three ' +
-              'Field roles — Dimension, Measure, Time Dimension — and no notion of a location type. ' +
-              'It also cannot say that two Measures are a coordinate pair rather than two figures.',
+              '§4.2 requires a "location-typed Dimension". `FieldType` does carry `location`, and ' +
+              'a Dataset reports `has_location_field` — but a choropleth shades *named areas* and ' +
+              '`location` does not separate a region from a postcode or a street address, which ' +
+              'cannot be shaded. Nor can it say that two Measures are a coordinate pair rather ' +
+              'than two figures. The type is nearly enough here and not quite: it is the one ' +
+              'Family where the published model already reaches for the fact and stops one step ' +
+              'short of it.',
             resolvedBy:
               "proposed Field semantics 'geographic-area', or " +
               "'geographic-latitude' with 'geographic-longitude'",
