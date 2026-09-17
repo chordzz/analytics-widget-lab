@@ -100,7 +100,7 @@
             "description": "Grouped rows and columns with aggregation."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "comparison-table",
             "name": "Comparison table",
             "description": "Side-by-side entities across fixed metrics."
@@ -240,7 +240,7 @@
             "description": "Pie chart with a hollow centre, often carrying the total."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "stacked-100-bar",
             "name": "Stacked 100% bar",
             "description": "Shares of a whole as proportions of a full-width bar."
@@ -289,7 +289,7 @@
             "description": "Quartiles, median and outliers."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "violin-plot",
             "name": "Violin plot",
             "description": "Density of values across the range."
@@ -324,7 +324,7 @@
             "description": "Scatter plot with a third Measure encoded as point size."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "heatmap-matrix",
             "name": "Heatmap matrix",
             "description": "Pairwise Measure relationships encoded as colour intensity."
@@ -374,7 +374,7 @@
             "description": "Flow volume between stages or categories."
           },
           {
-            "implemented": false,
+            "implemented": true,
             "id": "bar-chart-race",
             "name": "Bar chart race",
             "description": "Ranking animated across time periods."

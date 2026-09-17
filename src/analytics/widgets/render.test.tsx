@@ -170,6 +170,10 @@ const primitives: { name: string; element: ReactElement }[] = [
   { name: 'Treemap', element: <P.Treemap data={NO_ROWS} xKey="x" valueKey="v" /> },
   { name: 'TrendChart', element: <P.TrendChart data={NO_ROWS} xKey="x" series={SERIES} /> },
   { name: 'EventLog', element: <P.EventLog data={NO_ROWS} timeKey="t" /> },
+  { name: 'ViolinPlot', element: <P.ViolinPlot data={NO_ROWS} xKey="x" valueKey="v" /> },
+  { name: 'HeatmapMatrix', element: <P.HeatmapMatrix data={NO_ROWS} measures={[]} /> },
+  { name: 'BarChartRace', element: <P.BarChartRace data={NO_ROWS} timeKey="t" entityKey="e" valueKey="v" /> },
+  { name: 'ComparisonTable', element: <P.ComparisonTable data={NO_ROWS} entityKey="e" metrics={[]} /> },
   /*
    * The threshold pair are tiles, so "no data" for them is no *threshold* — the
    * figure is a bare number that always arrives. An unconfigured tile must not

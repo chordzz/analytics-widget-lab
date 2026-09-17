@@ -34,13 +34,13 @@ Evaluation yields one of three outcomes:
 
 | Family | Question answered | Required Data Shape | Decidable today | Types built |
 |---|---|---|---|---|
-| Tabular | What are the individual records? | One or more Dimensions and/or Measures | Yes | 2 of 3 |
+| Tabular | What are the individual records? | One or more Dimensions and/or Measures | Yes | 3 of 3 |
 | Trend | How has this changed over time? | One Time Dimension + one or more Measures | Yes | 4 of 4 |
 | Categorical Comparison | How do these categories compare? | One Dimension + one or more Measures | Yes | 4 of 4 |
-| Composition | What are the parts of this whole? | One Dimension + one Measure summing to a meaningful total | Partly | 3 of 4 |
-| Distribution | How are these values spread? | One Measure across many records | Partly | 2 of 3 |
-| Correlation | Do these move together? | Two or more Measures | Yes | 2 of 3 |
-| Ranking & Flow | What is the order, or where is the drop-off? | One Dimension + one Measure, or ordered stage data | Partly | 4 of 5 |
+| Composition | What are the parts of this whole? | One Dimension + one Measure summing to a meaningful total | Partly | 4 of 4 |
+| Distribution | How are these values spread? | One Measure across many records | Partly | 3 of 3 |
+| Correlation | Do these move together? | Two or more Measures | Yes | 3 of 3 |
+| Ranking & Flow | What is the order, or where is the drop-off? | One Dimension + one Measure, or ordered stage data | Partly | 5 of 5 |
 | Geospatial | Where is this happening? | One location-typed Dimension + one Measure | Partly | 1 of 2 |
 | Radial | How does this compare against a target or across axes? | One or more Measures, optionally with a target | Yes | 2 of 2 |
 | Single Value | What is the number right now? | One Measure, optionally one Time Dimension for trend or comparison | Yes | 4 of 4 |
@@ -59,7 +59,7 @@ whether something can *draw* the result yet.
 |---|---|---|
 | Tabular | Data table | Built |
 |  | Pivot table | Built |
-|  | Comparison table | Not built |
+|  | Comparison table | Built |
 | Trend | Line chart | Built |
 |  | Area chart | Built |
 |  | Spline chart | Built |
@@ -70,19 +70,19 @@ whether something can *draw* the result yet.
 |  | Stacked bar chart | Built |
 | Composition | Pie chart | Built |
 |  | Donut chart | Built |
-|  | Stacked 100% bar | Not built |
+|  | Stacked 100% bar | Built |
 |  | Treemap | Built |
 | Distribution | Histogram | Built |
 |  | Box plot | Built |
-|  | Violin plot | Not built |
+|  | Violin plot | Built |
 | Correlation | Scatter plot | Built |
 |  | Bubble chart | Built |
-|  | Heatmap matrix | Not built |
+|  | Heatmap matrix | Built |
 | Ranking & Flow | Top-N / ranked list | Built |
 |  | Leaderboard | Built |
 |  | Funnel | Built |
 |  | Sankey | Built |
-|  | Bar chart race | Not built |
+|  | Bar chart race | Built |
 | Geospatial | Choropleth map | Not built |
 |  | Point / pin map | Built |
 | Radial | Radar / spider chart | Built |
@@ -102,14 +102,9 @@ whether something can *draw* the result yet.
 
 ### Still to build
 
-- **Comparison table** *(Tabular)* — Ordinary work. A table putting two periods or two segments side by side; the data path is the one `data-table` already uses.
-- **Stacked 100% bar** *(Composition)* — Ordinary work, and the smallest of the six — Composition's other three are built, and this is a stacked bar normalised to the total, which the existing bar chart could take as a variant.
-- **Violin plot** *(Distribution)* — The one remaining Type needing new maths: a kernel density estimate. The histogram and box plot are built, so the data path exists — the shape does not.
-- **Heatmap matrix** *(Correlation)* — Ordinary work. Two Dimensions and a Measure on a colour scale; the cohort grid is the same drawing with a different axis pair.
-- **Bar chart race** *(Ranking & Flow)* — The only Type whose point is *motion* — a ranking animated over time. That makes it a design and accessibility decision rather than an effort estimate, and it is the one place `prefers-reduced-motion` would have to change what is drawn rather than how fast.
 - **Choropleth map** *(Geospatial)* — Boundary geometry — roughly 100KB of TopoJSON for a usable world atlas, which every host would pay for whether or not it draws maps. A standing dependency decision nobody has taken; the point map covers the Family using centroids in the meantime.
 
-Taken together: 36 of 42 Types are built, spanning 13 of 13
+Taken together: 41 of 42 Types are built, spanning 13 of 13
 Families. The order to tackle the rest in follows from the reasons above —
 anything blocked on Finding 1 is waiting on a decision about the publication
 model, not on frontend effort.
@@ -130,7 +125,7 @@ Visualization Types:
 
 - **Data table** — Sortable and filterable rows with pagination, column configuration (visibility, width, pinning), row selection and expandable rows.
 - **Pivot table** — Grouped rows and columns with aggregation.
-- **Comparison table** — Side-by-side entities across fixed metrics. *(no renderer yet — Ordinary work. A table putting two periods or two segments side by side; the data path is the one `data-table` already uses.)*
+- **Comparison table** — Side-by-side entities across fixed metrics.
 
 ### Trend
 
@@ -188,7 +183,7 @@ Visualization Types:
 
 - **Pie chart** — Shares of a whole as circular segments.
 - **Donut chart** — Pie chart with a hollow centre, often carrying the total.
-- **Stacked 100% bar** — Shares of a whole as proportions of a full-width bar. *(no renderer yet — Ordinary work, and the smallest of the six — Composition's other three are built, and this is a stacked bar normalised to the total, which the existing bar chart could take as a variant.)*
+- **Stacked 100% bar** — Shares of a whole as proportions of a full-width bar.
 - **Treemap** — Shares of a whole as nested rectangles sized by value.
 
 ### Distribution
@@ -208,7 +203,7 @@ Visualization Types:
 
 - **Histogram** — Record counts bucketed by value range.
 - **Box plot** — Quartiles, median and outliers.
-- **Violin plot** — Density of values across the range. *(no renderer yet — The one remaining Type needing new maths: a kernel density estimate. The histogram and box plot are built, so the data path exists — the shape does not.)*
+- **Violin plot** — Density of values across the range.
 
 ### Correlation
 
@@ -224,7 +219,7 @@ Visualization Types:
 
 - **Scatter plot** — One point per record against two Measures.
 - **Bubble chart** — Scatter plot with a third Measure encoded as point size.
-- **Heatmap matrix** — Pairwise Measure relationships encoded as colour intensity. *(no renderer yet — Ordinary work. Two Dimensions and a Measure on a colour scale; the cohort grid is the same drawing with a different axis pair.)*
+- **Heatmap matrix** — Pairwise Measure relationships encoded as colour intensity.
 
 ### Ranking & Flow
 
@@ -244,7 +239,7 @@ Visualization Types:
 - **Leaderboard** — Rank, score and movement indicator against the previous period.
 - **Funnel** — Drop-off across sequential stages.
 - **Sankey** — Flow volume between stages or categories.
-- **Bar chart race** — Ranking animated across time periods. *(no renderer yet — The only Type whose point is *motion* — a ranking animated over time. That makes it a design and accessibility decision rather than an effort estimate, and it is the one place `prefers-reduced-motion` would have to change what is drawn rather than how fast.)*
+- **Bar chart race** — Ranking animated across time periods.
 
 ### Geospatial
 

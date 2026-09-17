@@ -288,7 +288,7 @@ const salesByRegion = (): Draft => {
 
   return {
     id: 'sales-by-region',
-    suits: ['donut-chart', 'pie-chart', 'bar-chart-vertical'],
+    suits: ['donut-chart', 'pie-chart', 'bar-chart-vertical', 'stacked-100-bar'],
     name: 'Sales by region',
     description: 'Revenue and order volume across six regions.',
     source: 'Billing',
@@ -297,13 +297,30 @@ const salesByRegion = (): Draft => {
       { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
       { key: 'orders', label: 'Orders', role: 'measure', format: 'number' },
       { key: 'growth', label: 'Growth', role: 'measure', format: 'percent' },
+      // The three ways that revenue arrives. Parts of `revenue`, and the only
+      // Measures in the fixtures that genuinely sum to another one — which is
+      // what a 100% stacked bar needs and what the rest of this file, pairing
+      // revenue with orders or adoption with retention, cannot offer.
+      { key: 'subscriptions', label: 'Subscriptions', role: 'measure', format: 'currency' },
+      { key: 'usage', label: 'Usage', role: 'measure', format: 'currency' },
+      { key: 'services', label: 'Services', role: 'measure', format: 'currency' },
     ],
-    rows: regions.map((region) => ({
-      region,
-      revenue: Math.round(between(random, 180_000, 920_000)),
-      orders: intBetween(random, 1_200, 9_800),
-      growth: Number(between(random, -0.12, 0.34).toFixed(3)),
-    })),
+    rows: regions.map((region, index) => {
+      const revenue = Math.round(between(random, 180_000, 920_000))
+      // Each region holds a different mix, so the shares differ across the
+      // chart. An identical split six times reads as a broken render.
+      const subscriptions = Math.round(revenue * (0.34 + index * 0.07))
+      const usage = Math.round((revenue - subscriptions) * between(random, 0.55, 0.8))
+      return {
+        region,
+        revenue,
+        orders: intBetween(random, 1_200, 9_800),
+        growth: Number(between(random, -0.12, 0.34).toFixed(3)),
+        subscriptions,
+        usage,
+        services: revenue - subscriptions - usage,
+      }
+    }),
   }
 }
 
@@ -672,6 +689,60 @@ const supportTickets = (): Draft => {
   }
 }
 
+// --- 14. Revenue mix --------------------------------------------------------
+// The one fixture with several Measures that are genuinely *parts of the same
+// whole*. Revenue split three ways sums to revenue; the other multi-measure
+// fixtures pair things that do not add up — revenue and orders, adoption and
+// retention — so a 100% stacked bar over any of them would draw a total that
+// means nothing. It carries a Time Dimension as well, so the ranking of regions
+// can be watched changing rather than only compared once.
+
+const revenueMix = (): Draft => {
+  const random = seeded(1014)
+  const regions = ['West Africa', 'East Africa', 'Europe', 'North America', 'Middle East', 'Asia Pacific']
+  const months = monthsEndingAt('2026-08', 12)
+
+  // Each region holds its own mix and drifts from it, so the shares differ
+  // between regions and move over time. Identical mixes would make the chart
+  // look broken rather than uniform.
+  const mix = regions.map((_, index) => 0.34 + index * 0.07)
+
+  const rows = months.flatMap((month, step) =>
+    regions.map((region, index) => {
+      const scale = between(random, 0.82, 1.18) * (1 + step * 0.015)
+      const subscription = mix[index] + between(random, -0.05, 0.05)
+      const total = between(random, 220_000, 780_000) * scale
+      const subscriptions = Math.round(total * subscription)
+      const usage = Math.round(total * (1 - subscription) * between(random, 0.55, 0.8))
+      return {
+        month,
+        region,
+        subscriptions,
+        usage,
+        services: Math.max(0, Math.round(total) - subscriptions - usage),
+        revenue: Math.round(total),
+      }
+    }),
+  )
+
+  return {
+    id: 'revenue-mix',
+    suits: ['bar-chart-race'],
+    name: 'Revenue mix by region',
+    description: 'Twelve months of revenue split three ways across six regions.',
+    source: 'Billing',
+    fields: [
+      { key: 'month', label: 'Month', role: 'time-dimension' },
+      { key: 'region', label: 'Region', role: 'dimension' },
+      { key: 'subscriptions', label: 'Subscriptions', role: 'measure', format: 'currency' },
+      { key: 'usage', label: 'Usage', role: 'measure', format: 'currency' },
+      { key: 'services', label: 'Services', role: 'measure', format: 'currency' },
+      { key: 'revenue', label: 'Total revenue', role: 'measure', format: 'currency' },
+    ],
+    rows,
+  }
+}
+
 // --- library ----------------------------------------------------------------
 
 const DRAFTS: Draft[] = [
@@ -688,6 +759,7 @@ const DRAFTS: Draft[] = [
   activityEvents(),
   serviceHealth(),
   supportTickets(),
+  revenueMix(),
 ]
 
 const PUBLISHED = DRAFTS.map(publish)

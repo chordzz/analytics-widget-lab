@@ -134,6 +134,12 @@ const SLOTS: Record<string, Slot[]> = {
     slot('x', 'Categories', 'One stack per value.', CATEGORY),
     slot('series', 'Measures', 'One segment within each stack.', MEASURE, 2, 4),
   ],
+  'stacked-100-bar': [
+    slot('x', 'Categories', 'One full-width bar per value.', CATEGORY),
+    // Parts of one whole, so the minimum is two and the wording says why: a
+    // single "share" is always 100% and draws a solid bar that means nothing.
+    slot('series', 'Measures', 'Parts of the whole — two or more, or every bar is 100% of itself.', MEASURE, 2, 5),
+  ],
 
   // Composition
   'pie-chart': [
@@ -166,6 +172,11 @@ const SLOTS: Record<string, Slot[]> = {
     slot('x', 'From', 'Where flow leaves.', DIMENSION),
     slot('secondary', 'To', 'Where flow arrives.', DIMENSION),
     slot('value', 'Volume', 'Ribbon thickness.', MEASURE),
+  ],
+  'bar-chart-race': [
+    slot('x', 'Period', 'One frame of the race per value.', TIME),
+    slot('secondary', 'Racers', 'One bar each, ranked within every period.', DIMENSION),
+    slot('value', 'Measure', 'What they are ranked on.', MEASURE),
   ],
 
   // Status
@@ -207,6 +218,10 @@ const SLOTS: Record<string, Slot[]> = {
     slot('secondary', 'Columns', 'Grouped across the top.', DIMENSION),
     slot('value', 'Measure', 'Aggregated per cell. Counts rows if empty.', MEASURE, 0, 1),
   ],
+  'comparison-table': [
+    slot('x', 'Entities', 'One column each.', DIMENSION),
+    slot('series', 'Metrics', 'One row each, in this order.', MEASURE, 2, 8),
+  ],
 
   // Distribution
   histogram: [slot('value', 'Measure', 'Bucketed by value.', MEASURE)],
@@ -214,10 +229,19 @@ const SLOTS: Record<string, Slot[]> = {
     slot('x', 'Groups', 'One box per value.', DIMENSION),
     slot('value', 'Measure', 'Summarised within each group.', MEASURE),
   ],
+  'violin-plot': [
+    slot('x', 'Groups', 'One violin per value.', DIMENSION),
+    slot('value', 'Measure', 'Its spread drawn as a density curve.', MEASURE),
+  ],
 
   // Correlation
   'scatter-plot': [slot('series', 'Measures', 'Exactly two — x then y.', MEASURE, 2, 2)],
   'bubble-chart': [slot('series', 'Measures', 'Three — x, y, then size.', MEASURE, 3, 3)],
+  'heatmap-matrix': [
+    // Two Measures make a one-cell matrix, which is a scatter plot with the
+    // detail thrown away. Three is where the grid starts earning its place.
+    slot('series', 'Measures', 'Three or more — every pair gets a cell.', MEASURE, 3, 8),
+  ],
 
   // Temporal
   'calendar-heatmap': [

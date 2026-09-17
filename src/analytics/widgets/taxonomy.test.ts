@@ -114,23 +114,32 @@ describe('the rename map', () => {
 })
 
 describe('coverage against the FRD', () => {
-  test('the gap is the five types the merge plan names', () => {
-    /*
-     * Not a count — the names. A count passes while the *contents* change, which
-     * is exactly the drift this file exists to catch, and it would let a built
-     * type silently disappear as long as another arrived.
-     */
+  /*
+   * There is no gap any more. This asserted the five names the merge plan
+   * listed as absent, and those five are now in the catalogue — so the
+   * assertion becomes the stronger one it was always a stand-in for: every
+   * Type §4.2 names has an entry here.
+   *
+   * Names rather than a count, as before. A count passes while the contents
+   * change, and would let a Type silently disappear as long as another
+   * arrived.
+   */
+  test('every Visualization Type §4.2 names has a catalogue entry', () => {
     const moduleIds = new Set(WIDGET_TYPES.map((type) => type.id))
     const absent = visualizationTypes.map((type) => type.id).filter((id) => !moduleIds.has(id))
 
-    expect(absent.sort()).toEqual(
-      [
-        'bar-chart-race',
-        'comparison-table',
-        'heatmap-matrix',
-        'stacked-100-bar',
-        'violin-plot',
-      ].sort(),
-    )
+    expect(absent.sort()).toEqual([])
+  })
+
+  /*
+   * An entry is not a renderer, and conflating the two is what made D6 wrong
+   * for a day. `built.test.ts` holds each flag to a branch in the switch; this
+   * holds the *set* of unbuilt types to the one standing decision behind it,
+   * so building the last one is a deliberate edit here rather than a silent
+   * pass.
+   */
+  test('the only Type without a renderer is the one with a dependency decision behind it', () => {
+    const unbuilt = WIDGET_TYPES.filter((type) => !type.built).map((type) => type.id)
+    expect(unbuilt).toEqual(['choropleth-map'])
   })
 })

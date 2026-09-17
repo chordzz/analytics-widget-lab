@@ -56,26 +56,24 @@ const isBuilt = (typeId: string) => BUILT.has(typeId)
  *
  * **These were per Family and wrong after merge §2.** They said things like
  * "Composition cannot be evaluated at all — additivity is undeclared (Finding
- * 1)", which was true of the *workbench fixtures* and is not true of the product
- * module's thirteen datasets: those declare the proposed semantics, so all five
- * of Finding 1's Families now resolve (38 indeterminate outcomes to 0). Keeping
- * the old reasons would have told a reader that six Types were blocked on a
- * publication-model decision when in fact five are ordinary work.
+ * 1)", which was true of the *workbench fixtures* and is not true of the
+ * product module's datasets: those declare the proposed semantics, so all five
+ * of Finding 1's Families resolve. Keeping the old reasons would have told a
+ * reader that six Types were blocked on a publication-model decision when in
+ * fact five were ordinary work.
  *
- * Per Type now, because the remaining six are one per Family and each has its
- * own reason.
+ * **Those five are now built**, and their entries are deleted rather than left
+ * in place. A reason for a Type that draws is not merely unused — it is a
+ * standing claim that work is outstanding, in the document we hand publishers
+ * to explain what they cannot have. One of them was also wrong about its own
+ * subject: `heatmap-matrix` was described as "two Dimensions and a Measure on a
+ * colour scale", which is the cohort grid. §4.2 calls it pairwise *Measure*
+ * relationships, and that is what was built.
+ *
+ * What remains is one Type, and it is the only one here whose reason was never
+ * an effort estimate.
  */
 const UNBUILT_REASON: Record<string, string> = {
-  'comparison-table':
-    'Ordinary work. A table putting two periods or two segments side by side; the data path is the one `data-table` already uses.',
-  'stacked-100-bar':
-    'Ordinary work, and the smallest of the six — Composition\'s other three are built, and this is a stacked bar normalised to the total, which the existing bar chart could take as a variant.',
-  'violin-plot':
-    'The one remaining Type needing new maths: a kernel density estimate. The histogram and box plot are built, so the data path exists — the shape does not.',
-  'heatmap-matrix':
-    'Ordinary work. Two Dimensions and a Measure on a colour scale; the cohort grid is the same drawing with a different axis pair.',
-  'bar-chart-race':
-    'The only Type whose point is *motion* — a ranking animated over time. That makes it a design and accessibility decision rather than an effort estimate, and it is the one place `prefers-reduced-motion` would have to change what is drawn rather than how fast.',
   'choropleth-map':
     'Boundary geometry — roughly 100KB of TopoJSON for a usable world atlas, which every host would pay for whether or not it draws maps. A standing dependency decision nobody has taken; the point map covers the Family using centroids in the meantime.',
 }

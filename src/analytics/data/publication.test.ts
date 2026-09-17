@@ -19,7 +19,7 @@ import { validatePublication } from '../../domain/publication-contract'
 import { isCoordinate, isGeographic } from './types'
 
 describe('every fixture is a publishable Dataset', () => {
-  test('all 13 satisfy the enforceable contract', () => {
+  test('all 14 satisfy the enforceable contract', () => {
     const failed = datasets
       .map((dataset) => ({ id: dataset.id, verdict: validatePublication(dataset) }))
       .filter((entry) => !entry.verdict.accepted)
@@ -28,8 +28,8 @@ describe('every fixture is a publishable Dataset', () => {
     expect(failed).toEqual([])
   })
 
-  test('there are still 13 of them', () => {
-    expect(datasets).toHaveLength(13)
+  test('there are still 14 of them', () => {
+    expect(datasets).toHaveLength(14)
   })
 })
 

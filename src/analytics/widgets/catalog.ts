@@ -95,12 +95,14 @@ export const WIDGET_TYPES: WidgetType[] = [
   { id: 'pie-chart', label: 'Pie chart', family: 'composition', description: 'Shares of a whole as segments.', needs: { dimensions: 1, measures: 1 }, defaultSpan: 4, built: true },
   { id: 'donut-chart', label: 'Donut chart', family: 'composition', description: 'A pie with the total in the centre.', needs: { dimensions: 1, measures: 1 }, defaultSpan: 4, built: true },
   { id: 'treemap', label: 'Treemap', family: 'composition', description: 'Shares as nested rectangles.', needs: { dimensions: 1, measures: 1 }, defaultSpan: 6, built: true },
+  { id: 'stacked-100-bar', label: 'Stacked 100% bar', family: 'composition', description: 'Composition per category, every bar full width.', needs: { dimensions: 1, measures: 2 }, defaultSpan: 6, built: true },
 
   // Ranking
   { id: 'ranked-list', label: 'Ranked list', family: 'ranking-and-flow', description: 'Top N by a measure.', needs: { dimensions: 1, measures: 1 }, defaultSpan: 4, built: true },
   { id: 'leaderboard', label: 'Leaderboard', family: 'ranking-and-flow', description: 'Ranked, with movement between positions.', needs: { dimensions: 1, measures: 1 }, defaultSpan: 4, built: true },
   { id: 'funnel', label: 'Funnel', family: 'ranking-and-flow', description: 'Drop-off across ordered stages.', needs: { dimensions: 1, measures: 1 }, defaultSpan: 5, built: true },
   { id: 'sankey', label: 'Sankey', family: 'ranking-and-flow', description: 'Flow volume between nodes.', needs: { dimensions: 2, measures: 1 }, defaultSpan: 8, built: true },
+  { id: 'bar-chart-race', label: 'Bar chart race', family: 'ranking-and-flow', description: 'How the ranking changed, period by period.', needs: { time: 1, dimensions: 1, measures: 1 }, defaultSpan: 6, built: true },
 
   // Status
   { id: 'status-list', label: 'Status list', family: 'status', description: 'Several entities and their current state.', needs: { dimensions: 2 }, defaultSpan: 4, built: true },
@@ -115,12 +117,15 @@ export const WIDGET_TYPES: WidgetType[] = [
   // Tabular
   { id: 'data-table', label: 'Data table', family: 'tabular', description: 'Sortable rows and columns.', needs: {}, defaultSpan: 8, built: true },
   { id: 'pivot-table', label: 'Pivot table', family: 'tabular', description: 'Grouped rows and columns with aggregation.', needs: { dimensions: 2, measures: 1 }, defaultSpan: 8, built: true },
+  { id: 'comparison-table', label: 'Comparison table', family: 'tabular', description: 'Entities side by side down a fixed list of metrics.', needs: { dimensions: 1, measures: 2 }, defaultSpan: 6, built: true },
 
-  // Not yet built
+  // Distribution, correlation, temporal pattern, chronological, geospatial
   { id: 'histogram', label: 'Histogram', family: 'distribution', description: 'Record counts bucketed by value.', needs: { measures: 1, manyRows: true }, defaultSpan: 6, built: true },
   { id: 'box-plot', label: 'Box plot', family: 'distribution', description: 'Quartiles, median and outliers.', needs: { measures: 1, manyRows: true }, defaultSpan: 6, built: true },
+  { id: 'violin-plot', label: 'Violin plot', family: 'distribution', description: 'The shape of the spread, not just its quartiles.', needs: { dimensions: 1, measures: 1, manyRows: true }, defaultSpan: 6, built: true },
   { id: 'scatter-plot', label: 'Scatter plot', family: 'correlation', description: 'One point per record against two measures.', needs: { measures: 2 }, defaultSpan: 6, built: true },
   { id: 'bubble-chart', label: 'Bubble chart', family: 'correlation', description: 'Scatter with size as a third measure.', needs: { measures: 3 }, defaultSpan: 6, built: true },
+  { id: 'heatmap-matrix', label: 'Heatmap matrix', family: 'correlation', description: 'Every pair of measures at once, by colour.', needs: { measures: 3 }, defaultSpan: 6, built: true },
   { id: 'calendar-heatmap', label: 'Calendar heatmap', family: 'temporal-pattern', description: 'One cell per day, shaded by value.', needs: { time: 1, measures: 1 }, defaultSpan: 8, built: true },
   { id: 'cohort-grid', label: 'Cohort grid', family: 'temporal-pattern', description: 'Cohorts down, elapsed periods across.', needs: { time: 1, dimensions: 1, measures: 1 }, defaultSpan: 8, built: true },
   { id: 'timeline-chart', label: 'Gantt chart', family: 'temporal-pattern', description: 'Spans along a time axis.', needs: { dimensions: 1, measures: 2 }, defaultSpan: 8, built: true },

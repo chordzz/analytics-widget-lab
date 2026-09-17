@@ -186,11 +186,15 @@ export const DIVERGENCES: Divergence[] = [
     status: 'temporary',
     where: 'analytics/widgets/catalog.ts',
     reason:
-      'Down from eight before the merge, which brought three workbench renderers across. The ' +
-      `remaining ${countWord(UNRENDERED.length)} are ${asList(UNRENDERED)}. ` +
-      '`choropleth-map` is the standing decision about bundling ~100KB of boundary geometry; the ' +
-      'rest are ordinary work. All 13 Families are covered, and the catalogue lists what is unbuilt ' +
-      'rather than hiding it.',
+      'Down from eight before the merge, which brought three workbench renderers across, and from ' +
+      'six once the ordinary work was done: `comparison-table`, `stacked-100-bar`, `violin-plot`, ' +
+      '`heatmap-matrix` and `bar-chart-race` are built. ' +
+      (UNRENDERED.length === 1 && UNRENDERED[0] === 'choropleth-map'
+        ? 'What is left is not renderer effort: `choropleth-map` needs roughly 100KB of boundary ' +
+          'geometry bundled into every host, whether or not it draws maps, and that dependency ' +
+          'has never been agreed. It is a standing decision, not a backlog item.'
+        : `Still unrendered: ${asList(UNRENDERED)}.`) +
+      ' All 13 Families are covered, and the catalogue lists what is unbuilt rather than hiding it.',
   },
   {
     id: 'D7',

@@ -36,6 +36,9 @@ export type { RankedListProps } from './RankedList'
 export { DataTable } from './DataTable'
 export type { DataTableProps } from './DataTable'
 
+export { ComparisonTable } from './ComparisonTable'
+export type { ComparisonTableProps } from './ComparisonTable'
+
 export { ScatterChart, BubbleChart } from './ScatterChart'
 export type { ScatterChartProps } from './ScatterChart'
 
@@ -51,8 +54,8 @@ export type { FunnelChartProps } from './FunnelChart'
 export { SankeyChart } from './SankeyChart'
 export type { SankeyChartProps } from './SankeyChart'
 
-export { Histogram, BoxPlot } from './Distribution'
-export type { HistogramProps, BoxPlotProps } from './Distribution'
+export { Histogram, BoxPlot, ViolinPlot } from './Distribution'
+export type { HistogramProps, BoxPlotProps, ViolinPlotProps } from './Distribution'
 
 export { CalendarHeatmap } from './CalendarHeatmap'
 export type { CalendarHeatmapProps } from './CalendarHeatmap'
@@ -74,3 +77,9 @@ export type { PointMapProps } from './PointMap'
 
 export { Legend } from './shared'
 export type { ChartProps, SeriesSpec } from './shared'
+
+export { HeatmapMatrix, correlation } from './HeatmapMatrix'
+export type { HeatmapMatrixProps } from './HeatmapMatrix'
+
+export { BarChartRace } from './BarChartRace'
+export type { BarChartRaceProps } from './BarChartRace'

@@ -57,8 +57,8 @@ describe('build status is not a claim', () => {
     // `rendererCoverage()` in contract-docs reads these, so a change here shows
     // up as a docs diff rather than silently.
     expect({ built: built.length, total: WIDGET_TYPES.length }).toEqual({
-      built: 37,
-      total: 38,
+      built: 42,
+      total: 43,
     })
   })
 })
