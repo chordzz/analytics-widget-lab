@@ -236,18 +236,10 @@ async function main(): Promise<void> {
       const { satisfies } = await import('../src/visualization/data-shape')
       const { visualizationFamilies } = await import('../src/visualization/families')
 
-      /*
-       * With semantics on. They were `proposed` when the flag was named and
-       * the API has since published them, so evaluating without would compare
-       * their answer against a question we no longer ask — and report five
-       * disagreements that are our own switch, not their bug.
-       */
       const ours = visualizationFamilies
         .filter(
           (family) =>
-            satisfies(datasetFrom(dataset as never), family.dataShape, {
-              useProposedSemantics: true,
-            }).status === 'satisfied',
+            satisfies(datasetFrom(dataset as never), family.dataShape).status === 'satisfied',
         )
         .map((family) => family.id)
         .sort()

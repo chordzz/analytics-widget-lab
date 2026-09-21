@@ -25,6 +25,8 @@ import type {
   DataClassification,
   Dataset,
   Field,
+  FieldRole,
+  FieldSemantic,
   FilterParameter,
   FilterValueType,
   Measure,
@@ -63,6 +65,24 @@ export interface ApiDataset {
    * answers with a single summary row. What we asked for as BE-2 and D30.
    */
   grain?: string[]
+  /**
+   * Roughly how many rows, as an order of magnitude — BE-1's sixth part, landed
+   * 18 September. `grain` says what a row *is* and cannot say how many there
+   * are: `["day", "corridor"]` may be forty rows or four million depending on
+   * cardinalities nobody declares, and a histogram over one pre-aggregated
+   * figure is not a histogram.
+   */
+  record_volume?: string
+  /**
+   * Which two Filter Parameters are the ends of a date range, and the Field
+   * they narrow — BE-8, landed 18 September.
+   *
+   * Its **absence is a statement**: this endpoint takes no range. That is the
+   * whole value of it. Before this we supported `from`/`to` and nothing else,
+   * and a Dataset spelling them `start_date`/`end_date` left a range control
+   * that moved and changed nothing.
+   */
+  time_range?: { field?: string; from_parameter?: string; to_parameter?: string }
   time_dimension_field?: string | null
   fields: ApiField[]
   filter_parameters?: ApiFilterParameter[]
@@ -84,6 +104,12 @@ export interface ApiField {
   label: string
   type: string
   role: 'dimension' | 'measure'
+  /**
+   * What the Field *means* — BE-1, landed 17 September, and the exact six
+   * values we asked for. A semantic on the wrong role is refused at
+   * publication, so an `additive-total` here is genuinely a Measure.
+   */
+  semantic?: string
   description?: string
   aggregations?: string[]
   filter_operators?: string[]
@@ -239,6 +265,8 @@ export function datasetFrom(api: ApiDataset): Dataset {
      * nothing.
      */
     ...(api.grain === undefined ? {} : { grain: api.grain }),
+    ...recordVolumeFrom(api.record_volume),
+    ...timeRangeFrom(api.time_range),
     fields: api.fields.map((field) => fieldFrom(field, timeField)),
     filterParameters: filterParametersFrom(api),
   }
@@ -273,6 +301,11 @@ function fieldFrom(api: ApiField, timeField: string | null): Field {
       ...base,
       role: 'measure',
       aggregations: mapAggregations(api.aggregations),
+      // Three of the six are declared on Measures — `additive-total`, and the
+      // latitude/longitude pair. This branch returned before reading them at
+      // first, which dropped precisely the ones that unlock Composition and the
+      // point map while the Dimension semantics worked fine.
+      ...withSemantic(api, 'measure'),
     } satisfies Measure
   }
 
@@ -280,23 +313,49 @@ function fieldFrom(api: ApiField, timeField: string | null): Field {
   // Field per Dataset, so this is exact rather than a heuristic on `type`.
   const role = api.key === timeField ? 'time-dimension' : 'dimension'
 
-  /*
-   * A `location`-typed Dimension names a place — D2, and conformance rather
-   * than inference.
-   *
-   * §4.2 asks Geospatial for "a location-typed Dimension", and the API has
-   * exactly that in `FieldType`. Our model expresses the same fact as a
-   * `semantic`, so reading one as the other is a translation, not a guess.
-   *
-   * The coordinate half stays undecidable and is left alone: a point map needs
-   * two Measures that know which of them is latitude, and `type: 'location'` on
-   * a number cannot say. Marking those would be the failure the semantic was
-   * introduced to prevent — a table of regional sales plotted with revenue as a
-   * latitude.
-   */
-  const semantic = role === 'dimension' && api.type === 'location' ? 'geographic-area' : undefined
+  return { ...base, role, ...withSemantic(api, role) }
+}
 
-  return { ...base, role, ...(semantic ? { semantic } : {}) }
+/** The six the API publishes, which are the six our model already had. */
+const SEMANTICS: readonly FieldSemantic[] = [
+  'geographic-area',
+  'geographic-latitude',
+  'geographic-longitude',
+  'additive-total',
+  'state',
+  'stage',
+]
+
+/**
+ * A Field's meaning: declared where the publisher declared one, inferred from
+ * `type: 'location'` where they did not.
+ *
+ * The inference was all we had. §4.2 asks Geospatial for "a location-typed
+ * Dimension", the API had exactly that in `FieldType`, and reading one as the
+ * other was a translation rather than a guess — but it could only ever reach
+ * `geographic-area`, so four of the five Families it was standing in for stayed
+ * unreachable however the Dataset was declared.
+ *
+ * `semantic` landed on 17 September and is read first. It is not a superset of
+ * the inference: a publisher may declare a `location` Field and no semantic,
+ * and the backend deliberately kept offering Geospatial for that case so
+ * nothing that worked before stops working. We match them, which is why the
+ * fallback stays rather than being deleted as superseded.
+ *
+ * Unrecognised values are dropped, not passed through. An unknown semantic is a
+ * vocabulary we do not share, and guessing at one is how a table of regional
+ * sales gets plotted with revenue as a latitude.
+ */
+function withSemantic(
+  api: ApiField,
+  role: FieldRole,
+): { semantic?: FieldSemantic } {
+  const declared = SEMANTICS.find((value) => value === api.semantic)
+  if (declared) return { semantic: declared }
+
+  return role === 'dimension' && api.type === 'location'
+    ? { semantic: 'geographic-area' }
+    : {}
 }
 
 /**
@@ -327,3 +386,44 @@ export function labelFor(name: string): string {
 /** FR-DP-13 — a withdrawn Dataset leaves the Catalogue. */
 export const isPublished = (api: ApiDataset): boolean =>
   api.deleted !== true && api.status !== 'withdrawn'
+
+/**
+ * `record_volume` reduced to the question anything actually asks: many, or not?
+ *
+ * The API publishes four magnitudes and says only `thousands` and `millions`
+ * satisfy Distribution, so that is the threshold applied here — theirs, not one
+ * of our own invention, because two thresholds for one question is how the
+ * publication gate and `/presentation` drifted apart on their side.
+ *
+ * An undeclared volume is absent rather than `few`. They are different answers:
+ * `few` says the publisher told us it is small, absent says nobody said. Only
+ * the first is a reason to tell an Author a histogram is wrong, and the second
+ * is why Distribution is withheld rather than refused.
+ */
+function recordVolumeFrom(declared: string | undefined): { recordVolume?: 'few' | 'many' } {
+  if (declared === 'thousands' || declared === 'millions') return { recordVolume: 'many' }
+  if (declared === 'single-row' || declared === 'tens') return { recordVolume: 'few' }
+  return {}
+}
+
+/**
+ * `time_range`, taken only when it is complete.
+ *
+ * All three parts are required by the schema and validated at publication, so a
+ * partial one should not exist — but this is unvalidated wire data, and half a
+ * range is worse than none: sending `from` without `to` narrows one end of a
+ * window and leaves the other open, which draws a chart that looks filtered and
+ * is not.
+ */
+function timeRangeFrom(
+  api: ApiDataset['time_range'],
+): { timeRange?: { field: string; from: string; to: string } } {
+  const field = api?.field
+  const from = api?.from_parameter
+  const to = api?.to_parameter
+  if (!field || !from || !to) return {}
+  // Both ends the same parameter cannot be a range; it would send one value
+  // twice and narrow nothing.
+  if (from === to) return {}
+  return { timeRange: { field, from, to } }
+}

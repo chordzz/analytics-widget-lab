@@ -29,9 +29,11 @@ export type DataClassification = 'public' | 'internal' | 'confidential' | 'restr
  * recommended extension: one optional semantic descriptor rather than a
  * scatter of one-off flags.
  *
- * Every use of this is gated behind an explicit opt-in
- * (`SatisfactionOptions.useProposedSemantics`) so the gap stays visible in the
- * UI instead of being quietly papered over.
+ * No longer proposed. The API published `semantic` on 17 September with
+ * exactly these six values, so this is the declaration rather than our reading
+ * of it — and satisfaction consults it by default. `SatisfactionOptions`
+ * carries the inverse switch, `ignoreFieldSemantics`, for the one caller that
+ * measures what adopting them changed.
  */
 export type FieldSemantic =
   /**
@@ -238,10 +240,28 @@ export interface Dataset {
    */
   grain?: string[]
   /**
-   * PROPOSED — Finding 1. The Distribution Family requires "one Measure across
-   * many records"; record volume is not expressible in the published model.
+   * Whether this Dataset holds many records. Distribution requires it: a
+   * histogram over one pre-aggregated figure is not a histogram.
+   *
+   * Asked for as the sixth part of BE-1 — the one a Field-level `semantic`
+   * could not carry, because it belongs to the Dataset — and published on
+   * 18 September as `record_volume`, an order of magnitude rather than a
+   * count. `single-row` and `tens` are `few`; `thousands` and `millions` are
+   * `many`, which is the same threshold the API applies for `has_many_records`.
+   *
+   * Kept binary here because that is the whole of what any Family asks. The
+   * order of magnitude is the publisher's to state and ours to reduce; storing
+   * four values to test one would invite a second threshold somewhere else.
    */
   recordVolume?: 'few' | 'many'
+  /**
+   * Which two Filter Parameters are the ends of a date range, and the Field
+   * they narrow. BE-8, published 18 September.
+   *
+   * Absence is a statement: this endpoint takes no range. It is not a licence
+   * to fall back to guessing names — see `timeRangeParameters`.
+   */
+  timeRange?: { field: string; from: string; to: string }
   /**
    * PROPOSED — Finding 16. How many records the Dataset holds.
    *
@@ -325,19 +345,43 @@ export function requiredParameters(dataset: Dataset): FilterParameter[] {
 /**
  * The declared parameters that carry a date range, if any.
  *
- * `from` and `to` only. They are the names the API's own example uses, and
- * extending the guess to `start`/`end` or `from_date`/`to_date` would be a pile
- * of conventions nobody agreed to — each wrong for some publisher, and wrong
- * *silently*, since a parameter called `start` that means something else would
- * accept a date and return the wrong rows.
+ * **Read, not guessed.** `timeRange` is the publisher saying which two
+ * parameters are the ends of a range; BE-8 asked for it and it landed on
+ * 18 September. Both names are validated against the declaration at
+ * publication, so a `timeRange` naming an undeclared parameter cannot exist.
  *
- * A Dataset spelling it differently needs the relationship declared rather than
- * inferred, which is a question for the API rather than a gap to paper over
- * here. One definition, because two places depend on the same answer: the query
- * that sends the range, and the Control that says whether it reached.
+ * The `from`/`to` fallback stays for Datasets published before it, and only
+ * for them — it is the *whole* of the old behaviour, and extending it to
+ * `start`/`end` or `from_date`/`to_date` remains the thing not to do. Those
+ * are conventions nobody agreed to, each right for some publisher and wrong
+ * for others, and wrong *silently*: a parameter named `start` that means
+ * something else accepts a date without complaint and returns the wrong rows
+ * under a chart nobody has reason to doubt.
+ *
+ * A Dataset that declares neither is making a real statement — this endpoint
+ * takes no range — rather than leaving us to guess and get it wrong quietly.
+ *
+ * One definition, because two places depend on the same answer: the query that
+ * sends the range, and the Control that says whether it reached.
  */
 export function timeRangeParameters(dataset: Dataset): { from?: string; to?: string } {
   const declared = new Set((dataset.filterParameters ?? []).map((parameter) => parameter.name))
+
+  const range = dataset.timeRange
+  if (range) {
+    /*
+     * Still checked against the parameter list. The API validates this at
+     * publication and we are not the authority on it — but a declaration that
+     * names a parameter this Dataset does not carry would send an argument the
+     * endpoint has never heard of, and silently sending nothing is the better
+     * of the two failures.
+     */
+    return {
+      ...(declared.has(range.from) ? { from: range.from } : {}),
+      ...(declared.has(range.to) ? { to: range.to } : {}),
+    }
+  }
+
   return {
     ...(declared.has('from') ? { from: 'from' } : {}),
     ...(declared.has('to') ? { to: 'to' } : {}),

@@ -15,10 +15,17 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { ComparisonTable } from './ComparisonTable'
 import type { Field, Row } from '../../data/types'
 
-const metrics: Field[] = [
-  { key: 'revenue', label: 'Revenue', role: 'measure', format: 'number' },
-  { key: 'latency', label: 'Latency', role: 'measure', format: 'number' },
-]
+const measure = (key: string, label: string): Field => ({
+  key,
+  label,
+  role: 'measure',
+  format: 'number',
+  aggregations: ['sum'],
+  filterable: false,
+  sortable: true,
+})
+
+const metrics: Field[] = [measure('revenue', 'Revenue'), measure('latency', 'Latency')]
 
 /** Two rows per corridor — the grain a real Dataset frequently has. */
 const grained: Row[] = [

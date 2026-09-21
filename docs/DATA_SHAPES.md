@@ -361,11 +361,11 @@ Declared shape: 1 Dimension(s), 1 Time Dimension(s), 1 Measure(s)
 | Tabular | Yes | — |
 | Trend | Yes | — |
 | Categorical Comparison | Yes | — |
-| Composition | Cannot be determined | Needs proposed Field semantic 'additive-total' |
-| Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
+| Composition | Yes | — |
+| Distribution | Yes | — |
 | Correlation | No | Missing: at least 2 Measures |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
+| Geospatial | No | Missing: a Field naming a place, or a latitude and longitude pair |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | Yes | — |
@@ -382,11 +382,11 @@ Declared shape: 1 Dimension(s), 1 Time Dimension(s), 2 Measure(s)
 | Tabular | Yes | — |
 | Trend | Yes | — |
 | Categorical Comparison | Yes | — |
-| Composition | Cannot be determined | Needs proposed Field semantic 'additive-total' |
-| Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
+| Composition | Yes | — |
+| Distribution | Yes | — |
 | Correlation | Yes | — |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
+| Geospatial | No | Missing: a Field naming a place, or a latitude and longitude pair |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | Yes | — |
@@ -403,11 +403,11 @@ Declared shape: 1 Dimension(s), 1 Time Dimension(s), 1 Measure(s)
 | Tabular | Yes | — |
 | Trend | Yes | — |
 | Categorical Comparison | Yes | — |
-| Composition | Cannot be determined | Needs proposed Field semantic 'additive-total' |
-| Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
+| Composition | No | Missing: a Measure that sums to a meaningful total |
+| Distribution | Yes | — |
 | Correlation | No | Missing: at least 2 Measures |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
+| Geospatial | No | Missing: a Field naming a place, or a latitude and longitude pair |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | Yes | — |
@@ -424,11 +424,11 @@ Declared shape: 2 Dimension(s), 0 Time Dimension(s), 1 Measure(s)
 | Tabular | Yes | — |
 | Trend | No | Missing: at least one Time Dimension |
 | Categorical Comparison | Yes | — |
-| Composition | Cannot be determined | Needs proposed Field semantic 'additive-total' |
-| Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
+| Composition | Yes | — |
+| Distribution | No | Missing: many records |
 | Correlation | No | Missing: at least 2 Measures |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
+| Geospatial | Yes | — |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | No | Missing: at least one Time Dimension |
@@ -445,13 +445,13 @@ Declared shape: 2 Dimension(s), 1 Time Dimension(s), 0 Measure(s)
 | Tabular | Yes | — |
 | Trend | No | Missing: at least one Measure |
 | Categorical Comparison | No | Missing: at least one Measure |
-| Composition | No | Missing: at least one Measure |
+| Composition | No | Missing: at least one Measure; a Measure that sums to a meaningful total |
 | Distribution | No | Missing: at least one Measure |
 | Correlation | No | Missing: at least 2 Measures |
-| Ranking & Flow | Cannot be determined | Needs proposed Field semantic 'stage' |
-| Geospatial | No | Missing: at least one Measure |
+| Ranking & Flow | No | Missing: one Dimension and one Measure, or a Dimension declared as an ordered stage |
+| Geospatial | No | Missing: at least one Measure; a Field naming a place, or a latitude and longitude pair |
 | Radial | No | Missing: at least one Measure |
 | Single Value | No | Missing: at least one Measure |
 | Temporal Pattern | No | Missing: at least one Measure |
 | Chronological | Yes | — |
-| Status | Cannot be determined | Needs proposed Field semantic 'state' |
+| Status | Yes | — |

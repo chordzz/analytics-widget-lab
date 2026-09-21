@@ -21,8 +21,14 @@ import type { Satisfaction } from './data-shape'
 
 type Status = Satisfaction['status']
 
+/**
+ * `semantics` defaults false — the model *without* Field semantics, which is
+ * how this file read before they were published and what the second argument
+ * used to opt into. The parameter kept its meaning; the option beneath it
+ * inverted, because consulting the declaration is the normal path now.
+ */
 const statusFor = (dataset: typeof peniremitSettlements, familyId: string, semantics = false): Status =>
-  evaluateFamilies(dataset, { useProposedSemantics: semantics }).find(
+  evaluateFamilies(dataset, { ignoreFieldSemantics: !semantics }).find(
     (e) => e.family.id === familyId,
   )!.satisfaction.status
 
@@ -164,10 +170,26 @@ describe('FR-VZ-05 — only satisfying Types are offered', () => {
     expect(canPresent(peniremitSettlements, 'scatter-plot')).toBe(false)
   })
 
-  test('indeterminate Families are not offered', () => {
-    // Geospatial cannot be established under the published model, so its Types
-    // must not appear even though the Dataset does carry a location Field.
-    expect(canPresent(corridorCoverage, 'choropleth-map')).toBe(false)
+  test('an indeterminate Family is not offered', () => {
+    /*
+     * This asserted that Corridor coverage could not present a choropleth,
+     * because Geospatial could not be *established* under the published model
+     * even though the Dataset carried a location Field.
+     *
+     * It can be established now: the Dataset declares `geographic-area` and the
+     * API carries `semantic`, so the honest answer flipped to yes. The property
+     * the test was protecting did not flip — an unestablished Family must not
+     * be offered — so it is asserted where the state still exists, which is the
+     * pre-semantics evaluation.
+     */
+    const indeterminate = offeredVisualizationTypes(corridorCoverage, {
+      ignoreFieldSemantics: true,
+    }).map((t) => t.id)
+    expect(indeterminate).not.toContain('choropleth-map')
+
+    // And with the declaration read, it is on offer — which is the whole of
+    // what BE-1 bought.
+    expect(canPresent(corridorCoverage, 'choropleth-map')).toBe(true)
   })
 
   test('a Dataset with no Measure offers no Measure-requiring Type', () => {
@@ -191,11 +213,33 @@ describe('exclusions are explained', () => {
   })
 
   test('an indeterminate Family names the requirement and its resolution', () => {
-    const geospatial = evaluateFamilies(corridorCoverage).find((e) => e.family.id === 'geospatial')!
+    // Only reachable now by asking for the pre-semantics model, which is what
+    // the contract document does to measure what declaring them is worth.
+    const geospatial = evaluateFamilies(corridorCoverage, { ignoreFieldSemantics: true }).find(
+      (e) => e.family.id === 'geospatial',
+    )!
     expect(geospatial.satisfaction.status).toBe('indeterminate')
     if (geospatial.satisfaction.status !== 'indeterminate') throw new Error('unreachable')
     expect(geospatial.satisfaction.undecided[0].requirement).toContain('location-typed Dimension')
     expect(geospatial.satisfaction.undecided[0].resolvedBy).toContain('geographic-area')
+  })
+
+  /*
+   * The consequence of semantics being declaration data rather than a proposal,
+   * stated once so it is a decision rather than something a reader discovers.
+   *
+   * `indeterminate` means the model cannot tell. The model can tell now — a
+   * Family that fails is a Dataset whose publisher declared nothing, which is a
+   * definite answer about the declaration. Reporting "cannot be determined"
+   * there would send an Author to us about a gap that is theirs to fill.
+   */
+  test('nothing is indeterminate under the model as published', () => {
+    const undecided = catalogueFixtures.flatMap((dataset) =>
+      evaluateFamilies(dataset)
+        .filter((e) => e.satisfaction.status === 'indeterminate')
+        .map((e) => `${dataset.id}/${e.family.id}`),
+    )
+    expect(undecided).toEqual([])
   })
 
   test('every non-satisfied outcome carries at least one reason', () => {
@@ -209,14 +253,12 @@ describe('exclusions are explained', () => {
   })
 })
 
-// --- Finding 1: what the proposed extension would recover ------------------
+// --- Finding 1: what the extension recovered, now that it is published ------
 
-describe('Finding 1 — proposed Field semantics', () => {
-  test('no Family is indeterminate once semantics are permitted', () => {
+describe('Finding 1 — Field semantics', () => {
+  test('no Family is indeterminate, because semantics are the default now', () => {
     for (const dataset of catalogueFixtures) {
-      for (const { family, satisfaction } of evaluateFamilies(dataset, {
-        useProposedSemantics: true,
-      })) {
+      for (const { family, satisfaction } of evaluateFamilies(dataset)) {
         expect({ dataset: dataset.id, family: family.id, status: satisfaction.status }).not.toEqual({
           dataset: dataset.id,
           family: family.id,
@@ -241,8 +283,8 @@ describe('Finding 1 — proposed Field semantics', () => {
 
   test('semantics never turn a satisfied Family unsatisfied', () => {
     for (const dataset of catalogueFixtures) {
-      const asPublished = evaluateFamilies(dataset)
-      const withSemantics = evaluateFamilies(dataset, { useProposedSemantics: true })
+      const asPublished = evaluateFamilies(dataset, { ignoreFieldSemantics: true })
+      const withSemantics = evaluateFamilies(dataset)
 
       asPublished.forEach((before, i) => {
         if (before.satisfaction.status === 'satisfied') {
