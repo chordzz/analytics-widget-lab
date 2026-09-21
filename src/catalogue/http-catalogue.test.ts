@@ -369,3 +369,67 @@ describe('personal data is read, never inferred', () => {
     expect(exposes({ classification: 'internal' })).toBe(true)
   })
 })
+
+/*
+ * The Types the API accepts, and the property name they arrive under.
+ *
+ * There were no tests here at all, which is the reason this shipped broken.
+ * `visualizations()` read `entry.types`; the API sends `visualization_types`
+ * and always has — the published schema said otherwise until 18 September and
+ * we followed the schema. So every Family came back with an empty list from
+ * the day BE-5 was adopted.
+ *
+ * What made it survive is the fallback right below it: an empty answer is read
+ * as "the endpoint declined", and `acceptedByApi` then offers everything rather
+ * than locking the product. That is the correct behaviour for a 403 and it is
+ * perfect cover for a parse that silently yields nothing — a 200, no error, no
+ * diagnostic, and validation quietly not happening.
+ */
+describe('the accepted taxonomy', () => {
+  const entry = (types: Record<string, unknown>) => ({
+    family: 'trend',
+    requirement: 'at least one Measure and a Time Dimension',
+    single_value: false,
+    ...types,
+  })
+
+  test('reads the property name the API actually sends', async () => {
+    const catalogue = catalogueWith(() =>
+      json([entry({ visualization_types: ['line-chart', 'area-chart'] })]),
+    )
+    const [family] = await catalogue.visualizations()
+    expect(family.types).toEqual(['line-chart', 'area-chart'])
+  })
+
+  test('still reads the name the schema used to document', async () => {
+    // Not for the API's sake — it never sent this. For the next disagreement.
+    const catalogue = catalogueWith(() => json([entry({ types: ['line-chart'] })]))
+    const [family] = await catalogue.visualizations()
+    expect(family.types).toEqual(['line-chart'])
+  })
+
+  test('carries the requirement and the single-value flag', async () => {
+    const catalogue = catalogueWith(() =>
+      json([entry({ visualization_types: ['stat-card'], single_value: true })]),
+    )
+    const [family] = await catalogue.visualizations()
+    expect(family).toMatchObject({
+      family: 'trend',
+      requirement: 'at least one Measure and a Time Dimension',
+      singleValue: true,
+    })
+  })
+
+  test('a Family carrying no Types is empty, not broken', async () => {
+    const catalogue = catalogueWith(() => json([entry({})]))
+    const [family] = await catalogue.visualizations()
+    expect(family.types).toEqual([])
+  })
+
+  test('a refusal is an empty taxonomy, so nothing is locked', async () => {
+    // 403 is the likely one: `/v1/visualizations` needs `dataset.read`, which a
+    // viewer who can compose might not have.
+    const catalogue = catalogueWith(() => json({ message: 'forbidden' }, 403))
+    expect(await catalogue.visualizations()).toEqual([])
+  })
+})
