@@ -25,7 +25,24 @@ const BASE =
   argAfter('--base') ?? process.env.ANALYTICS_BASE_URL ?? 'https://api.dev.analytics.penilabs.com'
 const TOKEN = process.env.ANALYTICS_TOKEN
 
-type Status = 'pass' | 'fail' | 'skip'
+/*
+ * Four outcomes, not three, and the fourth is the one this script got wrong on
+ * its first real run.
+ *
+ * A check whose prerequisite failed has *not* found nothing — it has not
+ * looked, and saying "no Dataset declares one" when the catalogue returned 401
+ * reports a conclusion about someone's data drawn from an authentication
+ * error. That is the failure this whole codebase is written against: `useRows`
+ * turning denied into "no records", an empty taxonomy parse reading as "the
+ * endpoint declined". A conformance checker making it is worse than one that
+ * does not exist, because its answer looks like evidence.
+ *
+ *   pass    — asked, and it holds
+ *   fail    — asked, and it does not
+ *   n/a     — asked, and there was genuinely nothing to check
+ *   blocked — never asked; something upstream failed first
+ */
+type Status = 'pass' | 'fail' | 'skip' | 'blocked'
 interface Check {
   /** The ask this belongs to, as the backend document numbers them. */
   ask: string
@@ -89,6 +106,30 @@ async function main(): Promise<void> {
 
   console.log(`Conformance check against ${BASE}\n`)
 
+  /*
+   * One call first, purely to tell a bad token from a broken API. Without it a
+   * 401 is reported five times as five separate failures, which reads as the
+   * backend having removed five things — the first run of this script said
+   * exactly that, and it was one expired token.
+   */
+  try {
+    await get('/v1/me')
+  } catch (error) {
+    const message = String(error)
+    if (message.includes('401')) {
+      console.error(
+        'The token is not valid — every check would fail for that one reason.\n\n' +
+          'Access tokens are short-lived, so an hour-old one has usually expired.\n' +
+          'Read a fresh one on a signed-in tab:\n' +
+          "  JSON.parse(localStorage.getItem('smc.analytics.auth.v1')).accessToken\n\n" +
+          'Paste the value only — no quotes, no `Bearer` prefix.',
+      )
+      process.exit(2)
+    }
+    console.error(`Could not reach ${BASE}: ${message}`)
+    process.exit(2)
+  }
+
   // --- the one that bit us -------------------------------------------------
   //
   // First because it is the reason this script exists: the property name on the
@@ -124,7 +165,11 @@ async function main(): Promise<void> {
   }
 
   // --- the declaration fields ----------------------------------------------
-  let datasets: ApiDataset[] = []
+  //
+  // `null` is not `[]`. Every check below reads this, and the difference
+  // between "the catalogue holds no Dataset declaring a semantic" and "we never
+  // read the catalogue" is the difference between a finding and a lie.
+  let datasets: ApiDataset[] | null = null
   try {
     const body = await get<{ datasets?: ApiDataset[] } | ApiDataset[]>('/v1/datasets')
     datasets = Array.isArray(body) ? body : (body.datasets ?? [])
@@ -133,60 +178,86 @@ async function main(): Promise<void> {
     record('—', 'GET /v1/datasets', 'fail', String(error))
   }
 
+  /**
+   * Runs `check` over the catalogue, or records that it could not be run.
+   *
+   * The wrapper exists so a new check cannot forget: reading `datasets` at all
+   * means going through here, and there is no path that treats a missing
+   * catalogue as an empty one.
+   */
+  const overCatalogue = (
+    ask: string,
+    what: string,
+    check: (live: ApiDataset[]) => [Status, string],
+  ) => {
+    if (datasets === null) {
+      record(ask, what, 'blocked', 'the catalogue could not be read — see above')
+      return
+    }
+    if (datasets.length === 0) {
+      record(ask, what, 'skip', 'the catalogue is empty — nothing published to check')
+      return
+    }
+    const [status, detail] = check(datasets)
+    record(ask, what, status, detail)
+  }
+
   /*
    * A field being *accepted* is not the same as a field being *used*. These
    * report how many live Datasets actually carry each one, because a schema
    * that allows `semantic` and a catalogue where nobody declares one leave the
    * five Families exactly as unreachable as before.
    */
-  const withSemantics = datasets.filter((d) => d.fields?.some((f) => f.semantic))
-  record(
-    'BE-1',
-    'Fields declare `semantic`',
-    withSemantics.length > 0 ? 'pass' : 'skip',
-    withSemantics.length > 0
-      ? `${String(withSemantics.length)}/${String(datasets.length)} Datasets · ${[
-          ...new Set(datasets.flatMap((d) => d.fields ?? []).map((f) => f.semantic).filter(Boolean)),
-        ].join(', ')}`
-      : 'accepted by the schema, declared by nobody yet — the Families stay unreachable',
-  )
+  overCatalogue('BE-1', 'Fields declare `semantic`', (live) => {
+    const carrying = live.filter((d) => d.fields?.some((f) => f.semantic))
+    const values = [
+      ...new Set(live.flatMap((d) => d.fields ?? []).map((f) => f.semantic).filter(Boolean)),
+    ]
+    return carrying.length > 0
+      ? ['pass', `${String(carrying.length)}/${String(live.length)} Datasets · ${values.join(', ')}`]
+      : [
+          'skip',
+          'accepted by the schema, declared by nobody yet — the Families stay unreachable',
+        ]
+  })
 
-  const withVolume = datasets.filter((d) => d.record_volume)
-  record(
-    'BE-1b',
-    'Datasets declare `record_volume`',
-    withVolume.length > 0 ? 'pass' : 'skip',
-    withVolume.length > 0
-      ? `${String(withVolume.length)}/${String(datasets.length)} · ${[...new Set(withVolume.map((d) => d.record_volume))].join(', ')}`
-      : 'no Dataset declares one, so Distribution is offered to none',
-  )
+  overCatalogue('BE-1b', 'Datasets declare `record_volume`', (live) => {
+    const carrying = live.filter((d) => d.record_volume)
+    return carrying.length > 0
+      ? [
+          'pass',
+          `${String(carrying.length)}/${String(live.length)} · ${[...new Set(carrying.map((d) => d.record_volume))].join(', ')}`,
+        ]
+      : ['skip', 'no Dataset declares one, so Distribution is offered to none']
+  })
 
-  const withRange = datasets.filter((d) => d.time_range)
-  record(
-    'BE-8',
-    'Datasets declare `time_range`',
-    withRange.length > 0 ? 'pass' : 'skip',
-    withRange.length > 0
-      ? withRange
-          .map((d) => `${d.id}: ${d.time_range!.from_parameter}/${d.time_range!.to_parameter}`)
-          .join(' · ')
-      : 'none declared — a range control still reaches only `from`/`to`',
-  )
+  overCatalogue('BE-8', 'Datasets declare `time_range`', (live) => {
+    const carrying = live.filter((d) => d.time_range)
+    return carrying.length > 0
+      ? [
+          'pass',
+          carrying
+            .map(
+              (d) =>
+                `${d.id}: ${d.time_range?.from_parameter ?? '?'}/${d.time_range?.to_parameter ?? '?'}`,
+            )
+            .join(' · '),
+        ]
+      : ['skip', 'none declared — a range control still reaches only `from`/`to`']
+  })
 
-  const categoryParams = datasets.flatMap((d) =>
-    (d.filter_parameters ?? []).filter((p) => p.type === 'category').map((p) => ({ id: d.id, p })),
-  )
-  const emptyCategories = categoryParams.filter(({ p }) => !p.allowed_values?.length)
-  record(
-    'BE-3',
-    'every category parameter publishes `allowed_values`',
-    categoryParams.length === 0 ? 'skip' : emptyCategories.length === 0 ? 'pass' : 'fail',
-    categoryParams.length === 0
-      ? 'no category parameters in the catalogue to check'
-      : emptyCategories.length === 0
-        ? `${String(categoryParams.length)} category parameters, all populated`
-        : `empty: ${emptyCategories.map(({ id, p }) => `${id}.${p.name}`).join(', ')}`,
-  )
+  overCatalogue('BE-3', 'every category parameter publishes `allowed_values`', (live) => {
+    const categories = live.flatMap((d) =>
+      (d.filter_parameters ?? []).filter((p) => p.type === 'category').map((p) => ({ id: d.id, p })),
+    )
+    const empty = categories.filter(({ p }) => !p.allowed_values?.length)
+    if (categories.length === 0) {
+      return ['skip', 'no category parameters in the catalogue to check']
+    }
+    return empty.length === 0
+      ? ['pass', `${String(categories.length)} category parameters, all populated`]
+      : ['fail', `empty: ${empty.map(({ id, p }) => `${id}.${p.name}`).join(', ')}`]
+  })
 
   // --- the routes that did not exist ---------------------------------------
   //
@@ -224,7 +295,11 @@ async function main(): Promise<void> {
    * published its rules for the eight structural Families and said a
    * disagreement is a bug in one of us — this is where one would show up.
    */
-  for (const dataset of datasets.slice(0, 5)) {
+  if (datasets === null) {
+    record('FE-4', 'presentation agrees with our evaluation', 'blocked',
+      'the catalogue could not be read — see above')
+  }
+  for (const dataset of (datasets ?? []).slice(0, 5)) {
     try {
       const presentation = await get<{
         presentation_options?: { family: string }[]
@@ -277,25 +352,35 @@ async function main(): Promise<void> {
   }
 
   // --- report --------------------------------------------------------------
-  const mark = { pass: '  ok  ', fail: ' FAIL ', skip: ' n/a  ' }
+  const mark = { pass: '  ok  ', fail: ' FAIL ', skip: ' n/a  ', blocked: ' ---  ' }
   for (const check of checks) {
     console.log(`[${mark[check.status]}] ${check.ask.padEnd(6)} ${check.what}`)
     console.log(`                  ${check.detail}`)
   }
 
-  const failed = checks.filter((c) => c.status === 'fail').length
-  const skipped = checks.filter((c) => c.status === 'skip').length
+  const count = (status: Status) => checks.filter((c) => c.status === status).length
+  const failed = count('fail')
+  const blocked = count('blocked')
+
   console.log(
-    `\n${String(checks.length - failed - skipped)} passed · ${String(failed)} failed · ${String(skipped)} not applicable`,
+    `\n${String(count('pass'))} passed · ${String(failed)} failed · ` +
+      `${String(count('skip'))} not applicable · ${String(blocked)} not checked`,
   )
-  if (skipped > 0) {
+
+  if (count('skip') > 0) {
     console.log(
-      'Not applicable means the API accepts the field and no live Dataset uses it.\n' +
+      '\nNot applicable means the API accepts the field and no live Dataset uses it.\n' +
         'That is a publisher gap, not an API one — and it leaves the capability as\n' +
         'unreachable as if the field did not exist.',
     )
   }
-  process.exit(failed)
+  if (blocked > 0) {
+    console.log(
+      '\nNot checked means a prerequisite failed, so the question was never asked.\n' +
+        'It is not evidence either way. Fix what failed above and run again.',
+    )
+  }
+  process.exit(failed + blocked)
 }
 
 await main()
