@@ -23,7 +23,87 @@
 
 const BASE =
   argAfter('--base') ?? process.env.ANALYTICS_BASE_URL ?? 'https://api.dev.analytics.penilabs.com'
-const TOKEN = process.env.ANALYTICS_TOKEN
+
+/**
+ * The token, cleaned of the ways a copy out of a browser console arrives wrong.
+ *
+ * Dev tools render a string result *with its quotes* — `'eyJhbGci…'` — and
+ * selecting the line takes them with it. `Bearer 'eyJ…'` is then rejected as
+ * an invalid token, which is indistinguishable from an expired one in the
+ * response and was not distinguishable in this script either.
+ *
+ * Stripping is better than warning about it. The characters removed here —
+ * quotes, whitespace, a `Bearer ` prefix — cannot occur inside a JWT, so
+ * nothing valid is altered.
+ */
+const TOKEN = (process.env.ANALYTICS_TOKEN ?? '')
+  .trim()
+  .replace(/^Bearer\s+/i, '')
+  .replace(/^['"`]|['"`]$/g, '')
+  .trim()
+
+/**
+ * What is wrong with the token, without printing it.
+ *
+ * A 401 says only that the server refused it, and the three reasons behind
+ * that want three different actions: expired means read it again, malformed
+ * means the copy went wrong, and a foreign issuer means it is for another
+ * deployment. A JWT's first two segments are base64url JSON and need no
+ * secret to read, so the script can simply look.
+ */
+function diagnoseToken(token: string): string | null {
+  if (token === '') return 'ANALYTICS_TOKEN is empty.'
+  if (token === 'undefined' || token === 'null') {
+    return (
+      `ANALYTICS_TOKEN is the literal string "${token}", which is what the ` +
+      'browser read produced.\nThe app may be signed out, or storing tokens ' +
+      'under a different key — check that\n`localStorage.getItem(\'smc.analytics.auth.v1\')` ' +
+      'is not null on that tab.'
+    )
+  }
+
+  const segments = token.split('.')
+  if (segments.length !== 3) {
+    return (
+      `That is not a JWT — ${String(segments.length)} dot-separated segment(s), expected 3, ` +
+      `${String(token.length)} characters.\nThe copy probably picked up only part of the value.`
+    )
+  }
+
+  let payload: Record<string, unknown>
+  try {
+    payload = JSON.parse(Buffer.from(segments[1], 'base64url').toString('utf8')) as Record<
+      string,
+      unknown
+    >
+  } catch {
+    return 'The token has three segments but the middle one is not readable JSON.'
+  }
+
+  const exp = typeof payload.exp === 'number' ? payload.exp : undefined
+  if (exp !== undefined) {
+    const secondsAgo = Math.floor(Date.now() / 1000) - exp
+    if (secondsAgo > 0) {
+      const mins = Math.floor(secondsAgo / 60)
+      return (
+        `The token expired ${mins < 1 ? 'less than a minute' : `${String(mins)} minutes`} ago ` +
+        `(exp ${new Date(exp * 1000).toISOString()}).\n` +
+        'The browser tab still works because it silently refreshed and holds a newer one —\n' +
+        'so re-read it now and run again within the hour.'
+      )
+    }
+  }
+
+  const issuer = typeof payload.iss === 'string' ? payload.iss : undefined
+  return (
+    'The token parses and is not expired, so the API refused it for another reason.\n' +
+    `  issuer:   ${issuer ?? '(none)'}\n` +
+    `  audience: ${JSON.stringify(payload.aud) ?? '(none)'}\n` +
+    `  subject:  ${typeof payload.sub === 'string' ? payload.sub : '(none)'}\n` +
+    `  target:   ${BASE}\n` +
+    'If the issuer names a different deployment, point --base at that one.'
+  )
+}
 
 /*
  * Four outcomes, not three, and the fourth is the one this script got wrong on
@@ -95,11 +175,13 @@ interface ApiDataset {
 }
 
 async function main(): Promise<void> {
-  if (!TOKEN) {
+  if (TOKEN === '') {
     console.error(
       'Set ANALYTICS_TOKEN to your access token.\n' +
         'In the browser console on a signed-in tab:\n' +
-        "  JSON.parse(localStorage.getItem('smc.analytics.auth.v1')).accessToken\n",
+        "  copy(JSON.parse(localStorage.getItem('smc.analytics.auth.v1')).accessToken)\n" +
+        '`copy()` puts the bare value on the clipboard, without the quotes the\n' +
+        'console draws around a string result.\n',
     )
     process.exit(2)
   }
@@ -117,12 +199,11 @@ async function main(): Promise<void> {
   } catch (error) {
     const message = String(error)
     if (message.includes('401')) {
+      console.error('The token was refused — every check would fail for that one reason.\n')
+      console.error(diagnoseToken(TOKEN) ?? message)
       console.error(
-        'The token is not valid — every check would fail for that one reason.\n\n' +
-          'Access tokens are short-lived, so an hour-old one has usually expired.\n' +
-          'Read a fresh one on a signed-in tab:\n' +
-          "  JSON.parse(localStorage.getItem('smc.analytics.auth.v1')).accessToken\n\n" +
-          'Paste the value only — no quotes, no `Bearer` prefix.',
+        '\nTo copy it without the quotes the console draws around a string:\n' +
+          "  copy(JSON.parse(localStorage.getItem('smc.analytics.auth.v1')).accessToken)",
       )
       process.exit(2)
     }
