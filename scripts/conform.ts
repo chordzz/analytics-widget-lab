@@ -368,7 +368,27 @@ async function main(): Promise<void> {
       `${String(targets.users?.length ?? 0)} users · ${String(targets.departments?.length ?? 0)} departments`,
     )
   } catch (error) {
-    record('BE-7', 'GET share-targets', 'fail', String(error))
+    /*
+     * 403 and 404 are the same red mark and different findings, with different
+     * people to take them to.
+     *
+     * 404 is the ask unbuilt. 403 is the ask *built and enforcing* — the route
+     * exists, it ran as the caller, and IAM said this caller may not browse the
+     * directory. That is the scoping we asked for working correctly, and the
+     * fix is a permission grant rather than a line of backend code. Reporting
+     * it as "BE-7 failed" would send someone to rebuild a route that is fine.
+     */
+    const message = String(error)
+    record(
+      'BE-7',
+      'GET share-targets',
+      'fail',
+      message.includes('403')
+        ? `the route exists and refused this caller — ${message}\n` +
+          '                  BE-7 is built; the gap is a missing permission on your user\n' +
+          '                  (`dashboard.share`), which is IAM rather than Analytics'
+        : message,
+    )
   }
 
   /*
