@@ -108,7 +108,9 @@ export const visualizationFamilies: VisualizationFamily[] = [
               '§4.2 requires a Measure "summing to a meaningful total". Additivity is a property of ' +
               'meaning, not of type — FR-DP-04 declares which aggregations are meaningful, but not ' +
               'whether the resulting total is itself meaningful as a whole.',
-            resolvedBy: "proposed Field semantic 'additive-total'",
+            resolvedBy:
+              "Field semantic 'additive-total', published 17 September. A publisher declares it " +
+              'on the Measure whose total means something.',
           },
         },
       ],
@@ -131,7 +133,9 @@ export const visualizationFamilies: VisualizationFamily[] = [
             requirement:
               '§4.2 requires the Measure be spread "across many records". Record volume is not part ' +
               'of the published model.',
-            resolvedBy: "proposed Dataset descriptor 'recordVolume'",
+            resolvedBy:
+              "Dataset `record_volume`, published 18 September as an order of magnitude — " +
+              '`thousands` or `millions` is the many this clause asks for.',
           },
         },
       ],
@@ -164,7 +168,9 @@ export const visualizationFamilies: VisualizationFamily[] = [
             requirement:
               '§4.2 admits "ordered stage data" as an alternative shape. Stage ordering is not ' +
               'expressible in the published model, so the funnel/sankey route cannot be evaluated.',
-            resolvedBy: "proposed Field semantic 'stage'",
+            resolvedBy:
+              "Field semantic 'stage', published 17 September. Declared on the Dimension whose " +
+              'order is what a funnel reads.',
           },
         },
       ],
@@ -205,8 +211,9 @@ export const visualizationFamilies: VisualizationFamily[] = [
               'Family where the published model already reaches for the fact and stops one step ' +
               'short of it.',
             resolvedBy:
-              "proposed Field semantics 'geographic-area', or " +
-              "'geographic-latitude' with 'geographic-longitude'",
+              "Field semantics 'geographic-area', or 'geographic-latitude' with " +
+              "'geographic-longitude', published 17 September. Both halves of the pair are " +
+              'needed; one alone plots nothing.',
           },
         },
       ],
@@ -278,7 +285,9 @@ export const visualizationFamilies: VisualizationFamily[] = [
             requirement:
               '§4.2 admits "one state Dimension" as an alternative shape. The published model cannot ' +
               'distinguish a state Dimension from any other Dimension.',
-            resolvedBy: "proposed Field semantic 'state'",
+            resolvedBy:
+              "Field semantic 'state', published 17 September. Declared on the Dimension holding " +
+              'the condition — settled, pending, failed.',
           },
         },
       ],

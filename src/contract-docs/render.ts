@@ -266,10 +266,6 @@ ${catalogueFixtures
   })
   .join('\n')}
 
-The descriptors are not a blanket unlock. A Measure marked additive on one Dataset does not make an
-unrelated Dataset eligible for Composition, and a Dataset with no location Field stays ineligible for
-Geospatial whether or not the descriptors are adopted.
-
 **This is what publishers gain by declaring.** The descriptors are not a blanket unlock: a Measure
 marked additive on one Dataset does not make an unrelated one eligible for Composition, and a Dataset
 with no location Field stays ineligible for Geospatial whichever way it is evaluated.
@@ -324,7 +320,7 @@ Evaluation yields one of three outcomes:
 |---|---|
 | **Satisfied** | The Dataset meets the shape. The Family's Types are offered. |
 | **Not satisfied** | The Dataset provably does not meet the shape — for example it has one Measure where two are required. Nothing is wrong with the Dataset; the Author should pick a different visualization. |
-| **Cannot be determined** | The publication contract cannot express what the Family needs. The Types are withheld. This is a gap in the contract, not a defect in the Dataset — see the known gap in \`PUBLICATION_CONTRACT.md\`. |
+| **Cannot be determined** | This Dataset has not declared what the Family turns on. The Types are withheld rather than offered on a maybe. **This used to be a gap in the contract and is now a gap in the declaration:** \`semantic\` and \`record_volume\` landed on 17–18 September, so the fact can be stated — by the publisher, on the Dataset. |
 
 ## Summary
 
@@ -389,7 +385,7 @@ ${family.dataShape.clauses
     (clause) =>
       `- ${clause.describe}${
         clause.undecidable
-          ? `\n  - **Cannot be determined today.** ${clause.undecidable.requirement}\n  - Would be resolved by: ${clause.undecidable.resolvedBy}`
+          ? `\n  - **Not decidable from structure alone.** ${clause.undecidable.requirement}\n  - Decided by: ${clause.undecidable.resolvedBy}`
           : ''
       }`,
   )

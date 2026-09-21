@@ -28,7 +28,7 @@ Evaluation yields one of three outcomes:
 |---|---|
 | **Satisfied** | The Dataset meets the shape. The Family's Types are offered. |
 | **Not satisfied** | The Dataset provably does not meet the shape — for example it has one Measure where two are required. Nothing is wrong with the Dataset; the Author should pick a different visualization. |
-| **Cannot be determined** | The publication contract cannot express what the Family needs. The Types are withheld. This is a gap in the contract, not a defect in the Dataset — see the known gap in `PUBLICATION_CONTRACT.md`. |
+| **Cannot be determined** | This Dataset has not declared what the Family turns on. The Types are withheld rather than offered on a maybe. **This used to be a gap in the contract and is now a gap in the declaration:** `semantic` and `record_volume` landed on 17–18 September, so the fact can be stated — by the publisher, on the Dataset. |
 
 ## Summary
 
@@ -176,8 +176,8 @@ Conditions checked:
 - at least one Dimension
 - at least one Measure
 - a Measure that sums to a meaningful total
-  - **Cannot be determined today.** §4.2 requires a Measure "summing to a meaningful total". Additivity is a property of meaning, not of type — FR-DP-04 declares which aggregations are meaningful, but not whether the resulting total is itself meaningful as a whole.
-  - Would be resolved by: proposed Field semantic 'additive-total'
+  - **Not decidable from structure alone.** §4.2 requires a Measure "summing to a meaningful total". Additivity is a property of meaning, not of type — FR-DP-04 declares which aggregations are meaningful, but not whether the resulting total is itself meaningful as a whole.
+  - Decided by: Field semantic 'additive-total', published 17 September. A publisher declares it on the Measure whose total means something.
 
 Visualization Types:
 
@@ -196,8 +196,8 @@ Conditions checked:
 
 - at least one Measure
 - many records
-  - **Cannot be determined today.** §4.2 requires the Measure be spread "across many records". Record volume is not part of the published model.
-  - Would be resolved by: proposed Dataset descriptor 'recordVolume'
+  - **Not decidable from structure alone.** §4.2 requires the Measure be spread "across many records". Record volume is not part of the published model.
+  - Decided by: Dataset `record_volume`, published 18 September as an order of magnitude — `thousands` or `millions` is the many this clause asks for.
 
 Visualization Types:
 
@@ -230,8 +230,8 @@ Visualization Types:
 Conditions checked:
 
 - one Dimension and one Measure, or a Dimension declared as an ordered stage
-  - **Cannot be determined today.** §4.2 admits "ordered stage data" as an alternative shape. Stage ordering is not expressible in the published model, so the funnel/sankey route cannot be evaluated.
-  - Would be resolved by: proposed Field semantic 'stage'
+  - **Not decidable from structure alone.** §4.2 admits "ordered stage data" as an alternative shape. Stage ordering is not expressible in the published model, so the funnel/sankey route cannot be evaluated.
+  - Decided by: Field semantic 'stage', published 17 September. Declared on the Dimension whose order is what a funnel reads.
 
 Visualization Types:
 
@@ -251,8 +251,8 @@ Conditions checked:
 
 - at least one Measure
 - a Field naming a place, or a latitude and longitude pair
-  - **Cannot be determined today.** §4.2 requires a "location-typed Dimension". `FieldType` does carry `location`, and a Dataset reports `has_location_field` — but a choropleth shades *named areas* and `location` does not separate a region from a postcode or a street address, which cannot be shaded. Nor can it say that two Measures are a coordinate pair rather than two figures. The type is nearly enough here and not quite: it is the one Family where the published model already reaches for the fact and stops one step short of it.
-  - Would be resolved by: proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude'
+  - **Not decidable from structure alone.** §4.2 requires a "location-typed Dimension". `FieldType` does carry `location`, and a Dataset reports `has_location_field` — but a choropleth shades *named areas* and `location` does not separate a region from a postcode or a street address, which cannot be shaded. Nor can it say that two Measures are a coordinate pair rather than two figures. The type is nearly enough here and not quite: it is the one Family where the published model already reaches for the fact and stops one step short of it.
+  - Decided by: Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude', published 17 September. Both halves of the pair are needed; one alone plots nothing.
 
 Visualization Types:
 
@@ -336,8 +336,8 @@ Visualization Types:
 Conditions checked:
 
 - one Measure, or a Dimension declared as a state
-  - **Cannot be determined today.** §4.2 admits "one state Dimension" as an alternative shape. The published model cannot distinguish a state Dimension from any other Dimension.
-  - Would be resolved by: proposed Field semantic 'state'
+  - **Not decidable from structure alone.** §4.2 admits "one state Dimension" as an alternative shape. The published model cannot distinguish a state Dimension from any other Dimension.
+  - Decided by: Field semantic 'state', published 17 September. Declared on the Dimension holding the condition — settled, pending, failed.
 
 Visualization Types:
 

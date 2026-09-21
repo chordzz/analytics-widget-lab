@@ -161,31 +161,31 @@ about the declaration rather than a limit of the model.
 
 §4.2 requires a Measure "summing to a meaningful total". Additivity is a property of meaning, not of type — FR-DP-04 declares which aggregations are meaningful, but not whether the resulting total is itself meaningful as a whole.
 
-**Declared with:** proposed Field semantic 'additive-total'
+**Declared with:** Field semantic 'additive-total', published 17 September. A publisher declares it on the Measure whose total means something.
 
 ### Distribution
 
 §4.2 requires the Measure be spread "across many records". Record volume is not part of the published model.
 
-**Declared with:** proposed Dataset descriptor 'recordVolume'
+**Declared with:** Dataset `record_volume`, published 18 September as an order of magnitude — `thousands` or `millions` is the many this clause asks for.
 
 ### Ranking & Flow
 
 §4.2 admits "ordered stage data" as an alternative shape. Stage ordering is not expressible in the published model, so the funnel/sankey route cannot be evaluated.
 
-**Declared with:** proposed Field semantic 'stage'
+**Declared with:** Field semantic 'stage', published 17 September. Declared on the Dimension whose order is what a funnel reads.
 
 ### Geospatial
 
 §4.2 requires a "location-typed Dimension". `FieldType` does carry `location`, and a Dataset reports `has_location_field` — but a choropleth shades *named areas* and `location` does not separate a region from a postcode or a street address, which cannot be shaded. Nor can it say that two Measures are a coordinate pair rather than two figures. The type is nearly enough here and not quite: it is the one Family where the published model already reaches for the fact and stops one step short of it.
 
-**Declared with:** proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude'
+**Declared with:** Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude', published 17 September. Both halves of the pair are needed; one alone plots nothing.
 
 ### Status
 
 §4.2 admits "one state Dimension" as an alternative shape. The published model cannot distinguish a state Dimension from any other Dimension.
 
-**Declared with:** proposed Field semantic 'state'
+**Declared with:** Field semantic 'state', published 17 September. Declared on the Dimension holding the condition — settled, pending, failed.
 
 ### What declaring them is worth
 
@@ -198,10 +198,6 @@ Measured against the fixture Datasets — eligibility evaluated without the desc
 | Active users | 9 / 13 | 10 / 13 | 30 | 33 |
 | Corridor coverage | 6 / 13 | 8 / 13 | 21 | 27 |
 | Journal entries | 2 / 13 | 3 / 13 | 5 | 8 |
-
-The descriptors are not a blanket unlock. A Measure marked additive on one Dataset does not make an
-unrelated Dataset eligible for Composition, and a Dataset with no location Field stays ineligible for
-Geospatial whether or not the descriptors are adopted.
 
 **This is what publishers gain by declaring.** The descriptors are not a blanket unlock: a Measure
 marked additive on one Dataset does not make an unrelated one eligible for Composition, and a Dataset
