@@ -1,0 +1,98 @@
+/**
+ * Peniremit's 41 published Datasets, as their portal guide declares them.
+ *
+ * Transcribed from the integration guide of 22 September, and only as much of
+ * each declaration as binding a Widget needs: the Field keys, which of them is
+ * the time Dimension, and the shape the endpoint answers with.
+ *
+ * It is here rather than fetched because it is used to *check* boards before
+ * anything reaches the API — the point is to find a card that cannot be built
+ * without a round trip, an access token, or a half-created Dashboard. The live
+ * `/v1/datasets` remains the authority, and `scripts/peniremit-boards.ts`
+ * compares the two when it runs with a token.
+ *
+ * Nothing here declares a `semantic`. That is faithful: the guide declares
+ * none, which is why no Composition chart can be offered on any of the nine
+ * category Datasets, and why `Analytics_Additive_Total_Request.md` exists.
+ */
+
+export type PeniremitShape = 'aggregate' | 'date' | 'category'
+
+export interface PeniremitDataset {
+  id: string
+  name: string
+  shape: PeniremitShape
+  /** Field keys in declaration order. The first is the Dimension for a
+   *  `date` or `category` Dataset; an `aggregate` one has no Dimension. */
+  keys: string[]
+}
+
+const d = (id: string, name: string, shape: PeniremitShape, keys: string[]): PeniremitDataset => ({
+  id: `peniremit.${id}`, name, shape, keys,
+})
+
+const VALUE = ['value', 'delta', 'changePercent']
+const MONEY = ['usd', 'ngn', 'usdDelta', 'ngnDelta', 'usdChangePercent', 'ngnChangePercent']
+const SHARE = ['category', 'usd', 'ngn', 'percentage', 'changePercent']
+
+export const PENIREMIT_DATASETS: PeniremitDataset[] = [
+  // Growth
+  d('total-registered-users', 'Total Registered Users', 'aggregate', VALUE),
+  d('total-registered-users-trend', 'Total Registered Users Trend', 'date', ['date', 'value']),
+  d('signups-summary', 'Signups Summary', 'aggregate', VALUE),
+  d('signups', 'Signups', 'date', ['date', 'value']),
+  d('first-transaction-rate', 'First Transaction Rate', 'aggregate', VALUE),
+  d('first-transaction-rate-trend', 'First Transaction Rate Trend', 'date', ['date', 'value']),
+  d('signup-outcomes-summary', 'Signup Outcomes Summary', 'aggregate',
+    ['completed', 'dropOffs', 'total', 'completedDelta', 'dropOffsDelta', 'completedChangePercent', 'dropOffsChangePercent']),
+  d('signup-outcomes', 'Signup Outcomes', 'date', ['date', 'value', 'dropOffs', 'total']),
+  d('signup-by-channel', 'Signups by Channel', 'category', ['category', 'value', 'delta', 'changePercent']),
+  d('user-growth', 'User Growth', 'aggregate', VALUE),
+
+  // Transaction
+  d('transfer-volume', 'Total Transfer Volume', 'date', ['date', 'usd', 'ngn']),
+  d('transaction-count-summary', 'Total Transactions', 'aggregate', VALUE),
+  d('transaction-count-trend', 'Total Transactions Trend', 'date', ['date', 'value']),
+  d('transaction-rate-summary', 'Transaction Rate Summary', 'aggregate',
+    ['total', 'successful', 'failed', 'pending', 'successRate', 'totalDelta', 'successfulDelta', 'failedDelta']),
+  d('transaction-rate', 'Transaction Rate', 'date', ['date', 'value', 'total', 'successful', 'failed', 'pending']),
+  d('deposit-volume-summary', 'Total Deposit', 'aggregate', MONEY),
+  d('deposit-volume-trend', 'Total Deposit Trend', 'date', ['date', 'usd', 'ngn']),
+  d('spend-volume-summary', 'Total Spend', 'aggregate', MONEY),
+  d('avg-transaction-value-summary', 'Avg Transaction Value', 'aggregate', MONEY),
+  d('spend-by-category', 'Spend by Category', 'category', SHARE),
+  d('top-token-deposits', 'Top Token Deposits', 'category', SHARE),
+  d('top-token-spend', 'Top Token Spend', 'category', SHARE),
+  d('smart-spend-token', 'Smart Spend Token', 'category', SHARE),
+  d('failure-reasons', 'Top Failure Reasons', 'category', ['category', 'value', 'percentage', 'changePercent']),
+
+  // Revenue
+  d('gross-revenue', 'Gross Revenue', 'date', ['date', 'usd', 'ngn']),
+  d('fee-revenue-trend', 'Fee Revenue Trend', 'date',
+    ['date', 'palmpayFeesUsd', 'palmpayFeesNgn', 'fxFeesUsd', 'fxFeesNgn', 'cardFeesUsd', 'cardFeesNgn']),
+  d('net-revenue', 'Net Revenue', 'date', ['date', 'usd', 'ngn']),
+  d('revenue-summary', 'Revenue Summary', 'aggregate',
+    ['grossFeeRevenueUsd', 'grossFeeRevenueNgn', 'palmpayFeesUsd', 'netMarginUsd',
+     'avgFeePerTransactionUsd', 'marginPerTransactionUsd']),
+  d('revenue-by-token', 'Revenue by Token', 'category', SHARE),
+  d('revenue-by-product', 'Revenue by Product', 'category', SHARE),
+  d('fx-revenue-by-token', 'FX Revenue by Token', 'category', SHARE),
+
+  // Engagement
+  d('active-users-summary', 'Active Users Summary', 'aggregate',
+    ['dau', 'mau', 'dauDelta', 'mauDelta', 'dauChangePercent', 'mauChangePercent']),
+  d('active-users', 'Active Users', 'date', ['date', 'dau', 'mau']),
+  d('avg-transfer-size', 'Avg Transfer Size', 'date', ['date', 'usd', 'ngn']),
+  d('tx-per-active-user-per-day-summary', 'Transactions per Active User per Day Summary', 'aggregate', VALUE),
+  d('tx-per-active-user-per-day', 'Transactions per Active User per Day', 'date', ['date', 'value']),
+  d('active-cards-summary', 'Active Cards Summary', 'aggregate', VALUE),
+  d('active-cards', 'Active Cards', 'date', ['date', 'value']),
+  d('kyc-outcomes-summary', 'KYC Outcomes Summary', 'aggregate',
+    ['completed', 'failed', 'completedDelta', 'failedDelta', 'completedChangePercent', 'failedChangePercent']),
+  d('kyc-outcomes', 'KYC Outcomes', 'date', ['date', 'completed', 'failed']),
+  d('engagement-summary', 'Engagement Summary', 'aggregate',
+    ['retention7d', 'retention30d', 'dauMauRatio', 'retention7dDelta', 'retention30dDelta', 'dauMauRatioDelta']),
+]
+
+export const peniremitDataset = (id: string): PeniremitDataset | undefined =>
+  PENIREMIT_DATASETS.find((entry) => entry.id === id)
