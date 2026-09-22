@@ -14,7 +14,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { typesFor, unavailableTypesFor } from './requirements'
-import { requireDataset } from '../data/datasets'
+import { datasets, requireDataset } from '../data/datasets'
 import { datasetFrom, type ApiDataset } from '../../catalogue/api-dataset'
 import { UNMAPPED_TYPE_IDS } from '../../dashboard/api-taxonomy'
 import { FAMILIES, WIDGET_TYPES } from '../widgets/catalog'
@@ -323,5 +323,72 @@ describe('too few records to distribute', () => {
       const picker = typesFor(dataset).some((type) => type.id === 'histogram')
       expect({ volume, family, picker }).toEqual({ volume, family: picker, picker })
     }
+  })
+})
+
+/*
+ * The picker and the Family answer the same question and used to disagree.
+ *
+ * `Widget.visualization_type` is documented as "must belong to a Family the
+ * bound Dataset's Data Shape satisfies — checked on save", so an offer the
+ * Family refuses is work an Author can do and cannot keep: choose the chart,
+ * map the fields, watch it draw, have the save rejected. Across the fixtures
+ * that was 54 of 349 offers before this was closed.
+ */
+describe('the picker never offers what the API would refuse', () => {
+  const familyOf = new Map(WIDGET_TYPES.map((type) => [type.id, type.family]))
+
+  test('every offered Type belongs to a satisfied Family, for every fixture', () => {
+    const contradictions: string[] = []
+    for (const summary of datasets) {
+      const dataset = requireDataset(summary.id)
+      const satisfied = new Set(
+        visualizationFamilies
+          .filter((family) => satisfies(dataset, family.dataShape).status === 'satisfied')
+          .map((family) => family.id),
+      )
+      for (const type of typesFor(dataset)) {
+        if (!satisfied.has(familyOf.get(type.id) ?? '')) {
+          contradictions.push(`${summary.id}/${type.id}`)
+        }
+      }
+    }
+    expect(contradictions).toEqual([])
+  })
+
+  test('a Composition Type is withheld where no Measure is additive', () => {
+    /*
+     * The case that motivated this. A donut's slots are one Dimension and one
+     * Measure, which nearly every Dataset has — so slots alone offered a donut
+     * over a Dataset declaring nothing additive, and summing percentages is the
+     * canonical meaningless total.
+     */
+    const plain = datasetFrom(
+      apiDataset([
+        { key: 'token', label: 'Token', type: 'category', role: 'dimension' },
+        { key: 'share', label: 'Share', type: 'number', role: 'measure', aggregations: ['average'] },
+      ]),
+    )
+    expect(typesFor(plain).some((type) => type.id === 'donut-chart')).toBe(false)
+    expect(reasonFor(plain, 'donut-chart')).toMatchObject({ kind: 'undeclared' })
+  })
+
+  test('and offered once one is', () => {
+    const declared = datasetFrom(
+      apiDataset([
+        { key: 'token', label: 'Token', type: 'category', role: 'dimension' },
+        { key: 'usd', label: 'USD', type: 'number', role: 'measure', semantic: 'additive-total', aggregations: ['sum'] },
+      ]),
+    )
+    expect(typesFor(declared).some((type) => type.id === 'donut-chart')).toBe(true)
+  })
+
+  test('the absence says who can fix it', () => {
+    // `undeclared` and `shape` are different situations. One is the publisher's
+    // to act on today; the other is arithmetic nobody can declare away.
+    const noMeasure = datasetFrom(
+      apiDataset([{ key: 'token', label: 'Token', type: 'category', role: 'dimension' }]),
+    )
+    expect(reasonFor(noMeasure, 'scatter-plot')).toMatchObject({ kind: 'shape' })
   })
 })

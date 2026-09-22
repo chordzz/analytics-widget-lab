@@ -23,6 +23,8 @@
 
 import { acceptedByApi } from '../../dashboard/api-taxonomy'
 import { WIDGET_TYPES, widgetType } from '../widgets/catalog'
+import { satisfies as familySatisfies } from '../../visualization/data-shape'
+import { visualizationFamilies } from '../../visualization/families'
 import type { WidgetType } from '../widgets/catalog'
 import {
   fieldOf,
@@ -351,29 +353,42 @@ export const candidatesFor = (dataset: Dataset, entry: Slot): Field[] =>
     (field) => entry.accepts.includes(field.role) && (!entry.geo || isGeographic(field)),
   )
 
+/** The Data Shape a widget type's Family requires, if we model that Family. */
+export const familyShapeFor = (typeId: string) =>
+  visualizationFamilies.find((family) => family.id === widgetType(typeId)?.family)?.dataShape
+
 /**
- * Whether a Dataset can fill a widget type's required slots.
+ * Whether this Dataset can carry this widget type.
  *
- * Slots are about Fields. `manyRows` is the one requirement that is not —
- * a histogram over a single pre-aggregated figure is not a histogram, and no
- * arrangement of Fields fixes that.
+ * Two questions, and both have to hold. **Can the Family present this Dataset
+ * at all** — FR-VZ-05, and the one the API enforces — and **can the Fields fill
+ * the slots** this particular Type needs.
  *
- * It sat in `needs` and was read by nothing, which was defensible while record
- * volume was a descriptor we had proposed and no API carried: there was nothing
- * to enforce it against. `record_volume` landed on 18 September, and leaving it
- * unenforced then put the Type picker at odds with its own Family — Distribution
- * withheld, and a histogram offered anyway.
+ * Slots alone was the rule until 22 September, and it offered work that could
+ * not be kept. `Widget.visualization_type` is documented as *"must belong to a
+ * Family the bound Dataset's Data Shape satisfies — checked on save, so a
+ * stored Widget can never reference a chart its Dataset could not render."* A
+ * donut needs one Dimension and one Measure, which nearly every Dataset has, so
+ * the picker offered it over a Dataset declaring no additive Measure; an Author
+ * could choose it, map it, watch it draw, and have the save refused. Across our
+ * own fixtures that was 54 of 349 offers — one in seven, every one a dead end.
  *
- * Undeclared is not "many". This withholds where the publisher has not said,
- * which is the same answer Distribution gives and the same answer
- * `/presentation` gives. `unavailableTypesFor` explains the absence rather than
- * leaving it silent.
+ * Our clauses are the same as the API's published rules, and narrower in one
+ * place: Geospatial asks us for a Measure and asks them for nothing. Narrower
+ * is the safe direction — we withhold something they would have accepted, which
+ * costs an option, where the other way costs somebody their work.
+ *
+ * `needs.manyRows` used to be checked here separately. Distribution's Family
+ * clause is the same rule, so the explicit check is gone rather than left
+ * beside it: two statements of one requirement is how the backend's own
+ * publication gate and `/presentation` drifted apart.
  */
 export function satisfies(typeId: string, dataset: Dataset): boolean {
   const entries = slotsFor(typeId)
   if (entries.length === 0) return false
 
-  if (widgetType(typeId)?.needs.manyRows === true && dataset.recordVolume !== 'many') return false
+  const shape = familyShapeFor(typeId)
+  if (shape && familySatisfies(dataset, shape).status !== 'satisfied') return false
 
   /*
    * Slots are checked against a shared pool rather than independently. A radar
@@ -480,28 +495,6 @@ export function unavailableTypesFor(
  * act on.
  */
 function reasonFor(typeId: string, dataset: Dataset): UnavailableReason {
-  /*
-   * Volume first, because it is not a slot and the slot loop would otherwise
-   * find every Field present and fall through to "does not suit this widget
-   * type" — true, and useless to whoever has to act on it.
-   *
-   * Two different answers, and only one is the publisher's to fix. Undeclared
-   * means nobody has said how many rows; `few` means they said, and a
-   * distribution over tens of rows is genuinely the wrong shape.
-   */
-  if (widgetType(typeId)?.needs.manyRows === true && dataset.recordVolume !== 'many') {
-    return dataset.recordVolume === undefined
-      ? {
-          kind: 'undeclared',
-          because:
-            'Needs to be over many records, and this Dataset does not say how many it holds.',
-        }
-      : {
-          kind: 'shape',
-          because: `${dataset.name} holds too few records for a distribution to mean anything.`,
-        }
-  }
-
   const claimed = new Set<string>()
 
   for (const entry of slotsFor(typeId)) {
@@ -545,9 +538,69 @@ function reasonFor(typeId: string, dataset: Dataset): UnavailableReason {
     return { kind: 'shape', because: shortfall(entry, available.length) }
   }
 
-  // Every slot fills, so the type was excluded for a reason the slot table does
-  // not model. Saying so beats inventing one.
+  /*
+   * Every slot fills, so whatever excluded this Type is not about Fields. The
+   * Family is the remaining reason and the only one that carries information —
+   * a donut's slots are one Dimension and one Measure, which nearly every
+   * Dataset has, and it is Composition asking for an additive Measure that
+   * withholds it.
+   *
+   * Second rather than first, deliberately. The slot messages above are more
+   * specific ("needs a Measure, and this has none"), and checking the Family
+   * ahead of them replaced those with a vaguer restatement of the same fact.
+   */
+  const familyReason = familyShortfall(typeId, dataset)
+  if (familyReason) return familyReason
+
+  // Neither the slots nor the Family explain it. Saying so beats inventing one.
   return { kind: 'shape', because: `${dataset.name} does not suit this widget type.` }
+}
+
+/**
+ * Why this Type's Family cannot present this Dataset, said to whoever can act.
+ *
+ * The distinction is the whole value of the message. A clause carrying an
+ * `undecidable` block is one a *declaration* would settle — nobody has said
+ * this Measure is additive, or how many rows there are — and the publisher can
+ * fix it today. A clause without one is arithmetic: two Measures are needed and
+ * there is one, and no declaration changes that.
+ *
+ * The clause is re-walked rather than read off `unmet`, which carries only the
+ * descriptions. Matching those strings back to their clauses would work until
+ * somebody edited one.
+ */
+function familyShortfall(typeId: string, dataset: Dataset): UnavailableReason | null {
+  const shape = familyShapeFor(typeId)
+  if (!shape || familySatisfies(dataset, shape).status === 'satisfied') return null
+
+  const failing = shape.clauses.find(
+    (clause) => !(clause.testWithSemantics ?? clause.test)(dataset),
+  )
+  if (!failing) return null
+
+  /*
+   * Record volume is the one descriptor with a meaningful *negative*, and the
+   * generic rule below cannot see it.
+   *
+   * Every other clause turns on a flag being present — a Measure marked
+   * additive, a Dimension marked a state — so failing means nobody declared it,
+   * and "the publisher can declare it" is true. `recordVolume` can be declared
+   * `few`, and telling a publisher who said so that they have not said is both
+   * wrong and unactionable: there is no further declaration to make.
+   */
+  if (dataset.recordVolume === 'few' && failing.describe.includes('many records')) {
+    return {
+      kind: 'shape',
+      because: `${dataset.name} holds too few records for a distribution to mean anything.`,
+    }
+  }
+
+  return failing.undecidable
+    ? {
+        kind: 'undeclared',
+        because: `Needs ${failing.describe}. The publisher can declare it; ${dataset.name} has not.`,
+      }
+    : { kind: 'shape', because: `This widget needs ${failing.describe}.` }
 }
 
 function shortfall(entry: Slot, has: number): string {

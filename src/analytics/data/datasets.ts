@@ -235,9 +235,9 @@ const revenueDaily = (): Draft => {
     source: 'Billing',
     fields: [
       { key: 'date', label: 'Date', role: 'time-dimension' },
-      { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
-      { key: 'orders', label: 'Orders', role: 'measure', format: 'number' },
-      { key: 'refunds', label: 'Refunds', role: 'measure', format: 'currency' },
+      { key: 'revenue', label: 'Revenue', role: 'measure', semantic: 'additive-total', format: 'currency' },
+      { key: 'orders', label: 'Orders', role: 'measure', semantic: 'additive-total', format: 'number' },
+      { key: 'refunds', label: 'Refunds', role: 'measure', semantic: 'additive-total', format: 'currency' },
     ],
     rows: dates.map((date, index) => ({
       date,
@@ -265,9 +265,9 @@ const revenueMonthly = (): Draft => {
     source: 'Billing',
     fields: [
       { key: 'month', label: 'Month', role: 'time-dimension' },
-      { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
-      { key: 'target', label: 'Target', role: 'measure', format: 'currency' },
-      { key: 'customers', label: 'Customers', role: 'measure', format: 'number' },
+      { key: 'revenue', label: 'Revenue', role: 'measure', semantic: 'additive-total', format: 'currency' },
+      { key: 'target', label: 'Target', role: 'measure', semantic: 'additive-total', format: 'currency' },
+      { key: 'customers', label: 'Customers', role: 'measure', semantic: 'additive-total', format: 'number' },
     ],
     rows: months.map((month, index) => ({
       month,
@@ -294,16 +294,16 @@ const salesByRegion = (): Draft => {
     source: 'Billing',
     fields: [
       { key: 'region', label: 'Region', role: 'dimension' },
-      { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
-      { key: 'orders', label: 'Orders', role: 'measure', format: 'number' },
+      { key: 'revenue', label: 'Revenue', role: 'measure', semantic: 'additive-total', format: 'currency' },
+      { key: 'orders', label: 'Orders', role: 'measure', semantic: 'additive-total', format: 'number' },
       { key: 'growth', label: 'Growth', role: 'measure', format: 'percent' },
       // The three ways that revenue arrives. Parts of `revenue`, and the only
       // Measures in the fixtures that genuinely sum to another one — which is
       // what a 100% stacked bar needs and what the rest of this file, pairing
       // revenue with orders or adoption with retention, cannot offer.
-      { key: 'subscriptions', label: 'Subscriptions', role: 'measure', format: 'currency' },
-      { key: 'usage', label: 'Usage', role: 'measure', format: 'currency' },
-      { key: 'services', label: 'Services', role: 'measure', format: 'currency' },
+      { key: 'subscriptions', label: 'Subscriptions', role: 'measure', semantic: 'additive-total', format: 'currency' },
+      { key: 'usage', label: 'Usage', role: 'measure', semantic: 'additive-total', format: 'currency' },
+      { key: 'services', label: 'Services', role: 'measure', semantic: 'additive-total', format: 'currency' },
     ],
     rows: regions.map((region, index) => {
       const revenue = Math.round(between(random, 180_000, 920_000))
@@ -354,8 +354,8 @@ const salesByCountry = (): Draft => {
       { key: 'country', label: 'Country', role: 'dimension' },
       { key: 'lat', label: 'Latitude', role: 'measure', format: 'number', semantic: 'geographic-latitude' },
       { key: 'lng', label: 'Longitude', role: 'measure', format: 'number', semantic: 'geographic-longitude' },
-      { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
-      { key: 'customers', label: 'Customers', role: 'measure', format: 'number' },
+      { key: 'revenue', label: 'Revenue', role: 'measure', semantic: 'additive-total', format: 'currency' },
+      { key: 'customers', label: 'Customers', role: 'measure', semantic: 'additive-total', format: 'number' },
     ],
     rows: countries.map(([code, country, lat, lng]) => ({
       code,
@@ -386,11 +386,11 @@ const productPerformance = (): Draft => {
     source: 'Product analytics',
     fields: [
       { key: 'product', label: 'Product', role: 'dimension' },
-      { key: 'revenue', label: 'Revenue', role: 'measure', format: 'currency' },
+      { key: 'revenue', label: 'Revenue', role: 'measure', semantic: 'additive-total', format: 'currency' },
       { key: 'adoption', label: 'Adoption', role: 'measure', format: 'percent' },
       { key: 'retention', label: 'Retention', role: 'measure', format: 'percent' },
       { key: 'satisfaction', label: 'Satisfaction', role: 'measure', format: 'number' },
-      { key: 'tickets', label: 'Support tickets', role: 'measure', format: 'number' },
+      { key: 'tickets', label: 'Support tickets', role: 'measure', semantic: 'additive-total', format: 'number' },
     ],
     rows: products.map((product) => ({
       product,
@@ -424,7 +424,7 @@ const signupFunnel = (): Draft => {
     source: 'Product analytics',
     fields: [
       { key: 'stage', label: 'Stage', role: 'dimension' },
-      { key: 'users', label: 'Users', role: 'measure', format: 'number' },
+      { key: 'users', label: 'Users', role: 'measure', semantic: 'additive-total', format: 'number' },
       { key: 'position', label: 'Position', role: 'measure', format: 'number' },
     ],
     rows: stages.map(([stage, users], index) => ({ stage, users, position: index })),
@@ -450,7 +450,7 @@ const trafficFlow = (): Draft => {
     fields: [
       { key: 'from', label: 'From', role: 'dimension' },
       { key: 'to', label: 'To', role: 'dimension' },
-      { key: 'sessions', label: 'Sessions', role: 'measure', format: 'number' },
+      { key: 'sessions', label: 'Sessions', role: 'measure', semantic: 'additive-total', format: 'number' },
     ],
     rows: links.map(([from, to]) => ({ from, to, sessions: intBetween(random, 1_200, 28_000) })),
   }
@@ -499,7 +499,7 @@ const transactions = (): Draft => {
     fields: [
       { key: 'id', label: 'Transaction', role: 'dimension' },
       { key: 'channel', label: 'Channel', role: 'dimension' },
-      { key: 'amount', label: 'Amount', role: 'measure', format: 'currency' },
+      { key: 'amount', label: 'Amount', role: 'measure', semantic: 'additive-total', format: 'currency' },
       { key: 'duration', label: 'Settlement time', role: 'measure', format: 'duration' },
     ],
     rows,
@@ -539,10 +539,17 @@ const cohortRetention = (): Draft => {
       { key: 'cohort', label: 'Cohort', role: 'time-dimension' },
       { key: 'period', label: 'Period', role: 'dimension' },
       { key: 'retention', label: 'Retention', role: 'measure', format: 'percent' },
-      { key: 'users', label: 'Users', role: 'measure', format: 'number' },
+      { key: 'users', label: 'Users', role: 'measure', semantic: 'additive-total', format: 'number' },
     ],
     rows,
   }
+}
+
+/** `2026-01-05` plus n days, as an ISO date. */
+const dayOffsetFrom = (start: string, days: number): string => {
+  const at = new Date(`${start}T00:00:00Z`)
+  at.setUTCDate(at.getUTCDate() + days)
+  return at.toISOString().slice(0, 10)
 }
 
 // --- 10. Project timeline ---------------------------------------------------
@@ -563,7 +570,19 @@ const projectTimeline = (): Draft => {
     name: 'Project timeline',
     description: 'Nine workstreams with start and end offsets, grouped by phase.',
     source: 'Delivery',
+    /*
+     * The date is here because the Gantt's Family requires it, and the Family
+     * is right to.
+     *
+     * `timeline-chart` sits in Temporal Pattern, whose Data Shape asks for a
+     * Time Dimension — the API enforces that on save, so a Gantt bound to a
+     * Dataset without one is a Widget that cannot be stored. This fixture used
+     * day-offsets alone, which draws perfectly well and could never have been
+     * published. Real project tasks have dates; the offsets stay because that
+     * is what the renderer plots.
+     */
     fields: [
+      { key: 'begins_on', label: 'Begins on', role: 'time-dimension' },
       { key: 'task', label: 'Task', role: 'dimension' },
       { key: 'phase', label: 'Phase', role: 'dimension' },
       { key: 'start', label: 'Start day', role: 'measure', format: 'number' },
@@ -571,6 +590,7 @@ const projectTimeline = (): Draft => {
       { key: 'progress', label: 'Progress', role: 'measure', format: 'percent' },
     ],
     rows: tasks.map(([task, phase, start, end]) => ({
+      begins_on: dayOffsetFrom('2026-01-05', start),
       task,
       phase,
       start,
@@ -675,7 +695,7 @@ const supportTickets = (): Draft => {
       { key: 'priority', label: 'Priority', role: 'dimension' },
       { key: 'team', label: 'Team', role: 'dimension' },
       { key: 'ageDays', label: 'Age', role: 'measure', format: 'number' },
-      { key: 'replies', label: 'Replies', role: 'measure', format: 'number' },
+      { key: 'replies', label: 'Replies', role: 'measure', semantic: 'additive-total', format: 'number' },
     ],
     rows: days.map((opened, index) => ({
       ref: `SUP-${4200 + index}`,
@@ -734,10 +754,10 @@ const revenueMix = (): Draft => {
     fields: [
       { key: 'month', label: 'Month', role: 'time-dimension' },
       { key: 'region', label: 'Region', role: 'dimension' },
-      { key: 'subscriptions', label: 'Subscriptions', role: 'measure', format: 'currency' },
-      { key: 'usage', label: 'Usage', role: 'measure', format: 'currency' },
-      { key: 'services', label: 'Services', role: 'measure', format: 'currency' },
-      { key: 'revenue', label: 'Total revenue', role: 'measure', format: 'currency' },
+      { key: 'subscriptions', label: 'Subscriptions', role: 'measure', semantic: 'additive-total', format: 'currency' },
+      { key: 'usage', label: 'Usage', role: 'measure', semantic: 'additive-total', format: 'currency' },
+      { key: 'services', label: 'Services', role: 'measure', semantic: 'additive-total', format: 'currency' },
+      { key: 'revenue', label: 'Total revenue', role: 'measure', semantic: 'additive-total', format: 'currency' },
     ],
     rows,
   }
