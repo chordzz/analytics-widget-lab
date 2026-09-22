@@ -351,10 +351,29 @@ export const candidatesFor = (dataset: Dataset, entry: Slot): Field[] =>
     (field) => entry.accepts.includes(field.role) && (!entry.geo || isGeographic(field)),
   )
 
-/** Whether a dataset has enough of the right fields for every required slot. */
+/**
+ * Whether a Dataset can fill a widget type's required slots.
+ *
+ * Slots are about Fields. `manyRows` is the one requirement that is not —
+ * a histogram over a single pre-aggregated figure is not a histogram, and no
+ * arrangement of Fields fixes that.
+ *
+ * It sat in `needs` and was read by nothing, which was defensible while record
+ * volume was a descriptor we had proposed and no API carried: there was nothing
+ * to enforce it against. `record_volume` landed on 18 September, and leaving it
+ * unenforced then put the Type picker at odds with its own Family — Distribution
+ * withheld, and a histogram offered anyway.
+ *
+ * Undeclared is not "many". This withholds where the publisher has not said,
+ * which is the same answer Distribution gives and the same answer
+ * `/presentation` gives. `unavailableTypesFor` explains the absence rather than
+ * leaving it silent.
+ */
 export function satisfies(typeId: string, dataset: Dataset): boolean {
   const entries = slotsFor(typeId)
   if (entries.length === 0) return false
+
+  if (widgetType(typeId)?.needs.manyRows === true && dataset.recordVolume !== 'many') return false
 
   /*
    * Slots are checked against a shared pool rather than independently. A radar
@@ -461,6 +480,28 @@ export function unavailableTypesFor(
  * act on.
  */
 function reasonFor(typeId: string, dataset: Dataset): UnavailableReason {
+  /*
+   * Volume first, because it is not a slot and the slot loop would otherwise
+   * find every Field present and fall through to "does not suit this widget
+   * type" — true, and useless to whoever has to act on it.
+   *
+   * Two different answers, and only one is the publisher's to fix. Undeclared
+   * means nobody has said how many rows; `few` means they said, and a
+   * distribution over tens of rows is genuinely the wrong shape.
+   */
+  if (widgetType(typeId)?.needs.manyRows === true && dataset.recordVolume !== 'many') {
+    return dataset.recordVolume === undefined
+      ? {
+          kind: 'undeclared',
+          because:
+            'Needs to be over many records, and this Dataset does not say how many it holds.',
+        }
+      : {
+          kind: 'shape',
+          because: `${dataset.name} holds too few records for a distribution to mean anything.`,
+        }
+  }
+
   const claimed = new Set<string>()
 
   for (const entry of slotsFor(typeId)) {
@@ -481,6 +522,10 @@ function reasonFor(typeId: string, dataset: Dataset): UnavailableReason {
      */
     if (entry.geo) {
       /*
+       * No longer inexpressible — `semantic` landed on 17 September — so the
+       * wording says what is missing rather than blaming the contract for it.
+       */
+      /*
        * Named by what the slot wants rather than by the first thing missing.
        * A point map's place slot failing is not the whole story — it also needs
        * a latitude and a longitude — and an Author told only about the first
@@ -493,7 +538,7 @@ function reasonFor(typeId: string, dataset: Dataset): UnavailableReason {
 
       return {
         kind: 'undeclared',
-        because: `Needs ${wants} — something the publication contract cannot express yet.`,
+        because: `Needs ${wants}. The publisher can declare it; this Dataset has not.`,
       }
     }
 
