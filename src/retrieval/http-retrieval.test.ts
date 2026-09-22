@@ -77,14 +77,32 @@ describe('the rows are found under either documented reading', () => {
     expect(relays[0].shape).toBe('nested')
   })
 
-  test('rows nowhere either reading puts them raises rather than reading empty', async () => {
+  test('aggregate — one object, read as the single row it is', async () => {
+    // What every stat card in Peniremit's four dashboards returns.
+    const { port } = retrievalWith({
+      status: true,
+      message: 'OK',
+      data: { value: 1420, delta: 28, changePercent: 2.01 },
+    })
+    const result = await port.retrieve('d', {}, viewer())
+    expect(result).toMatchObject({ kind: 'rows' })
+    if (result.kind !== 'rows') throw new Error('unreachable')
+    expect(result.rows).toEqual([{ value: 1420, delta: 28, changePercent: 2.01 }])
+  })
+
+  test('rows in none of the three readings raises rather than reading empty', async () => {
     /*
-     * "No data" is a claim about the world and this is not evidence for it. A
-     * Dataset that genuinely has nothing returns `200` with an empty array, and
-     * that is a different response from one whose shape we cannot read.
+     * "No data" is a claim about the world and an unreadable body is not
+     * evidence for it. A Dataset that genuinely has nothing returns `200` with
+     * an empty array, which is a different response from one we cannot parse.
+     *
+     * This used `data: { total: 4 }`, which was unreadable until 22 September
+     * and is now a perfectly good aggregate answer. The property is unchanged;
+     * the example had to move to something that is genuinely not a shape —
+     * a scalar carries neither rows nor fields.
      */
-    const { port } = retrievalWith({ status: true, message: 'OK', data: { total: 4 } })
-    expect(port.retrieve('d', {}, viewer())).rejects.toThrow(/did not carry rows/)
+    const { port } = retrievalWith({ status: true, message: 'OK', data: 'four' })
+    expect(port.retrieve('d', {}, viewer())).rejects.toThrow(/neither rows nor a single aggregate/)
   })
 })
 
@@ -298,3 +316,76 @@ describe('filter values are not guessed from a retrieval', () => {
 })
 
 const viewer = () => ({ id: 'u1', displayName: 'Test' })
+
+/*
+ * The aggregate shape, which is a different kind of answer rather than a third
+ * ambiguity about where the rows live.
+ *
+ * `PresentationOption.single_value` asks for it by name: back a stat card with
+ * "an aggregate-shaped Dataset — the Source System returns the figure over the
+ * received filters; Analytics and the frontend never compute it." We rejected
+ * it outright until 22 September, which gave every stat card across Peniremit's
+ * four dashboards a `failed` widget instead of a number — sixteen of their
+ * forty-one Datasets.
+ */
+describe('one object is one row', () => {
+  const aggregate = (data: unknown, meta?: unknown) => ({
+    status: true,
+    message: 'OK',
+    data,
+    ...(meta === undefined ? {} : { meta }),
+  })
+  const rowsOf = async (body: unknown) => {
+    const { port } = retrievalWith(body)
+    const result = await port.retrieve('d', {}, viewer())
+    if (result.kind !== 'rows') throw new Error(`expected rows, got ${result.kind}`)
+    return result.rows
+  }
+
+  test('the shape is reported as its own, not as flat', async () => {
+    const { port, relays } = retrievalWith(aggregate({ value: 1 }))
+    await port.retrieve('d', {}, viewer())
+    expect(relays[0].shape).toBe('aggregate')
+  })
+
+  test('a zero figure is a figure', async () => {
+    // `0` is falsy and a real answer. Nothing here may treat it as absence.
+    expect(await rowsOf(aggregate({ value: 0 }))).toEqual([{ value: 0 }])
+  })
+
+  test('an object with no fields is empty, not a row of nothing', async () => {
+    /*
+     * A stat card over `{}` reads `NaN`, which draws as a dash and looks like a
+     * rendering fault. Zero rows reaches `empty` instead — one of the six
+     * render states, and the one that says plainly that the endpoint answered
+     * with nothing. A genuine zero still carries its key, so the two stay
+     * distinguishable.
+     */
+    const { port } = retrievalWith(aggregate({}))
+    expect(await port.retrieve('d', {}, viewer())).toMatchObject({ kind: 'empty' })
+  })
+
+  test('nesting and aggregating are orthogonal', async () => {
+    // A publisher may do both. Refusing that combination would be an accident
+    // of the order these two checks happen to run in.
+    expect(await rowsOf(aggregate({ status: true, message: 'OK', data: { value: 7 } }))).toEqual([
+      { value: 7 },
+    ])
+  })
+
+  test('a partial marker still reaches the card', async () => {
+    const { port, relays } = retrievalWith(
+      aggregate({ value: 5 }, { partial: true, reason: 'capped at 10,000 rows' }),
+    )
+    await port.retrieve('d', {}, viewer())
+    expect(relays[0]).toMatchObject({ partial: true, reason: 'capped at 10,000 rows' })
+  })
+
+  test('an array is still an array', async () => {
+    // The guard on the new branch: adding it must not reclassify the two
+    // shapes that already worked.
+    const { port, relays } = retrievalWith(aggregate([{ date: '2026-08-01', value: 1 }]))
+    await port.retrieve('d', {}, viewer())
+    expect(relays[0].shape).toBe('flat')
+  })
+})
