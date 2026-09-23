@@ -22,55 +22,10 @@
  * shares that sums to 340% is the failure mode.
  */
 
-export type PeniremitShape = 'aggregate' | 'date' | 'category'
+import { d, BASE_PARAMS, type PeniremitDataset, type PeniremitShape } from './peniremit-catalogue-shape'
 
-export interface PeniremitDataset {
-  id: string
-  name: string
-  shape: PeniremitShape
-  /** Field keys in declaration order. The first is the Dimension for a
-   *  `date` or `category` Dataset; an `aggregate` one has no Dimension. */
-  keys: string[]
-  /** Measures declared `semantic: additive-total`. Empty where none are. */
-  additive?: string[]
-  /**
-   * Filter Parameters beyond `from`/`to`, which every Dataset here declares.
-   *
-   * Stated per Dataset rather than assumed from its shape. The first version of
-   * this file inferred them — `granularity` for anything grained by date, and
-   * nothing else — and that inference was wrong in the direction that matters:
-   * it said `peniremit.transaction-count-summary` had no `status`, so a card
-   * the guide describes looked impossible. It declares one, with
-   * `allowed_values: ["success", "failed", "all"]`.
-   *
-   * The query endpoint refuses any parameter a Dataset did not advertise, so an
-   * over-declaration here produces a 400 at runtime and an under-declaration
-   * hides a card that works. Neither is recoverable by guessing, which is why
-   * `bun run conform --dump-catalogue` exists: it writes the live declarations,
-   * and those replace anything transcribed here.
-   */
-  params?: string[]
-}
-
-const d = (
-  id: string,
-  name: string,
-  shape: PeniremitShape,
-  keys: string[],
-  extra: { additive?: string[]; params?: string[] } = {},
-): PeniremitDataset => ({
-  id: `peniremit.${id}`,
-  name,
-  shape,
-  keys,
-  ...(extra.additive ? { additive: extra.additive } : {}),
-  // Everything grained by date takes `granularity`; the guide is consistent on
-  // that and the live declarations agree.
-  params: [...(shape === 'date' ? ['granularity'] : []), ...(extra.params ?? [])],
-})
-
-/** Every Dataset's `from`/`to`, which none of them omit. */
-export const BASE_PARAMS = ['from', 'to']
+export { BASE_PARAMS }
+export type { PeniremitDataset, PeniremitShape }
 
 /** Money totals. Every category Dataset that measures value in both currencies. */
 const MONEY_ADDITIVE = ['usd', 'ngn']

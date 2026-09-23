@@ -11,7 +11,8 @@
     "typecheck": "tsc -b",
     "preview": "vite preview",
     "docs": "bun run scripts/generate-contract-docs.ts",
-    "conform": "bun run scripts/conform.ts"
+    "conform": "bun run scripts/conform.ts",
+    "catalogue": "bun run scripts/conform.ts --dump-catalogue"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

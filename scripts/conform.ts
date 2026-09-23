@@ -13,6 +13,16 @@
  *
  *   ANALYTICS_TOKEN=... bun run scripts/conform.ts
  *   ANALYTICS_TOKEN=... bun run scripts/conform.ts --base https://…
+ *   ANALYTICS_TOKEN=... bun run scripts/conform.ts --dump-catalogue
+ *
+ * `--dump-catalogue` writes Peniremit's live declarations to
+ * `src/boards/peniremit-catalogue.generated.ts`. The boards bind against a
+ * catalogue that was transcribed from a PDF, and a transcribed declaration is
+ * a guess: this one claimed a Dataset had no `status` parameter when it has
+ * one, which sent a working card down a worse route. Without the flag the run
+ * still *compares* the two and fails on any difference, because a stale
+ * transcription is otherwise silent — every board validates against it, and
+ * the first sign of trouble is a Widget that 400s in front of someone.
  *
  * The token is your own access token — the `access_token` from sign-in, which
  * the browser holds in `localStorage` under `smc.analytics.auth.v1`. It is read
@@ -166,12 +176,152 @@ interface ApiField {
 interface ApiDataset {
   id: string
   name: string
+  description?: string
   status?: string
+  time_dimension_field?: string | null
   fields?: ApiField[]
   grain?: string[]
   record_volume?: string
   time_range?: { field: string; from_parameter: string; to_parameter: string }
   filter_parameters?: { name: string; type: string; allowed_values?: string[] }[]
+}
+
+
+// --- generating the catalogue ------------------------------------------------
+
+/**
+ * The transcribed catalogue is the thing most likely to be quietly wrong.
+ *
+ * `src/boards/peniremit-catalogue.ts` was typed out of a PDF, and typing out a
+ * declaration is guessing with extra steps: it claimed
+ * `peniremit.transaction-count-summary` had no `status` parameter, which sent a
+ * working card down a worse route and produced a wrong bug report for the
+ * publisher. Nothing in the repository could have caught it, because both the
+ * board and the check read the same transcription.
+ *
+ * So generate it. What the API returns is the declaration by definition, and a
+ * file written from it cannot disagree with the thing it describes.
+ */
+const shapeOf = (dataset: ApiDataset): 'aggregate' | 'date' | 'category' => {
+  // An empty grain is the endpoint saying it answers with one summary row —
+  // meaningful, and distinct from an absent grain, which says nothing.
+  if (dataset.grain?.length === 0) return 'aggregate'
+  if (dataset.time_dimension_field) return 'date'
+  return 'category'
+}
+
+const quote = (value: string) => `'${value.replace(/'/g, "\\'")}'`
+const list = (values: readonly string[]) => `[${values.map(quote).join(', ')}]`
+
+function renderCatalogue(datasets: readonly ApiDataset[]): string {
+  const entries = [...datasets]
+    .sort((a, b) => a.id.localeCompare(b.id))
+    .map((dataset) => {
+      const shape = shapeOf(dataset)
+      const keys = (dataset.fields ?? []).map((field) => field.key)
+      const additive = (dataset.fields ?? [])
+        .filter((field) => field.semantic === 'additive-total')
+        .map((field) => field.key)
+      // `from`/`to` are on every Dataset and live in BASE_PARAMS; `granularity`
+      // is implied by the shape. Everything else has to be stated.
+      const params = (dataset.filter_parameters ?? [])
+        .map((parameter) => parameter.name)
+        .filter((name) => !['from', 'to', 'granularity'].includes(name))
+
+      const extra: string[] = []
+      if (additive.length > 0) extra.push(`additive: ${list(additive)}`)
+      if (params.length > 0) extra.push(`params: ${list(params)}`)
+
+      const id = dataset.id.replace(/^peniremit\./, '')
+      return (
+        `  d(${quote(id)}, ${quote(dataset.name)}, ${quote(shape)}, ${list(keys)}` +
+        `${extra.length > 0 ? `, { ${extra.join(', ')} }` : ''}),`
+      )
+    })
+
+  return [
+    '/**',
+    ' * GENERATED — do not edit.',
+    ' *',
+    ` * Written by \`bun run conform --dump-catalogue\` from ${BASE}`,
+    ` * on ${new Date().toISOString().slice(0, 10)}, reading ${String(datasets.length)} published Datasets.`,
+    ' *',
+    ' * Regenerate rather than correcting by hand. The previous version of this',
+    ' * file was transcribed from a PDF and was wrong about a filter parameter in',
+    ' * the direction that hides a working card.',
+    ' */',
+    '',
+    "import { d, type PeniremitDataset } from './peniremit-catalogue-shape'",
+    '',
+    'export const PENIREMIT_DATASETS: PeniremitDataset[] = [',
+    ...entries,
+    ']',
+    '',
+  ].join('\n')
+}
+
+/**
+ * What the live declarations say that the transcription does not.
+ *
+ * Reported as a check rather than only written to a file, because a stale
+ * transcription is silent: every board still validates against it, and the
+ * first sign of trouble is a Widget that 400s in front of a user.
+ */
+async function compareCatalogue(live: readonly ApiDataset[]): Promise<void> {
+  const { PENIREMIT_DATASETS } = await import('../src/boards/peniremit-catalogue')
+  const ours = new Map(PENIREMIT_DATASETS.map((entry) => [entry.id, entry]))
+
+  const drift: string[] = []
+  for (const dataset of live) {
+    const mine = ours.get(dataset.id)
+    if (!mine) {
+      drift.push(`${dataset.id}: published, absent from the catalogue`)
+      continue
+    }
+
+    const liveKeys = (dataset.fields ?? []).map((field) => field.key).join(',')
+    if (liveKeys !== mine.keys.join(',')) {
+      drift.push(`${dataset.id}: fields — live ${liveKeys || '(none)'}, ours ${mine.keys.join(',')}`)
+    }
+
+    const liveParams = (dataset.filter_parameters ?? [])
+      .map((parameter) => parameter.name)
+      .filter((name) => !['from', 'to'].includes(name))
+      .sort()
+    const ourParams = [...(mine.params ?? [])].sort()
+    if (liveParams.join(',') !== ourParams.join(',')) {
+      drift.push(
+        `${dataset.id}: parameters — live ${liveParams.join(',') || '(none beyond from/to)'}, ` +
+          `ours ${ourParams.join(',') || '(none)'}`,
+      )
+    }
+
+    const liveAdditive = (dataset.fields ?? [])
+      .filter((field) => field.semantic === 'additive-total')
+      .map((field) => field.key)
+      .sort()
+    const ourAdditive = [...(mine.additive ?? [])].sort()
+    if (liveAdditive.join(',') !== ourAdditive.join(',')) {
+      drift.push(
+        `${dataset.id}: additive — live ${liveAdditive.join(',') || '(none)'}, ` +
+          `ours ${ourAdditive.join(',') || '(none)'}`,
+      )
+    }
+  }
+
+  const missing = PENIREMIT_DATASETS.filter(
+    (entry) => !live.some((dataset) => dataset.id === entry.id),
+  ).map((entry) => entry.id)
+  for (const id of missing) drift.push(`${id}: in the catalogue, not published`)
+
+  record(
+    'catalogue',
+    'the transcribed catalogue matches the live declarations',
+    drift.length === 0 ? 'pass' : 'fail',
+    drift.length === 0
+      ? `${String(live.length)} Datasets agree on fields, parameters and semantics`
+      : `${String(drift.length)} differences:\n                  ${drift.join('\n                  ')}`,
+  )
 }
 
 async function main(): Promise<void> {
@@ -257,6 +407,27 @@ async function main(): Promise<void> {
     record('—', 'GET /v1/datasets', 'pass', `${String(datasets.length)} declarations`)
   } catch (error) {
     record('—', 'GET /v1/datasets', 'fail', String(error))
+  }
+
+  /*
+   * Peniremit's own, which is what the boards bind. A deployment carrying other
+   * publishers' Datasets should not have them written into a file named for
+   * theirs.
+   */
+  const peniremit = (datasets ?? []).filter((dataset) => dataset.id.startsWith('peniremit.'))
+
+  if (datasets !== null && peniremit.length > 0) {
+    await compareCatalogue(peniremit)
+
+    if (process.argv.includes('--dump-catalogue')) {
+      const path =
+        argAfter('--dump-catalogue')?.startsWith('--') === false
+          ? argAfter('--dump-catalogue')!
+          : 'src/boards/peniremit-catalogue.generated.ts'
+      await Bun.write(path, renderCatalogue(peniremit))
+      console.log(`\nWrote ${String(peniremit.length)} declarations to ${path}`)
+      console.log('Review the diff, then point `peniremit-catalogue.ts` at it.\n')
+    }
   }
 
   /**
