@@ -277,7 +277,7 @@ describe('a binding is stored where the API declares it', () => {
     const board = boardFrom({ id: 'b', name: 'B', widgets: [
       { id: 'w1', dataset_id: 'd', visualization_type: 'stat-card',
         default_filters: { status: 'failed' } },
-    ] })
+    ] }, 'actor-1')
     expect(board.widgets.w1.parameterBindings).toEqual({ status: 'failed' })
   })
 
@@ -285,7 +285,7 @@ describe('a binding is stored where the API declares it', () => {
     const board = boardFrom({ id: 'b', name: 'B', widgets: [
       { id: 'w1', dataset_id: 'd', visualization_type: 'stat-card',
         presentation_options: { 'smc.parameterBindings': { status: 'failed' } } },
-    ] })
+    ] }, 'actor-1')
     expect(board.widgets.w1.parameterBindings).toEqual({ status: 'failed' })
   })
 
@@ -298,7 +298,7 @@ describe('a binding is stored where the API declares it', () => {
     const board = boardFrom({ id: 'b', name: 'B', widgets: [
       { id: 'w1', dataset_id: 'd', visualization_type: 'stat-card',
         default_filters: { status: 'failed', broken: { nested: true }, nan: Number.NaN } },
-    ] })
+    ] }, 'actor-1')
     expect(board.widgets.w1.parameterBindings).toEqual({ status: 'failed' })
   })
 })
