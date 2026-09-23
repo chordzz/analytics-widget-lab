@@ -324,6 +324,29 @@ async function compareCatalogue(live: readonly ApiDataset[]): Promise<void> {
   )
 }
 
+
+/**
+ * Whether the caller holds a permission, according to `/v1/me`.
+ *
+ * Three answers, because `absent means unknown, not denied` — IAM being
+ * degraded must not read as a caller who may do nothing. `/v1/me` returns
+ * fully-qualified keys (`holdings.analytics::dashboard.share`) and the API
+ * documents the short form, so the comparison is on the part after `::`.
+ */
+function holds(
+  permissions: Record<string, boolean> | undefined,
+  key: string,
+): 'granted' | 'denied' | 'unknown' {
+  if (!permissions || Object.keys(permissions).length === 0) return 'unknown'
+  const bare = (name: string) => {
+    const marker = name.lastIndexOf('::')
+    return marker === -1 ? name : name.slice(marker + 2)
+  }
+  const held = new Map(Object.entries(permissions).map(([name, value]) => [bare(name), value === true]))
+  const value = held.get(bare(key))
+  return value === undefined ? 'denied' : value ? 'granted' : 'denied'
+}
+
 async function main(): Promise<void> {
   if (TOKEN === '') {
     console.error(
@@ -339,13 +362,23 @@ async function main(): Promise<void> {
   console.log(`Conformance check against ${BASE}\n`)
 
   /*
+   * What this caller may do, reported before anything that could be refused
+   * for lacking it. Every 403 below is then read against a published fact
+   * rather than guessed at — which is how a held `dashboard.share` came to be
+   * reported as missing.
+   */
+  const REQUIRED = ['dashboard.read', 'dashboard.create', 'dashboard.share', 'dataset.read']
+
+  /*
    * One call first, purely to tell a bad token from a broken API. Without it a
    * 401 is reported five times as five separate failures, which reads as the
    * backend having removed five things — the first run of this script said
    * exactly that, and it was one expired token.
    */
+  let permissions: Record<string, boolean> | undefined
   try {
-    await get('/v1/me')
+    const me = await get<{ permissions?: Record<string, boolean> }>('/v1/me')
+    permissions = me.permissions
   } catch (error) {
     const message = String(error)
     if (message.includes('401')) {
@@ -360,6 +393,23 @@ async function main(): Promise<void> {
     console.error(`Could not reach ${BASE}: ${message}`)
     process.exit(2)
   }
+
+  const decisions = REQUIRED.map((key) => [key, holds(permissions, key)] as const)
+  const lacking = decisions.filter(([, decision]) => decision !== 'granted')
+  record(
+    '—',
+    'the permissions this run needs',
+    permissions === undefined || Object.keys(permissions).length === 0
+      ? 'skip'
+      : lacking.length === 0
+        ? 'pass'
+        : 'fail',
+    permissions === undefined || Object.keys(permissions).length === 0
+      ? '`/v1/me` returned no permission map — absent means unknown, not denied'
+      : lacking.length === 0
+        ? `holds ${REQUIRED.join(', ')}`
+        : `not held: ${lacking.map(([key]) => key).join(', ')}`,
+  )
 
   // --- the one that bit us -------------------------------------------------
   //
@@ -540,26 +590,39 @@ async function main(): Promise<void> {
     )
   } catch (error) {
     /*
-     * 403 and 404 are the same red mark and different findings, with different
-     * people to take them to.
+     * 404 is the ask unbuilt. 403 is the ask built and enforcing — and *why* it
+     * refused is a different question from whether it ran, which this script
+     * previously answered by guessing.
      *
-     * 404 is the ask unbuilt. 403 is the ask *built and enforcing* — the route
-     * exists, it ran as the caller, and IAM said this caller may not browse the
-     * directory. That is the scoping we asked for working correctly, and the
-     * fix is a permission grant rather than a line of backend code. Reporting
-     * it as "BE-7 failed" would send someone to rebuild a route that is fine.
+     * It reported a 403 as "a missing permission on your user
+     * (`dashboard.share`)", named the key, and pointed at IAM. That was an
+     * inference from a status code, stated as a diagnosis. `/v1/me` publishes
+     * the permission map, so the answer is available rather than deducible:
+     * when the caller demonstrably holds the key, the refusal is about
+     * something else and saying otherwise sends someone to fix a grant that is
+     * already there.
      */
     const message = String(error)
-    record(
-      'BE-7',
-      'GET share-targets',
-      'fail',
-      message.includes('403')
-        ? `the route exists and refused this caller — ${message}\n` +
-          '                  BE-7 is built; the gap is a missing permission on your user\n' +
-          '                  (`dashboard.share`), which is IAM rather than Analytics'
-        : message,
-    )
+    if (!message.includes('403')) {
+      record('BE-7', 'GET share-targets', 'fail', message)
+    } else {
+      const decision = holds(permissions, 'dashboard.share')
+      record(
+        'BE-7',
+        'GET share-targets',
+        'fail',
+        `the route exists and refused this caller — ${message}\n` +
+          '                  ' +
+          (decision === 'granted'
+            ? '`/v1/me` says you DO hold `dashboard.share`, so this refusal is not\n' +
+              '                  about that permission. One to raise with the Analytics team.'
+            : decision === 'denied'
+              ? '`/v1/me` does not list `dashboard.share` as held — a grant on your\n' +
+                '                  user, which is IAM rather than Analytics.'
+              : '`/v1/me` returned no permission map, so why it refused cannot be\n' +
+                '                  read from here. Absent means unknown, not denied.'),
+      )
+    }
   }
 
   /*
