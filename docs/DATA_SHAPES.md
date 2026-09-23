@@ -28,19 +28,19 @@ Evaluation yields one of three outcomes:
 |---|---|
 | **Satisfied** | The Dataset meets the shape. The Family's Types are offered. |
 | **Not satisfied** | The Dataset provably does not meet the shape — for example it has one Measure where two are required. Nothing is wrong with the Dataset; the Author should pick a different visualization. |
-| **Cannot be determined** | The publication contract cannot express what the Family needs. The Types are withheld. This is a gap in the contract, not a defect in the Dataset — see the known gap in `PUBLICATION_CONTRACT.md`. |
+| **Cannot be determined** | This Dataset has not declared what the Family turns on. The Types are withheld rather than offered on a maybe. **This used to be a gap in the contract and is now a gap in the declaration:** `semantic` and `record_volume` landed on 17–18 September, so the fact can be stated — by the publisher, on the Dataset. |
 
 ## Summary
 
 | Family | Question answered | Required Data Shape | Decidable today | Types built |
 |---|---|---|---|---|
-| Tabular | What are the individual records? | One or more Dimensions and/or Measures | Yes | 2 of 3 |
+| Tabular | What are the individual records? | One or more Dimensions and/or Measures | Yes | 3 of 3 |
 | Trend | How has this changed over time? | One Time Dimension + one or more Measures | Yes | 4 of 4 |
 | Categorical Comparison | How do these categories compare? | One Dimension + one or more Measures | Yes | 4 of 4 |
-| Composition | What are the parts of this whole? | One Dimension + one Measure summing to a meaningful total | Partly | 3 of 4 |
-| Distribution | How are these values spread? | One Measure across many records | Partly | 2 of 3 |
-| Correlation | Do these move together? | Two or more Measures | Yes | 2 of 3 |
-| Ranking & Flow | What is the order, or where is the drop-off? | One Dimension + one Measure, or ordered stage data | Partly | 4 of 5 |
+| Composition | What are the parts of this whole? | One Dimension + one Measure summing to a meaningful total | Partly | 4 of 4 |
+| Distribution | How are these values spread? | One Measure across many records | Partly | 3 of 3 |
+| Correlation | Do these move together? | Two or more Measures | Yes | 3 of 3 |
+| Ranking & Flow | What is the order, or where is the drop-off? | One Dimension + one Measure, or ordered stage data | Partly | 5 of 5 |
 | Geospatial | Where is this happening? | One location-typed Dimension + one Measure | Partly | 1 of 2 |
 | Radial | How does this compare against a target or across axes? | One or more Measures, optionally with a target | Yes | 2 of 2 |
 | Single Value | What is the number right now? | One Measure, optionally one Time Dimension for trend or comparison | Yes | 4 of 4 |
@@ -59,7 +59,7 @@ whether something can *draw* the result yet.
 |---|---|---|
 | Tabular | Data table | Built |
 |  | Pivot table | Built |
-|  | Comparison table | Not built |
+|  | Comparison table | Built |
 | Trend | Line chart | Built |
 |  | Area chart | Built |
 |  | Spline chart | Built |
@@ -70,19 +70,19 @@ whether something can *draw* the result yet.
 |  | Stacked bar chart | Built |
 | Composition | Pie chart | Built |
 |  | Donut chart | Built |
-|  | Stacked 100% bar | Not built |
+|  | Stacked 100% bar | Built |
 |  | Treemap | Built |
 | Distribution | Histogram | Built |
 |  | Box plot | Built |
-|  | Violin plot | Not built |
+|  | Violin plot | Built |
 | Correlation | Scatter plot | Built |
 |  | Bubble chart | Built |
-|  | Heatmap matrix | Not built |
+|  | Heatmap matrix | Built |
 | Ranking & Flow | Top-N / ranked list | Built |
 |  | Leaderboard | Built |
 |  | Funnel | Built |
 |  | Sankey | Built |
-|  | Bar chart race | Not built |
+|  | Bar chart race | Built |
 | Geospatial | Choropleth map | Not built |
 |  | Point / pin map | Built |
 | Radial | Radar / spider chart | Built |
@@ -102,14 +102,9 @@ whether something can *draw* the result yet.
 
 ### Still to build
 
-- **Comparison table** *(Tabular)* — Ordinary work. A table putting two periods or two segments side by side; the data path is the one `data-table` already uses.
-- **Stacked 100% bar** *(Composition)* — Ordinary work, and the smallest of the six — Composition's other three are built, and this is a stacked bar normalised to the total, which the existing bar chart could take as a variant.
-- **Violin plot** *(Distribution)* — The one remaining Type needing new maths: a kernel density estimate. The histogram and box plot are built, so the data path exists — the shape does not.
-- **Heatmap matrix** *(Correlation)* — Ordinary work. Two Dimensions and a Measure on a colour scale; the cohort grid is the same drawing with a different axis pair.
-- **Bar chart race** *(Ranking & Flow)* — The only Type whose point is *motion* — a ranking animated over time. That makes it a design and accessibility decision rather than an effort estimate, and it is the one place `prefers-reduced-motion` would have to change what is drawn rather than how fast.
 - **Choropleth map** *(Geospatial)* — Boundary geometry — roughly 100KB of TopoJSON for a usable world atlas, which every host would pay for whether or not it draws maps. A standing dependency decision nobody has taken; the point map covers the Family using centroids in the meantime.
 
-Taken together: 36 of 42 Types are built, spanning 13 of 13
+Taken together: 41 of 42 Types are built, spanning 13 of 13
 Families. The order to tackle the rest in follows from the reasons above —
 anything blocked on Finding 1 is waiting on a decision about the publication
 model, not on frontend effort.
@@ -130,7 +125,7 @@ Visualization Types:
 
 - **Data table** — Sortable and filterable rows with pagination, column configuration (visibility, width, pinning), row selection and expandable rows.
 - **Pivot table** — Grouped rows and columns with aggregation.
-- **Comparison table** — Side-by-side entities across fixed metrics. *(no renderer yet — Ordinary work. A table putting two periods or two segments side by side; the data path is the one `data-table` already uses.)*
+- **Comparison table** — Side-by-side entities across fixed metrics.
 
 ### Trend
 
@@ -181,14 +176,14 @@ Conditions checked:
 - at least one Dimension
 - at least one Measure
 - a Measure that sums to a meaningful total
-  - **Cannot be determined today.** §4.2 requires a Measure "summing to a meaningful total". Additivity is a property of meaning, not of type — FR-DP-04 declares which aggregations are meaningful, but not whether the resulting total is itself meaningful as a whole.
-  - Would be resolved by: proposed Field semantic 'additive-total'
+  - **Not decidable from structure alone.** §4.2 requires a Measure "summing to a meaningful total". Additivity is a property of meaning, not of type — FR-DP-04 declares which aggregations are meaningful, but not whether the resulting total is itself meaningful as a whole.
+  - Decided by: Field semantic 'additive-total', published 17 September. A publisher declares it on the Measure whose total means something.
 
 Visualization Types:
 
 - **Pie chart** — Shares of a whole as circular segments.
 - **Donut chart** — Pie chart with a hollow centre, often carrying the total.
-- **Stacked 100% bar** — Shares of a whole as proportions of a full-width bar. *(no renderer yet — Ordinary work, and the smallest of the six — Composition's other three are built, and this is a stacked bar normalised to the total, which the existing bar chart could take as a variant.)*
+- **Stacked 100% bar** — Shares of a whole as proportions of a full-width bar.
 - **Treemap** — Shares of a whole as nested rectangles sized by value.
 
 ### Distribution
@@ -201,14 +196,14 @@ Conditions checked:
 
 - at least one Measure
 - many records
-  - **Cannot be determined today.** §4.2 requires the Measure be spread "across many records". Record volume is not part of the published model.
-  - Would be resolved by: proposed Dataset descriptor 'recordVolume'
+  - **Not decidable from structure alone.** §4.2 requires the Measure be spread "across many records". Record volume is not part of the published model.
+  - Decided by: Dataset `record_volume`, published 18 September as an order of magnitude — `thousands` or `millions` is the many this clause asks for.
 
 Visualization Types:
 
 - **Histogram** — Record counts bucketed by value range.
 - **Box plot** — Quartiles, median and outliers.
-- **Violin plot** — Density of values across the range. *(no renderer yet — The one remaining Type needing new maths: a kernel density estimate. The histogram and box plot are built, so the data path exists — the shape does not.)*
+- **Violin plot** — Density of values across the range.
 
 ### Correlation
 
@@ -224,7 +219,7 @@ Visualization Types:
 
 - **Scatter plot** — One point per record against two Measures.
 - **Bubble chart** — Scatter plot with a third Measure encoded as point size.
-- **Heatmap matrix** — Pairwise Measure relationships encoded as colour intensity. *(no renderer yet — Ordinary work. Two Dimensions and a Measure on a colour scale; the cohort grid is the same drawing with a different axis pair.)*
+- **Heatmap matrix** — Pairwise Measure relationships encoded as colour intensity.
 
 ### Ranking & Flow
 
@@ -235,8 +230,8 @@ Visualization Types:
 Conditions checked:
 
 - one Dimension and one Measure, or a Dimension declared as an ordered stage
-  - **Cannot be determined today.** §4.2 admits "ordered stage data" as an alternative shape. Stage ordering is not expressible in the published model, so the funnel/sankey route cannot be evaluated.
-  - Would be resolved by: proposed Field semantic 'stage'
+  - **Not decidable from structure alone.** §4.2 admits "ordered stage data" as an alternative shape. Stage ordering is not expressible in the published model, so the funnel/sankey route cannot be evaluated.
+  - Decided by: Field semantic 'stage', published 17 September. Declared on the Dimension whose order is what a funnel reads.
 
 Visualization Types:
 
@@ -244,7 +239,7 @@ Visualization Types:
 - **Leaderboard** — Rank, score and movement indicator against the previous period.
 - **Funnel** — Drop-off across sequential stages.
 - **Sankey** — Flow volume between stages or categories.
-- **Bar chart race** — Ranking animated across time periods. *(no renderer yet — The only Type whose point is *motion* — a ranking animated over time. That makes it a design and accessibility decision rather than an effort estimate, and it is the one place `prefers-reduced-motion` would have to change what is drawn rather than how fast.)*
+- **Bar chart race** — Ranking animated across time periods.
 
 ### Geospatial
 
@@ -256,8 +251,8 @@ Conditions checked:
 
 - at least one Measure
 - a Field naming a place, or a latitude and longitude pair
-  - **Cannot be determined today.** §4.2 requires a "location-typed Dimension". `FieldType` does carry `location`, and a Dataset reports `has_location_field` — but a choropleth shades *named areas* and `location` does not separate a region from a postcode or a street address, which cannot be shaded. Nor can it say that two Measures are a coordinate pair rather than two figures. The type is nearly enough here and not quite: it is the one Family where the published model already reaches for the fact and stops one step short of it.
-  - Would be resolved by: proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude'
+  - **Not decidable from structure alone.** §4.2 requires a "location-typed Dimension". `FieldType` does carry `location`, and a Dataset reports `has_location_field` — but a choropleth shades *named areas* and `location` does not separate a region from a postcode or a street address, which cannot be shaded. Nor can it say that two Measures are a coordinate pair rather than two figures. The type is nearly enough here and not quite: it is the one Family where the published model already reaches for the fact and stops one step short of it.
+  - Decided by: Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude', published 17 September. Both halves of the pair are needed; one alone plots nothing.
 
 Visualization Types:
 
@@ -341,8 +336,8 @@ Visualization Types:
 Conditions checked:
 
 - one Measure, or a Dimension declared as a state
-  - **Cannot be determined today.** §4.2 admits "one state Dimension" as an alternative shape. The published model cannot distinguish a state Dimension from any other Dimension.
-  - Would be resolved by: proposed Field semantic 'state'
+  - **Not decidable from structure alone.** §4.2 admits "one state Dimension" as an alternative shape. The published model cannot distinguish a state Dimension from any other Dimension.
+  - Decided by: Field semantic 'state', published 17 September. Declared on the Dimension holding the condition — settled, pending, failed.
 
 Visualization Types:
 
@@ -366,11 +361,11 @@ Declared shape: 1 Dimension(s), 1 Time Dimension(s), 1 Measure(s)
 | Tabular | Yes | — |
 | Trend | Yes | — |
 | Categorical Comparison | Yes | — |
-| Composition | Cannot be determined | Needs proposed Field semantic 'additive-total' |
-| Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
+| Composition | Yes | — |
+| Distribution | Yes | — |
 | Correlation | No | Missing: at least 2 Measures |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
+| Geospatial | No | Missing: a Field naming a place, or a latitude and longitude pair |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | Yes | — |
@@ -387,11 +382,11 @@ Declared shape: 1 Dimension(s), 1 Time Dimension(s), 2 Measure(s)
 | Tabular | Yes | — |
 | Trend | Yes | — |
 | Categorical Comparison | Yes | — |
-| Composition | Cannot be determined | Needs proposed Field semantic 'additive-total' |
-| Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
+| Composition | Yes | — |
+| Distribution | Yes | — |
 | Correlation | Yes | — |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
+| Geospatial | No | Missing: a Field naming a place, or a latitude and longitude pair |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | Yes | — |
@@ -408,11 +403,11 @@ Declared shape: 1 Dimension(s), 1 Time Dimension(s), 1 Measure(s)
 | Tabular | Yes | — |
 | Trend | Yes | — |
 | Categorical Comparison | Yes | — |
-| Composition | Cannot be determined | Needs proposed Field semantic 'additive-total' |
-| Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
+| Composition | No | Missing: a Measure that sums to a meaningful total |
+| Distribution | Yes | — |
 | Correlation | No | Missing: at least 2 Measures |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
+| Geospatial | No | Missing: a Field naming a place, or a latitude and longitude pair |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | Yes | — |
@@ -429,11 +424,11 @@ Declared shape: 2 Dimension(s), 0 Time Dimension(s), 1 Measure(s)
 | Tabular | Yes | — |
 | Trend | No | Missing: at least one Time Dimension |
 | Categorical Comparison | Yes | — |
-| Composition | Cannot be determined | Needs proposed Field semantic 'additive-total' |
-| Distribution | Cannot be determined | Needs proposed Dataset descriptor 'recordVolume' |
+| Composition | Yes | — |
+| Distribution | No | Missing: many records |
 | Correlation | No | Missing: at least 2 Measures |
 | Ranking & Flow | Yes | — |
-| Geospatial | Cannot be determined | Needs proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude' |
+| Geospatial | Yes | — |
 | Radial | Yes | — |
 | Single Value | Yes | — |
 | Temporal Pattern | No | Missing: at least one Time Dimension |
@@ -450,13 +445,13 @@ Declared shape: 2 Dimension(s), 1 Time Dimension(s), 0 Measure(s)
 | Tabular | Yes | — |
 | Trend | No | Missing: at least one Measure |
 | Categorical Comparison | No | Missing: at least one Measure |
-| Composition | No | Missing: at least one Measure |
+| Composition | No | Missing: at least one Measure; a Measure that sums to a meaningful total |
 | Distribution | No | Missing: at least one Measure |
 | Correlation | No | Missing: at least 2 Measures |
-| Ranking & Flow | Cannot be determined | Needs proposed Field semantic 'stage' |
-| Geospatial | No | Missing: at least one Measure |
+| Ranking & Flow | No | Missing: one Dimension and one Measure, or a Dimension declared as an ordered stage |
+| Geospatial | No | Missing: at least one Measure; a Field naming a place, or a latitude and longitude pair |
 | Radial | No | Missing: at least one Measure |
 | Single Value | No | Missing: at least one Measure |
 | Temporal Pattern | No | Missing: at least one Measure |
 | Chronological | Yes | — |
-| Status | Cannot be determined | Needs proposed Field semantic 'state' |
+| Status | Yes | — |

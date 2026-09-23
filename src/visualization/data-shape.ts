@@ -56,10 +56,25 @@ export type Satisfaction =
 
 export interface SatisfactionOptions {
   /**
-   * Permit proposed Field semantics to decide otherwise-undecidable clauses.
-   * Off by default so the FRD's model as written is what gets evaluated.
+   * Evaluate the FRD's model *without* Field semantics, as it stood before the
+   * API could carry them.
+   *
+   * This was `useProposedSemantics`, default off, and the default was right
+   * while the semantics were a proposal: consulting a descriptor the
+   * publication model could not express would have papered over the gap
+   * instead of showing it.
+   *
+   * The API published `semantic` and `record_volume` on 17–18 September. They
+   * are declaration data now, and evaluating without them would ignore what a
+   * publisher has actually said — the same mistake in the other direction, and
+   * the one that keeps five Families unreachable no matter what anybody
+   * declares.
+   *
+   * So the option is inverted rather than deleted. It has one honest remaining
+   * caller: the contract document, which shows what the descriptors changed by
+   * measuring both ways.
    */
-  useProposedSemantics?: boolean
+  ignoreFieldSemantics?: boolean
 }
 
 /** FR-VZ-05 — can this Visualization Family present this Dataset? */
@@ -73,15 +88,24 @@ export function satisfies(
 
   for (const clause of shape.clauses) {
     const decide =
-      options.useProposedSemantics && clause.testWithSemantics
+      !options.ignoreFieldSemantics && clause.testWithSemantics
         ? clause.testWithSemantics
         : clause.test
 
     if (decide(dataset)) continue
 
-    // A clause that failed and is known to be inexpressible is not a definite
-    // "no" — the model simply cannot tell. Keep the two apart.
-    if (clause.undecidable && !options.useProposedSemantics) {
+    /*
+     * A clause that failed and is known to be inexpressible is not a definite
+     * "no" — the model simply cannot tell. Keep the two apart.
+     *
+     * Which is now only true when semantics are being ignored. With them
+     * consulted, a failing clause means the publisher declared no
+     * `additive-total`, no `state`, no volume — a definite answer about this
+     * declaration, not a limit of the model. Reporting "cannot be determined"
+     * there would send an Author to ask us about a gap that is theirs to fill,
+     * and it is the over-offering the backend corrected on their own side.
+     */
+    if (clause.undecidable && options.ignoreFieldSemantics) {
       undecided.push(clause.undecidable)
     } else {
       unmet.push(clause.describe)

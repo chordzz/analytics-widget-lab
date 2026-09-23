@@ -18,9 +18,30 @@ import type { Dataset } from '../domain/dataset'
 /** `PresentationOption`, as the API spells it. */
 interface ApiTaxonomyEntry {
   family: string
+  /**
+   * `visualization_types` is what the API sends, and has always sent. The
+   * published schema called it `types` until 18 September, and we followed the
+   * schema — so this adapter has been reading a property that was never on the
+   * wire and returning an empty list for every Family since BE-5 was adopted.
+   *
+   * Both are read. Not because the name is still in doubt — the backend has
+   * confirmed which it is and added a test marshalling the real structs — but
+   * because `taxonomy-drift.ts` reads both and quietly kept working through the
+   * whole episode, and this one, reading a single spelling, did not. Two
+   * adapters on one endpoint disagreeing about its shape is how the failure
+   * lasted; agreeing about it is the cheap half of the fix.
+   */
+  visualization_types?: string[]
   types?: string[]
   requirement?: string
   single_value?: boolean
+}
+
+/** The Types in one taxonomy entry, under either spelling. */
+const typesOf = (entry: ApiTaxonomyEntry): string[] => {
+  if (Array.isArray(entry.visualization_types)) return entry.visualization_types
+  if (Array.isArray(entry.types)) return entry.types
+  return []
 }
 
 export function httpCatalogue(api: ApiClient): CataloguePort {
@@ -48,7 +69,7 @@ export function httpCatalogue(api: ApiClient): CataloguePort {
         const body = await api.request<ApiTaxonomyEntry[]>('/v1/visualizations')
         return (Array.isArray(body) ? body : []).map((entry) => ({
           family: entry.family,
-          types: Array.isArray(entry.types) ? entry.types : [],
+          types: typesOf(entry),
           ...(entry.requirement === undefined ? {} : { requirement: entry.requirement }),
           ...(entry.single_value === undefined ? {} : { singleValue: entry.single_value }),
         }))

@@ -11,6 +11,22 @@
  *   flat:   { status, message, data: [rows], meta }         ← rows at .data
  *   nested: { status, message, data: { status, message, data: [rows], meta } }
  *
+ * There is a third shape, and it is not an ambiguity — it is a different kind
+ * of answer:
+ *
+ *   aggregate: { status, message, data: { value: 1420, delta: 28 } }
+ *
+ * One object rather than a list, because the question has one answer. The API
+ * asks for it by name: `PresentationOption.single_value` says to back a stat
+ * card with "an aggregate-shaped Dataset — the Source System returns the figure
+ * over the received filters; Analytics and the frontend never compute it."
+ *
+ * We rejected it outright until 22 September, which cost sixteen of Peniremit's
+ * forty-one Datasets — every stat card on all four of their dashboards — a
+ * `failed` widget rather than a number. Read as one row, which is what it is:
+ * everything downstream already handles a single row, `singleValueOf`
+ * included.
+ *
  * Rather than guess, this handles both and reports which it found. Guessing is
  * the wrong move for a specific reason: the rows would fail loudly at the wrong
  * depth, but `meta.partial` would not. Read at the wrong level it is
@@ -26,7 +42,7 @@
 import type { DatasetRow } from '../domain/query'
 import type { Envelope } from '../api/client'
 
-export type RelayShape = 'flat' | 'nested'
+export type RelayShape = 'flat' | 'nested' | 'aggregate'
 
 export interface RelayedBody {
   rows: DatasetRow[]
@@ -41,7 +57,8 @@ export interface RelayedBody {
 export class RelayShapeError extends Error {
   constructor(saw: string) {
     super(
-      `The query response did not carry rows where either documented reading puts them (saw ${saw}).`,
+      `The query response carried neither rows nor a single aggregate figure, in any of the ` +
+        `three readings the contract admits (saw ${saw}).`,
     )
     this.name = 'RelayShapeError'
   }
@@ -56,19 +73,44 @@ export function readRelayedBody(envelope: Envelope<unknown>): RelayedBody {
 
   if (isEnvelopeLike(data)) {
     const inner = data.data
-    if (!Array.isArray(inner)) throw new RelayShapeError(describe(inner))
     /*
      * The inner envelope's `meta` wins. Under this reading it is the Source
      * System's own marker, and the outer one is ours — which never sets it.
      */
-    return {
-      rows: asRows(inner),
-      ...partialOf(data.meta ?? envelope.meta),
-      shape: 'nested',
-    }
+    const meta = partialOf(data.meta ?? envelope.meta)
+
+    if (Array.isArray(inner)) return { rows: asRows(inner), ...meta, shape: 'nested' }
+
+    // Aggregate, one level deeper. Both ambiguities are orthogonal: a publisher
+    // may nest *and* answer with a single figure, and rejecting that
+    // combination would be an accident of how these two checks are ordered.
+    const single = asSingleRow(inner)
+    if (single) return { rows: single.rows, ...meta, shape: 'aggregate' }
+
+    throw new RelayShapeError(describe(inner))
   }
 
+  const single = asSingleRow(data)
+  if (single) return { rows: single.rows, ...partialOf(envelope.meta), shape: 'aggregate' }
+
   throw new RelayShapeError(describe(data))
+}
+
+/**
+ * An aggregate answer, as the one row it is.
+ *
+ * `{}` is *not* that row. A stat card over an object with no fields reads
+ * `NaN`, which draws as a dash and looks like a rendering fault; zero rows
+ * reaches the `empty` state, which says plainly that the endpoint answered with
+ * nothing. A genuine zero still has a key — `{ "value": 0 }` — so the two are
+ * distinguishable and nothing real is lost.
+ *
+ * Returns a wrapper rather than the rows themselves, so that "not an object"
+ * and "an object with no fields" stay distinct at the call site.
+ */
+function asSingleRow(value: unknown): { rows: DatasetRow[] } | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null
+  return { rows: Object.keys(value).length === 0 ? [] : [value as DatasetRow] }
 }
 
 /**

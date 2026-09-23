@@ -143,7 +143,7 @@ widget bound to it is correct on one query and meaningless on the next.
 
 ### Order, or tell us there is none
 
-Nine of the 37 widget types need rows in order — every
+Nine of the 42 widget types need rows in order — every
 trend, the chronological pair, and the temporal ones. A line chart drawn from
 unordered rows is not untidy, it is wrong: the line doubles back on itself.
 
@@ -165,8 +165,8 @@ raised this upstream; until it is settled, please say in the Field's
 
 ## 4. Aggregation grain — the thing to settle with us
 
-Of the 37 built widget types, **3 currently send an aggregated
-query and 34 ask for records.**
+Of the 42 built widget types, **3 currently send an aggregated
+query and 39 ask for records.**
 
 That is not a recommendation, it is a report — and it needs a conversation
 before it meets a real database.
@@ -235,6 +235,7 @@ does not produce trend charts.
 | `pie-chart`<br>Pie chart | **Segments** — 1 × Dimension<br>**Measure** — 1 × Measure | no aggregation — all records | records | 6 |
 | `donut-chart`<br>Donut chart | **Segments** — 1 × Dimension<br>**Measure** — 1 × Measure | no aggregation — all records | records | 6 |
 | `treemap`<br>Treemap | **Rectangles** — 1 × Dimension<br>**Measure** — 1 × Measure | no aggregation — all records | records | 12 |
+| `stacked-100-bar`<br>Stacked 100% bar | **Categories** — 1 × Dimension or Time Dimension<br>**Measures** — 2–5 × Measure | no aggregation — all records | records | 6 |
 
 ### Ranking & flow — `ranking-and-flow`
 
@@ -244,6 +245,7 @@ does not produce trend charts.
 | `leaderboard`<br>Leaderboard | **Entries** — 1 × Dimension<br>**Measure** — 1 × Measure | no aggregation — all records | records | 12 |
 | `funnel`<br>Funnel | **Stages** — 1 × Dimension<br>**Measure** — 1 × Measure | no aggregation — all records | records | 6 |
 | `sankey`<br>Sankey | **From** — 1 × Dimension<br>**To** — 1 × Dimension<br>**Volume** — 1 × Measure | no aggregation — all records | records | 10 |
+| `bar-chart-race`<br>Bar chart race | **Period** — 1 × Time Dimension<br>**Racers** — 1 × Dimension<br>**Measure** — 1 × Measure | no aggregation — all records | records | 72 |
 
 ### Status — `status`
 
@@ -267,6 +269,7 @@ does not produce trend charts.
 |---|---|---|---|---|
 | `data-table`<br>Data table | **Columns** — 1–12 × Dimension or Time Dimension or Measure | no aggregation — all records | records | 120 |
 | `pivot-table`<br>Pivot table | **Rows** — 1 × Dimension<br>**Columns** — 1 × Dimension<br>**Measure** — up to 1 × Measure | no aggregation — all records | records | 120 |
+| `comparison-table`<br>Comparison table | **Entities** — 1 × Dimension<br>**Metrics** — 2–8 × Measure | no aggregation — all records | records | 12 |
 
 ### Distribution — `distribution`
 
@@ -274,6 +277,7 @@ does not produce trend charts.
 |---|---|---|---|---|
 | `histogram`<br>Histogram | **Measure** — 1 × Measure | no aggregation — all records | records | 2000 |
 | `box-plot`<br>Box plot | **Groups** — 1 × Dimension<br>**Measure** — 1 × Measure | no aggregation — all records | records | 2000 |
+| `violin-plot`<br>Violin plot | **Groups** — 1 × Dimension<br>**Measure** — 1 × Measure | no aggregation — all records | records | 2000 |
 
 ### Correlation — `correlation`
 
@@ -281,6 +285,7 @@ does not produce trend charts.
 |---|---|---|---|---|
 | `scatter-plot`<br>Scatter plot | **Measures** — 2 × Measure | no aggregation — all records | records | 12 |
 | `bubble-chart`<br>Bubble chart | **Measures** — 3 × Measure | no aggregation — all records | records | 12 |
+| `heatmap-matrix`<br>Heatmap matrix | **Measures** — 3–8 × Measure | no aggregation — all records | records | 12 |
 
 ### Temporal pattern — `temporal-pattern`
 

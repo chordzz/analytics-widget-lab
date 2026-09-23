@@ -1,0 +1,122 @@
+/**
+ * Peniremit's 41 published Datasets, as their portal guide declares them.
+ *
+ * Transcribed from the integration guide of 22 September, and only as much of
+ * each declaration as binding a Widget needs: the Field keys, which of them is
+ * the time Dimension, and the shape the endpoint answers with.
+ *
+ * It is here rather than fetched because it is used to *check* boards before
+ * anything reaches the API — the point is to find a card that cannot be built
+ * without a round trip, an access token, or a half-created Dashboard. The live
+ * `/v1/datasets` remains the authority, and `scripts/peniremit-boards.ts`
+ * compares the two when it runs with a token.
+ *
+ * `additive` records which Measures Peniremit declared `semantic:
+ * additive-total` after our 22 September request. Transcribed, not observed —
+ * `bun run conform` reads the live declarations and its BE-1 row names what it
+ * actually finds. If the two disagree, the live one is right and this is wrong.
+ *
+ * Only money and counts carry it. `percentage` and `changePercent` deliberately
+ * do not: summing percentages is permitted arithmetic and a meaningless total,
+ * which is the exact case `additive-total` exists to distinguish. A donut of
+ * shares that sums to 340% is the failure mode.
+ */
+
+import { d, BASE_PARAMS, type PeniremitDataset, type PeniremitShape } from './peniremit-catalogue-shape'
+
+export { BASE_PARAMS }
+export type { PeniremitDataset, PeniremitShape }
+
+/** Money totals. Every category Dataset that measures value in both currencies. */
+const MONEY_ADDITIVE = ['usd', 'ngn']
+
+const VALUE = ['value', 'delta', 'changePercent']
+const MONEY = ['usd', 'ngn', 'usdDelta', 'ngnDelta', 'usdChangePercent', 'ngnChangePercent']
+const SHARE = ['category', 'usd', 'ngn', 'percentage', 'changePercent']
+
+export const PENIREMIT_DATASETS: PeniremitDataset[] = [
+  // Growth
+  d('total-registered-users', 'Total Registered Users', 'aggregate', VALUE),
+  d('total-registered-users-trend', 'Total Registered Users Trend', 'date', ['date', 'value']),
+  d('signups-summary', 'Signups Summary', 'aggregate', VALUE),
+  d('signups', 'Signups', 'date', ['date', 'value']),
+  d('first-transaction-rate', 'First Transaction Rate', 'aggregate', VALUE),
+  d('first-transaction-rate-trend', 'First Transaction Rate Trend', 'date', ['date', 'value']),
+  d('signup-outcomes-summary', 'Signup Outcomes Summary', 'aggregate',
+    ['completed', 'dropOffs', 'total', 'completedDelta', 'dropOffsDelta', 'completedChangePercent', 'dropOffsChangePercent']),
+  d('signup-outcomes', 'Signup Outcomes', 'date', ['date', 'value', 'dropOffs', 'total']),
+  d('signup-by-channel', 'Signups by Channel', 'category', ['category', 'value', 'delta', 'changePercent'], { additive: ['value'] }),
+  d('user-growth', 'User Growth', 'aggregate', VALUE),
+
+  // Transaction
+  d('transfer-volume', 'Total Transfer Volume', 'date', ['date', 'usd', 'ngn']),
+  d('transaction-count-summary', 'Total Transactions', 'aggregate', VALUE, { params: ['status'] }),
+  d('transaction-count-trend', 'Total Transactions Trend', 'date', ['date', 'value'], { params: ['status'] }),
+  d('transaction-rate-summary', 'Transaction Rate Summary', 'aggregate',
+    ['total', 'successful', 'failed', 'pending', 'successRate',
+     'totalDelta', 'successfulDelta', 'failedDelta', 'successRateDelta',
+     'totalChangePercent', 'successfulChangePercent', 'failedChangePercent', 'successRateChangePercent']),
+  d('transaction-rate', 'Transaction Rate', 'date', ['date', 'value', 'total', 'successful', 'failed', 'pending']),
+  d('deposit-volume-summary', 'Total Deposit', 'aggregate', MONEY),
+  d('deposit-volume-trend', 'Total Deposit Trend', 'date', ['date', 'usd', 'ngn']),
+  d('spend-volume-summary', 'Total Spend', 'aggregate', MONEY),
+  d('avg-transaction-value-summary', 'Avg Transaction Value', 'aggregate', MONEY),
+  d('spend-by-category', 'Spend by Category', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('top-token-deposits', 'Top Token Deposits', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('top-token-spend', 'Top Token Spend', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('smart-spend-token', 'Smart Spend Token', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('failure-reasons', 'Top Failure Reasons', 'category', ['category', 'value', 'percentage', 'changePercent'], { additive: ['value'] }),
+
+  // Revenue
+  d('gross-revenue', 'Gross Revenue', 'date', ['date', 'usd', 'ngn']),
+  d('fee-revenue-trend', 'Fee Revenue Trend', 'date',
+    ['date', 'palmpayFeesUsd', 'palmpayFeesNgn', 'fxFeesUsd', 'fxFeesNgn', 'cardFeesUsd', 'cardFeesNgn']),
+  d('net-revenue', 'Net Revenue', 'date', ['date', 'usd', 'ngn']),
+  /*
+   * Six measures in four currencies-and-deltas. Transcribing this by hand
+   * produced `netMarginUsd`, which does not exist — the Field is
+   * `netRevenueUsd`. No card bound it, so nothing broke; a card that had would
+   * have passed every check here and 400ed live, because the checks read the
+   * transcription rather than the declaration.
+   */
+  d('revenue-summary', 'Revenue Summary', 'aggregate',
+    ['grossFeeRevenueUsd', 'grossFeeRevenueNgn', 'grossFeeRevenueUsdDelta', 'grossFeeRevenueNgnDelta',
+     'grossFeeRevenueUsdChangePercent', 'grossFeeRevenueNgnChangePercent',
+     'netRevenueUsd', 'netRevenueNgn', 'netRevenueUsdDelta', 'netRevenueNgnDelta',
+     'netRevenueUsdChangePercent', 'netRevenueNgnChangePercent',
+     'palmpayFeesUsd', 'palmpayFeesNgn', 'palmpayFeesUsdDelta', 'palmpayFeesNgnDelta',
+     'palmpayFeesUsdChangePercent', 'palmpayFeesNgnChangePercent',
+     'fxFeesUsd', 'fxFeesNgn', 'fxFeesUsdDelta', 'fxFeesNgnDelta',
+     'fxFeesUsdChangePercent', 'fxFeesNgnChangePercent',
+     'cardFeesUsd', 'cardFeesNgn', 'cardFeesUsdDelta', 'cardFeesNgnDelta',
+     'cardFeesUsdChangePercent', 'cardFeesNgnChangePercent',
+     'avgFeePerTransactionUsd', 'avgFeePerTransactionNgn',
+     'avgFeePerTransactionUsdDelta', 'avgFeePerTransactionNgnDelta',
+     'avgFeePerTransactionUsdChangePercent', 'avgFeePerTransactionNgnChangePercent',
+     'marginPerTransactionUsd', 'marginPerTransactionNgn',
+     'marginPerTransactionUsdDelta', 'marginPerTransactionNgnDelta',
+     'marginPerTransactionUsdChangePercent', 'marginPerTransactionNgnChangePercent']),
+  d('revenue-by-token', 'Revenue by Token', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('revenue-by-product', 'Revenue by Product', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('fx-revenue-by-token', 'FX Revenue by Token', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+
+  // Engagement
+  d('active-users-summary', 'Active Users Summary', 'aggregate',
+    ['dau', 'mau', 'dauDelta', 'mauDelta', 'dauChangePercent', 'mauChangePercent']),
+  d('active-users', 'Active Users', 'date', ['date', 'dau', 'mau']),
+  d('avg-transfer-size', 'Avg Transfer Size', 'date', ['date', 'usd', 'ngn']),
+  d('tx-per-active-user-per-day-summary', 'Transactions per Active User per Day Summary', 'aggregate', VALUE),
+  d('tx-per-active-user-per-day', 'Transactions per Active User per Day', 'date', ['date', 'value']),
+  d('active-cards-summary', 'Active Cards Summary', 'aggregate', VALUE),
+  d('active-cards', 'Active Cards', 'date', ['date', 'value']),
+  d('kyc-outcomes-summary', 'KYC Outcomes Summary', 'aggregate',
+    ['completed', 'failed', 'completedDelta', 'failedDelta', 'completedChangePercent', 'failedChangePercent']),
+  d('kyc-outcomes', 'KYC Outcomes', 'date', ['date', 'completed', 'failed']),
+  d('engagement-summary', 'Engagement Summary', 'aggregate',
+    ['retention7d', 'retention30d', 'dauMauRatio',
+     'retention7dDelta', 'retention30dDelta', 'dauMauRatioDelta',
+     'retention7dChangePercent', 'retention30dChangePercent', 'dauMauRatioChangePercent']),
+]
+
+export const peniremitDataset = (id: string): PeniremitDataset | undefined =>
+  PENIREMIT_DATASETS.find((entry) => entry.id === id)

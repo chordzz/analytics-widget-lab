@@ -141,49 +141,57 @@ Dashboard continues to function (FR-DA-10). A denial must never be circumventabl
 a Viewer must not obtain through any Widget data they could not obtain directly from the bound
 Dataset (FR-DA-12).
 
-## Known gap — properties the contract cannot express
+## Field semantics — the gap, and how it closed
 
-5 Data Shape requirements across 5 Visualization Families cannot be
-evaluated against this contract as it currently stands. Those Families are therefore withheld from
-Authors, because the requirement is to offer only Visualization Types the Dataset is *known* to
-satisfy.
+5 Data Shape requirements across 5 Visualization Families could not be
+evaluated from a Field's type and role alone. Those Families were withheld from Authors, because the
+requirement is to offer only Visualization Types the Dataset is *known* to satisfy — and a type says
+how a value is stored while a role says whether it groups or aggregates. Neither can say a number is
+a latitude, that a category holds a workflow state, or that a sum means anything.
+
+**The API now carries them.** `semantic` landed on 17 September with the six values below, and
+`record_volume` on 18 September for the one fact that belongs to the Dataset rather than to any
+Field. Evaluation consults both by default.
+
+This section stays because the requirement did not go away — it moved to the publisher. A Dataset
+that declares no semantics still does not satisfy these Families, and that is now a definite answer
+about the declaration rather than a limit of the model.
 
 ### Composition
 
 §4.2 requires a Measure "summing to a meaningful total". Additivity is a property of meaning, not of type — FR-DP-04 declares which aggregations are meaningful, but not whether the resulting total is itself meaningful as a whole.
 
-**Proposed resolution:** proposed Field semantic 'additive-total'
+**Declared with:** Field semantic 'additive-total', published 17 September. A publisher declares it on the Measure whose total means something.
 
 ### Distribution
 
 §4.2 requires the Measure be spread "across many records". Record volume is not part of the published model.
 
-**Proposed resolution:** proposed Dataset descriptor 'recordVolume'
+**Declared with:** Dataset `record_volume`, published 18 September as an order of magnitude — `thousands` or `millions` is the many this clause asks for.
 
 ### Ranking & Flow
 
 §4.2 admits "ordered stage data" as an alternative shape. Stage ordering is not expressible in the published model, so the funnel/sankey route cannot be evaluated.
 
-**Proposed resolution:** proposed Field semantic 'stage'
+**Declared with:** Field semantic 'stage', published 17 September. Declared on the Dimension whose order is what a funnel reads.
 
 ### Geospatial
 
 §4.2 requires a "location-typed Dimension". `FieldType` does carry `location`, and a Dataset reports `has_location_field` — but a choropleth shades *named areas* and `location` does not separate a region from a postcode or a street address, which cannot be shaded. Nor can it say that two Measures are a coordinate pair rather than two figures. The type is nearly enough here and not quite: it is the one Family where the published model already reaches for the fact and stops one step short of it.
 
-**Proposed resolution:** proposed Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude'
+**Declared with:** Field semantics 'geographic-area', or 'geographic-latitude' with 'geographic-longitude', published 17 September. Both halves of the pair are needed; one alone plots nothing.
 
 ### Status
 
 §4.2 admits "one state Dimension" as an alternative shape. The published model cannot distinguish a state Dimension from any other Dimension.
 
-**Proposed resolution:** proposed Field semantic 'state'
+**Declared with:** Field semantic 'state', published 17 September. Declared on the Dimension holding the condition — settled, pending, failed.
 
-### Impact
+### What declaring them is worth
 
-Measured against the fixture Datasets, adopting the proposed descriptors changes eligibility as
-follows:
+Measured against the fixture Datasets — eligibility evaluated without the descriptors, and with:
 
-| Dataset | Families satisfied today | With the proposed descriptors | Types offered today | With |
+| Dataset | Families without | Families with | Types without | Types with |
 |---|---|---|---|---|
 | Peniremit settlements | 9 / 13 | 11 / 13 | 30 | 37 |
 | Payroll disbursements | 10 / 13 | 12 / 13 | 33 | 40 |
@@ -191,13 +199,13 @@ follows:
 | Corridor coverage | 6 / 13 | 8 / 13 | 21 | 27 |
 | Journal entries | 2 / 13 | 3 / 13 | 5 | 8 |
 
-The descriptors are not a blanket unlock. A Measure marked additive on one Dataset does not make an
-unrelated Dataset eligible for Composition, and a Dataset with no location Field stays ineligible for
-Geospatial whether or not the descriptors are adopted.
+**This is what publishers gain by declaring.** The descriptors are not a blanket unlock: a Measure
+marked additive on one Dataset does not make an unrelated one eligible for Composition, and a Dataset
+with no location Field stays ineligible for Geospatial whichever way it is evaluated.
 
-**Recommendation:** extend the publication contract with one optional semantic descriptor per Field,
-plus one Dataset-level record-volume hint, rather than adding a separate flag per Family. A single
-extension point keeps the contract stable as new Families are introduced.
+The shape of the extension — one optional descriptor per Field plus one Dataset-level volume, rather
+than a flag per Family — is what was asked for and what was built, and it is why adding a fourteenth
+Family would need no change to any declaration.
 
 ## Open interpretations
 

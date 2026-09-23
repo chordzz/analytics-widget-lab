@@ -48,19 +48,24 @@ export const SAMPLES: Record<string, WidgetSample> = {
 
   'data-table': { datasetId: 'support-tickets', title: 'Support tickets', mapping: { columns: ['ref', 'status', 'priority', 'team', 'ageDays'] } },
   'pivot-table': { datasetId: 'support-tickets', title: 'Tickets by team and status', mapping: { x: 'team', secondary: 'status' }, options: { aggregation: 'count' } },
+  'comparison-table': { datasetId: 'product-performance', title: 'Products side by side', mapping: { x: 'product', series: ['revenue', 'adoption', 'retention', 'satisfaction', 'tickets'] } },
 
   treemap: { datasetId: 'product-performance', title: 'Revenue by product', mapping: { x: 'product', value: 'revenue' } },
+  'stacked-100-bar': { datasetId: 'sales-by-region', title: 'Revenue mix by region', mapping: { x: 'region', series: ['subscriptions', 'usage', 'services'] } },
 
   funnel: { datasetId: 'signup-funnel', title: 'Signup funnel', mapping: { x: 'stage', value: 'users' } },
   sankey: { datasetId: 'traffic-flow', title: 'Acquisition flow', mapping: { x: 'from', secondary: 'to', value: 'sessions' } },
+  'bar-chart-race': { datasetId: 'revenue-mix', title: 'Regions by revenue, month by month', mapping: { x: 'month', secondary: 'region', value: 'revenue' } },
 
   'radar-chart': { datasetId: 'product-performance', title: 'Product profile', mapping: { x: 'product', series: ['revenue', 'adoption', 'retention', 'satisfaction', 'tickets'] } },
 
   histogram: { datasetId: 'transactions', title: 'Transaction amounts', mapping: { value: 'amount' } },
   'box-plot': { datasetId: 'transactions', title: 'Amount by channel', mapping: { x: 'channel', value: 'amount' } },
+  'violin-plot': { datasetId: 'transactions', title: 'Shape of amounts by channel', mapping: { x: 'channel', value: 'amount' } },
 
   'scatter-plot': { datasetId: 'product-performance', title: 'Adoption vs retention', mapping: { series: ['adoption', 'retention'] } },
   'bubble-chart': { datasetId: 'product-performance', title: 'Adoption, retention, revenue', mapping: { series: ['adoption', 'retention', 'revenue'] } },
+  'heatmap-matrix': { datasetId: 'product-performance', title: 'What moves with what', mapping: { series: ['revenue', 'adoption', 'retention', 'satisfaction', 'tickets'] } },
 
   'calendar-heatmap': { datasetId: 'revenue-daily', title: 'Daily revenue', mapping: { x: 'date', value: 'revenue' } },
   'cohort-grid': { datasetId: 'cohort-retention', title: 'Retention by cohort', mapping: { x: 'cohort', secondary: 'period', value: 'retention' } },

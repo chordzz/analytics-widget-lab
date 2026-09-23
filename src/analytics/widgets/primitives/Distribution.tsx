@@ -400,3 +400,196 @@ export function BoxPlot({ data, xKey, valueKey, format = 'number', height, class
     </VizFrame>
   )
 }
+
+// --- violin plot ------------------------------------------------------------
+
+/**
+ * A violin is a box plot that shows the shape instead of summarising it.
+ *
+ * The box plot draws five numbers, and five numbers cannot tell a single broad
+ * hump from two separate clusters — a bimodal measure and a flat one produce
+ * the same box. That distinction is usually the finding: two clusters of
+ * settlement times mean two populations, not one slow average.
+ *
+ * So it is a density curve mirrored about its own axis, with the median kept as
+ * a tick. The box plot's quartiles stay available beside it; this answers the
+ * question the quartiles cannot.
+ */
+
+/** A density estimate: `steps` evenly spaced samples over the value range. */
+function density(values: readonly number[], steps: number): { at: number; weight: number }[] {
+  const sorted = [...values].sort((a, b) => a - b)
+  const low = sorted[0]
+  const high = sorted[sorted.length - 1]
+  const span = high - low
+
+  // Every value identical — a legitimate distribution, and one with no width to
+  // sample across. Drawn as a single full-weight band rather than dividing by a
+  // zero span.
+  if (span === 0) return [{ at: low, weight: 1 }]
+
+  /*
+   * Silverman's rule of thumb for the kernel width. A fixed bandwidth cannot
+   * work across measures: the same number is far too wide for a ratio between
+   * 0 and 1 and far too narrow for currency in the millions. This scales with
+   * the data's own spread, so one implementation suits both.
+   */
+  const mean = sorted.reduce((sum, value) => sum + value, 0) / sorted.length
+  const variance =
+    sorted.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(1, sorted.length - 1)
+  const bandwidth =
+    1.06 * Math.sqrt(variance) * Math.pow(sorted.length, -0.2) || span / steps
+
+  return Array.from({ length: steps }, (_, index) => {
+    const at = low + (index / (steps - 1)) * span
+    // Gaussian kernel. Not normalised: the curve is scaled to its own peak
+    // below, so a constant factor would cancel out anyway.
+    const weight = sorted.reduce((sum, value) => {
+      const z = (at - value) / bandwidth
+      return sum + Math.exp(-0.5 * z * z)
+    }, 0)
+    return { at, weight }
+  })
+}
+
+export interface ViolinPlotProps {
+  data: readonly Row[]
+  /** Dimension splitting the data into violins. */
+  xKey: string
+  /** Measure whose density is drawn. */
+  valueKey: string
+  format?: ValueFormat
+  height?: number
+  className?: string
+}
+
+export function ViolinPlot({
+  data,
+  xKey,
+  valueKey,
+  format = 'number',
+  height,
+  className,
+}: ViolinPlotProps) {
+  const groups = new Map<string, number[]>()
+  for (const row of data) {
+    const key = String(row[xKey])
+    const value = Number(row[valueKey] ?? 0)
+    if (Number.isFinite(value)) groups.set(key, [...(groups.get(key) ?? []), value])
+  }
+
+  /*
+   * Four values is the same floor the box plot uses, and for a stronger reason
+   * here: a density curve over three points is an artefact of the bandwidth
+   * rather than a description of anything. Sparse groups are dropped, not
+   * drawn thin.
+   */
+  const violins = [...groups.entries()]
+    .filter(([, values]) => values.length >= 4)
+    .map(([label, values]) => ({
+      label,
+      values,
+      summary: summarise(label, values),
+      curve: density(values, 32),
+    }))
+    .filter((violin): violin is typeof violin & { summary: Summary } => violin.summary !== null)
+
+  if (violins.length === 0) return null
+
+  /*
+   * Scaled to the whiskers, like the box plot, and for the same reason — one
+   * outlier two orders of magnitude out would flatten every curve to a line.
+   * The curve is clipped to the scale rather than the scale stretched to it.
+   */
+  const lowest = Math.min(...violins.map((v) => v.summary.min))
+  const highest = Math.max(...violins.map((v) => v.summary.max))
+  const pad = (highest - lowest) * 0.08 || 1
+  const floor = Math.max(0, lowest - pad)
+  const ceiling = highest + pad
+  const span = ceiling - floor || 1
+
+  return (
+    <VizFrame height={height} className={className}>
+      {({ width, height: plotHeight }) => {
+        const labelHeight = 20
+        const plot = plotHeight - labelHeight
+        const band = width / violins.length
+        const maxHalfWidth = Math.min(38, band * 0.42)
+        const yFor = (value: number) =>
+          plot - ((Math.min(ceiling, Math.max(floor, value)) - floor) / span) * plot
+
+        return (
+          <svg width={width} height={plotHeight} role="img" aria-label="Violin plot">
+            {[0, 0.5, 1].map((fraction) => {
+              const y = plot - fraction * plot
+              return (
+                <g key={fraction}>
+                  <line x1={0} x2={width} y1={y} y2={y} stroke="var(--a-grid)" strokeDasharray="2 4" />
+                  <text x={2} y={y - 3} style={{ fontSize: 10, fill: 'var(--a-axis)' }}>
+                    {formatAxis(floor + fraction * span, format)}
+                  </text>
+                </g>
+              )
+            })}
+
+            {violins.map((violin, index) => {
+              const centre = index * band + band / 2
+              const peak = Math.max(...violin.curve.map((point) => point.weight)) || 1
+
+              // Each curve is scaled to its own peak, so a group of forty and a
+              // group of four thousand are compared on shape rather than on
+              // count — which is what the chart is for. The tooltip carries the
+              // count, since the drawing deliberately no longer does.
+              const half = violin.curve.map((point) => ({
+                y: yFor(point.at),
+                x: (point.weight / peak) * maxHalfWidth,
+              }))
+
+              const right = half.map((point) => `${centre + point.x},${point.y}`)
+              const left = [...half].reverse().map((point) => `${centre - point.x},${point.y}`)
+
+              return (
+                <g key={violin.label}>
+                  <title>
+                    {`${violin.label} — ${String(violin.values.length)} records, median ` +
+                      `${formatValue(violin.summary.median, format)}, IQR ` +
+                      `${formatValue(violin.summary.q1, format)}–${formatValue(violin.summary.q3, format)}`}
+                  </title>
+
+                  <polygon
+                    points={[...right, ...left].join(' ')}
+                    fill="var(--a-series-1)"
+                    fillOpacity={0.28}
+                    stroke="var(--a-series-1)"
+                    strokeWidth={1.5}
+                    strokeLinejoin="round"
+                  />
+
+                  {/* The median, kept from the box plot — a curve alone gives no
+                      single number to read off, and readers look for one. */}
+                  <line
+                    x1={centre - maxHalfWidth * 0.5}
+                    x2={centre + maxHalfWidth * 0.5}
+                    y1={yFor(violin.summary.median)}
+                    y2={yFor(violin.summary.median)}
+                    stroke="var(--a-series-1)"
+                    strokeWidth={2.5}
+                  />
+
+                  <text
+                    x={centre}
+                    y={plotHeight - 5}
+                    textAnchor="middle"
+                    style={{ fontSize: 11, fill: 'var(--a-axis)' }}
+                  >
+                    {violin.label}
+                  </text>
+                </g>
+              )
+            })}
+          </svg>
+        )
+      }}
+    </VizFrame>
+  )
+}

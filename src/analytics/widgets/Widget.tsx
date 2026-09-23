@@ -21,14 +21,17 @@ import { fieldOf } from '../data/types'
 import {
   ActivityFeed,
   BarChart,
+  BarChartRace,
   BoxPlot,
   CalendarHeatmap,
   CohortGrid,
+  ComparisonTable,
   DataTable,
   DonutChart,
   FunnelChart,
   GanttChart,
   GaugeTile,
+  HeatmapMatrix,
   Histogram,
   PivotTable,
   PointMap,
@@ -44,6 +47,7 @@ import {
   StatusTile,
   Treemap,
   TrendChart,
+  ViolinPlot,
 } from './primitives'
 import type { Dataset, Row } from '../data/types'
 import type { StatusTone } from '../theme/tokens'
@@ -403,7 +407,8 @@ function renderBody(
     case 'bar-chart-vertical':
     case 'bar-chart-horizontal':
     case 'grouped-bar-chart':
-    case 'stacked-bar-chart': {
+    case 'stacked-bar-chart':
+    case 'stacked-100-bar': {
       const variant =
         typeId === 'bar-chart-horizontal'
           ? 'horizontal'
@@ -411,7 +416,9 @@ function renderBody(
             ? 'grouped'
             : typeId === 'stacked-bar-chart'
               ? 'stacked'
-              : 'vertical'
+              : typeId === 'stacked-100-bar'
+                ? 'stacked-100'
+                : 'vertical'
       return (
         <BarChart
           data={rows}
@@ -703,6 +710,41 @@ function renderBody(
         />
       )
 
+    case 'violin-plot':
+      return (
+        <ViolinPlot
+          data={rows}
+          xKey={mapping.x ?? ''}
+          valueKey={mapping.value ?? ''}
+          format={primaryFormat}
+        />
+      )
+
+    case 'heatmap-matrix': {
+      /*
+       * The matrix correlates the Measures the Author put on the widget, not
+       * every Measure the Dataset declares. Binding is the Author's statement
+       * of what this widget is about, and a matrix that quietly included three
+       * more columns would answer a question nobody asked.
+       */
+      const measures = (mapping.series ?? [])
+        .map((key) => fieldOf(dataset, key))
+        .filter((field): field is NonNullable<typeof field> => field !== undefined)
+      return <HeatmapMatrix data={rows} measures={measures} />
+    }
+
+    case 'bar-chart-race':
+      return (
+        <BarChartRace
+          data={rows}
+          timeKey={mapping.x ?? ''}
+          entityKey={mapping.secondary ?? ''}
+          valueKey={mapping.value ?? ''}
+          top={typeof options.top === 'number' ? options.top : undefined}
+          format={primaryFormat}
+        />
+      )
+
     case 'calendar-heatmap':
       return (
         <CalendarHeatmap
@@ -780,9 +822,39 @@ function renderBody(
       return <DataTable data={rows} columns={columns} />
     }
 
+    case 'comparison-table': {
+      const metrics = (mapping.series ?? [])
+        .map((key) => fieldOf(dataset, key))
+        .filter((field): field is NonNullable<typeof field> => field !== undefined)
+      return (
+        <ComparisonTable
+          data={rows}
+          entityKey={mapping.x ?? ''}
+          metrics={metrics}
+          showLeaders={options.showLeaders === true}
+          higherIsBetter={
+            isDirectionMap(options.higherIsBetter) ? options.higherIsBetter : undefined
+          }
+        />
+      )
+    }
+
     default:
       return null
   }
+}
+
+/**
+ * `presentation_options` is opaque to the API, so anything read out of it is
+ * unvalidated input rather than a typed field — checked here rather than cast.
+ */
+function isDirectionMap(value: unknown): value is Record<string, boolean> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every((entry) => typeof entry === 'boolean')
+  )
 }
 
 const SEVERITY: Record<string, number> = { good: 0, warning: 1, serious: 2, critical: 3 }

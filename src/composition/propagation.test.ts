@@ -165,20 +165,35 @@ describe('view-switcher Controls — the target must also be permissible', () =>
 
   test('an eligible Type with no renderer is refused, and gives the right reason', () => {
     /*
-     * Comparison table is Tabular, so Corridor coverage satisfies its Data Shape
-     * — it simply has not been built. That is a different refusal from an
-     * ineligible Type, and the two must not be reported the same way.
+     * A Type the Dataset *can* present but nothing can draw is a different
+     * refusal from a Type the Dataset cannot present, and the two must not be
+     * reported the same way.
      *
-     * This was `pivot-table` until merge §2, when the module's renderer became
-     * the source of truth and the pivot table turned out to be built. Swapped
-     * for the other unbuilt Tabular Type, which keeps the case identical.
+     * The predicate is a stub rather than the live catalogue, which is the
+     * third version of this test. It was `pivot-table` until merge §2 built
+     * one, then `comparison-table` until that was built too — each time the
+     * test broke for the happiest possible reason and had to be re-pointed at
+     * whatever was still missing. Only one Type is unbuilt now and no fixture
+     * satisfies it, so there is no fourth name to swap in.
+     *
+     * What is under test here is `canSwitchTo`'s reasoning, not which renderers
+     * exist today: given a Type that fits and a renderer that is absent, does
+     * it say the right thing. Withholding one explicitly asks exactly that, and
+     * cannot be invalidated by shipping a renderer. That the real catalogue's
+     * gap is one named Type is asserted in `governance.test.ts`, where it
+     * belongs.
      */
-    expect(canPresent(corridorCoverage, 'comparison-table')).toBe(true)
+    expect(canPresent(corridorCoverage, 'data-table')).toBe(true)
+    const withoutTables = (id: string) => id !== 'data-table' && hasRenderer(id)
 
-    const verdict = canSwitchTo('comparison-table', corridorCoverage, hasRenderer)
+    const verdict = canSwitchTo('data-table', corridorCoverage, withoutTables)
     expect(verdict.applies).toBe(false)
     if (verdict.applies) throw new Error('unreachable')
     expect(verdict.reason).toContain('no renderer')
+
+    // And with the renderer present it is allowed, so the refusal above is the
+    // missing renderer talking and not something else about this Type.
+    expect(canSwitchTo('data-table', corridorCoverage, hasRenderer).applies).toBe(true)
 
     // Contrast: a Type the Dataset genuinely cannot satisfy.
     const ineligible = canSwitchTo('scatter-plot', corridorCoverage, hasRenderer)

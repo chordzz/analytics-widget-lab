@@ -196,22 +196,28 @@ describe('renderer coverage', () => {
     const drawable = new Set(classified)
     const unbuilt = visualizationTypes.filter((type) => !drawable.has(type.id)).map((t) => t.id)
 
-    expect(unbuilt.sort()).toEqual(
-      [
-        'bar-chart-race',
-        'choropleth-map',
-        'comparison-table',
-        'heatmap-matrix',
-        'stacked-100-bar',
-        'violin-plot',
-      ].sort(),
-    )
+    expect(unbuilt.sort()).toEqual(['choropleth-map'])
   })
 
-  test('classification stays ahead of rendering, as intended', () => {
-    // All 42 Types are classified whether or not anything can draw them —
-    // FR-VZ-01/02 are satisfied independently of renderer work.
+  /*
+   * This asserted `drawable < all`, which was true while five Types were
+   * ordinary work nobody had done. Those five are built, and the one that is
+   * left is left for a reason that is not about renderer effort: a choropleth
+   * needs roughly 100KB of boundary geometry bundled into every host, whether
+   * or not it draws maps, and that dependency has never been agreed.
+   *
+   * So the inequality would now pass on a single deliberate omission and keep
+   * passing if someone deleted four renderers. The property worth holding is
+   * the one that was always underneath it: classification is independent of
+   * rendering — all 42 Types are classified — and the gap between the two is
+   * exactly the standing decision, named.
+   */
+  test('classification stays ahead of rendering, and the gap is one named decision', () => {
     expect(visualizationTypes).toHaveLength(42)
-    expect([...drawableIds].length).toBeLessThan(visualizationTypes.length)
+
+    const undrawable = visualizationTypes
+      .map((type) => type.id)
+      .filter((id) => !drawableIds.has(id))
+    expect(undrawable).toEqual(['choropleth-map'])
   })
 })

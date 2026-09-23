@@ -34,7 +34,7 @@ import {
 import { formatAxis, formatValue } from '../format'
 import { seriesColor } from '../../theme/tokens'
 
-export type BarVariant = 'vertical' | 'horizontal' | 'grouped' | 'stacked'
+export type BarVariant = 'vertical' | 'horizontal' | 'grouped' | 'stacked' | 'stacked-100'
 
 export interface BarChartProps extends ChartProps {
   /** @default 'vertical' */
@@ -157,7 +157,20 @@ export function BarChart({
   // to say why it is empty.
   if (data.length === 0) return null
 
-  const stacked = variant === 'stacked'
+  /*
+   * `stacked-100` answers a different question from `stacked`, on the same
+   * marks. Stacked compares totals *and* composition and lets the first hide
+   * the second: a category twice the size of its neighbour dominates the chart
+   * whatever its mix. Normalising to full width throws the totals away
+   * deliberately, so every category's composition is compared like for like.
+   *
+   * Which is also its hazard, and why the tooltip below carries the absolute
+   * value as well as the share. A bar reading 50% over four records and one
+   * reading 50% over forty thousand are drawn identically, and only one of them
+   * means anything.
+   */
+  const normalised = variant === 'stacked-100'
+  const stacked = variant === 'stacked' || normalised
   // Recharts calls bars-running-sideways `layout="vertical"`, which is the
   // opposite of what the visualisation is called.
   const sideways = variant === 'horizontal'
@@ -180,7 +193,11 @@ export function BarChart({
     tick: AXIS_TICK,
     axisLine: false,
     tickLine: false,
-    tickFormatter: (value: unknown) => formatAxis(value, format),
+    // A normalised axis runs 0–1 and means *share*, so it is formatted as one
+    // whatever the measure is. Passing `currency` through here would label the
+    // ticks $0 through $1 on a chart that shows no currency at all.
+    tickFormatter: (value: unknown) => formatAxis(value, normalised ? 'percent' : format),
+    ...(normalised ? { domain: [0, 1] as [number, number], ticks: [0, 0.25, 0.5, 0.75, 1] } : {}),
   } as const
 
   return (
@@ -200,6 +217,7 @@ export function BarChart({
             height={plotHeight}
             data={data as object[]}
             layout={sideways ? 'vertical' : 'horizontal'}
+            {...(normalised ? { stackOffset: 'expand' as const } : {})}
             margin={{ top: 6, right: 8, bottom: 0, left: 0 }}
             barGap={2}
             barCategoryGap="22%"
@@ -237,8 +255,17 @@ export function BarChart({
               labelStyle={TOOLTIP_LABEL_STYLE}
               itemStyle={TOOLTIP_ITEM_STYLE}
               cursor={{ fill: 'var(--a-surface-hover)', opacity: 0.6 }}
-              formatter={(value: unknown, name: unknown) => [
-                formatValue(value, format),
+              /*
+               * The absolute value, and the share it became. Recharts hands the
+               * formatter the *original* datum rather than the expanded
+               * fraction, so the share is recomputed here against the row's
+               * total — which is the number the reader is looking at, and the
+               * one they cannot recover from the drawing.
+               */
+              formatter={(value: unknown, name: unknown, item: unknown) => [
+                normalised
+                  ? `${formatValue(value, format)} · ${shareOf(value, item, series)}`
+                  : formatValue(value, format),
                 String(name),
               ]}
             />
@@ -267,4 +294,30 @@ export function BarChart({
       }}
     </VizFrame>
   )
+}
+
+/**
+ * A stacked segment's share of its own bar.
+ *
+ * Recomputed from the row rather than read off the geometry: recharts' expand
+ * offset changes what is *drawn* and leaves `payload` holding the original
+ * numbers, so the fraction exists nowhere else by the time a tooltip is built.
+ * A total of zero has no shares — every segment is 0/0 — and says so rather
+ * than dividing.
+ */
+function shareOf(
+  value: unknown,
+  item: unknown,
+  series: readonly { key: string }[],
+): string {
+  const row = (item as { payload?: Record<string, unknown> } | undefined)?.payload
+  if (typeof value !== 'number' || !row) return '—'
+
+  const total = series.reduce((sum, spec) => {
+    const entry = row[spec.key]
+    return typeof entry === 'number' && Number.isFinite(entry) ? sum + entry : sum
+  }, 0)
+
+  if (total === 0) return 'no share of an empty total'
+  return formatValue(value / total, 'percent')
 }

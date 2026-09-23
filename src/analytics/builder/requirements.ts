@@ -23,6 +23,8 @@
 
 import { acceptedByApi } from '../../dashboard/api-taxonomy'
 import { WIDGET_TYPES, widgetType } from '../widgets/catalog'
+import { satisfies as familySatisfies } from '../../visualization/data-shape'
+import { visualizationFamilies } from '../../visualization/families'
 import type { WidgetType } from '../widgets/catalog'
 import {
   fieldOf,
@@ -134,6 +136,12 @@ const SLOTS: Record<string, Slot[]> = {
     slot('x', 'Categories', 'One stack per value.', CATEGORY),
     slot('series', 'Measures', 'One segment within each stack.', MEASURE, 2, 4),
   ],
+  'stacked-100-bar': [
+    slot('x', 'Categories', 'One full-width bar per value.', CATEGORY),
+    // Parts of one whole, so the minimum is two and the wording says why: a
+    // single "share" is always 100% and draws a solid bar that means nothing.
+    slot('series', 'Measures', 'Parts of the whole — two or more, or every bar is 100% of itself.', MEASURE, 2, 5),
+  ],
 
   // Composition
   'pie-chart': [
@@ -166,6 +174,11 @@ const SLOTS: Record<string, Slot[]> = {
     slot('x', 'From', 'Where flow leaves.', DIMENSION),
     slot('secondary', 'To', 'Where flow arrives.', DIMENSION),
     slot('value', 'Volume', 'Ribbon thickness.', MEASURE),
+  ],
+  'bar-chart-race': [
+    slot('x', 'Period', 'One frame of the race per value.', TIME),
+    slot('secondary', 'Racers', 'One bar each, ranked within every period.', DIMENSION),
+    slot('value', 'Measure', 'What they are ranked on.', MEASURE),
   ],
 
   // Status
@@ -207,6 +220,10 @@ const SLOTS: Record<string, Slot[]> = {
     slot('secondary', 'Columns', 'Grouped across the top.', DIMENSION),
     slot('value', 'Measure', 'Aggregated per cell. Counts rows if empty.', MEASURE, 0, 1),
   ],
+  'comparison-table': [
+    slot('x', 'Entities', 'One column each.', DIMENSION),
+    slot('series', 'Metrics', 'One row each, in this order.', MEASURE, 2, 8),
+  ],
 
   // Distribution
   histogram: [slot('value', 'Measure', 'Bucketed by value.', MEASURE)],
@@ -214,10 +231,19 @@ const SLOTS: Record<string, Slot[]> = {
     slot('x', 'Groups', 'One box per value.', DIMENSION),
     slot('value', 'Measure', 'Summarised within each group.', MEASURE),
   ],
+  'violin-plot': [
+    slot('x', 'Groups', 'One violin per value.', DIMENSION),
+    slot('value', 'Measure', 'Its spread drawn as a density curve.', MEASURE),
+  ],
 
   // Correlation
   'scatter-plot': [slot('series', 'Measures', 'Exactly two — x then y.', MEASURE, 2, 2)],
   'bubble-chart': [slot('series', 'Measures', 'Three — x, y, then size.', MEASURE, 3, 3)],
+  'heatmap-matrix': [
+    // Two Measures make a one-cell matrix, which is a scatter plot with the
+    // detail thrown away. Three is where the grid starts earning its place.
+    slot('series', 'Measures', 'Three or more — every pair gets a cell.', MEASURE, 3, 8),
+  ],
 
   // Temporal
   'calendar-heatmap': [
@@ -327,10 +353,42 @@ export const candidatesFor = (dataset: Dataset, entry: Slot): Field[] =>
     (field) => entry.accepts.includes(field.role) && (!entry.geo || isGeographic(field)),
   )
 
-/** Whether a dataset has enough of the right fields for every required slot. */
+/** The Data Shape a widget type's Family requires, if we model that Family. */
+export const familyShapeFor = (typeId: string) =>
+  visualizationFamilies.find((family) => family.id === widgetType(typeId)?.family)?.dataShape
+
+/**
+ * Whether this Dataset can carry this widget type.
+ *
+ * Two questions, and both have to hold. **Can the Family present this Dataset
+ * at all** — FR-VZ-05, and the one the API enforces — and **can the Fields fill
+ * the slots** this particular Type needs.
+ *
+ * Slots alone was the rule until 22 September, and it offered work that could
+ * not be kept. `Widget.visualization_type` is documented as *"must belong to a
+ * Family the bound Dataset's Data Shape satisfies — checked on save, so a
+ * stored Widget can never reference a chart its Dataset could not render."* A
+ * donut needs one Dimension and one Measure, which nearly every Dataset has, so
+ * the picker offered it over a Dataset declaring no additive Measure; an Author
+ * could choose it, map it, watch it draw, and have the save refused. Across our
+ * own fixtures that was 54 of 349 offers — one in seven, every one a dead end.
+ *
+ * Our clauses are the same as the API's published rules, and narrower in one
+ * place: Geospatial asks us for a Measure and asks them for nothing. Narrower
+ * is the safe direction — we withhold something they would have accepted, which
+ * costs an option, where the other way costs somebody their work.
+ *
+ * `needs.manyRows` used to be checked here separately. Distribution's Family
+ * clause is the same rule, so the explicit check is gone rather than left
+ * beside it: two statements of one requirement is how the backend's own
+ * publication gate and `/presentation` drifted apart.
+ */
 export function satisfies(typeId: string, dataset: Dataset): boolean {
   const entries = slotsFor(typeId)
   if (entries.length === 0) return false
+
+  const shape = familyShapeFor(typeId)
+  if (shape && familySatisfies(dataset, shape).status !== 'satisfied') return false
 
   /*
    * Slots are checked against a shared pool rather than independently. A radar
@@ -457,6 +515,10 @@ function reasonFor(typeId: string, dataset: Dataset): UnavailableReason {
      */
     if (entry.geo) {
       /*
+       * No longer inexpressible — `semantic` landed on 17 September — so the
+       * wording says what is missing rather than blaming the contract for it.
+       */
+      /*
        * Named by what the slot wants rather than by the first thing missing.
        * A point map's place slot failing is not the whole story — it also needs
        * a latitude and a longitude — and an Author told only about the first
@@ -469,16 +531,76 @@ function reasonFor(typeId: string, dataset: Dataset): UnavailableReason {
 
       return {
         kind: 'undeclared',
-        because: `Needs ${wants} — something the publication contract cannot express yet.`,
+        because: `Needs ${wants}. The publisher can declare it; this Dataset has not.`,
       }
     }
 
     return { kind: 'shape', because: shortfall(entry, available.length) }
   }
 
-  // Every slot fills, so the type was excluded for a reason the slot table does
-  // not model. Saying so beats inventing one.
+  /*
+   * Every slot fills, so whatever excluded this Type is not about Fields. The
+   * Family is the remaining reason and the only one that carries information —
+   * a donut's slots are one Dimension and one Measure, which nearly every
+   * Dataset has, and it is Composition asking for an additive Measure that
+   * withholds it.
+   *
+   * Second rather than first, deliberately. The slot messages above are more
+   * specific ("needs a Measure, and this has none"), and checking the Family
+   * ahead of them replaced those with a vaguer restatement of the same fact.
+   */
+  const familyReason = familyShortfall(typeId, dataset)
+  if (familyReason) return familyReason
+
+  // Neither the slots nor the Family explain it. Saying so beats inventing one.
   return { kind: 'shape', because: `${dataset.name} does not suit this widget type.` }
+}
+
+/**
+ * Why this Type's Family cannot present this Dataset, said to whoever can act.
+ *
+ * The distinction is the whole value of the message. A clause carrying an
+ * `undecidable` block is one a *declaration* would settle — nobody has said
+ * this Measure is additive, or how many rows there are — and the publisher can
+ * fix it today. A clause without one is arithmetic: two Measures are needed and
+ * there is one, and no declaration changes that.
+ *
+ * The clause is re-walked rather than read off `unmet`, which carries only the
+ * descriptions. Matching those strings back to their clauses would work until
+ * somebody edited one.
+ */
+function familyShortfall(typeId: string, dataset: Dataset): UnavailableReason | null {
+  const shape = familyShapeFor(typeId)
+  if (!shape || familySatisfies(dataset, shape).status === 'satisfied') return null
+
+  const failing = shape.clauses.find(
+    (clause) => !(clause.testWithSemantics ?? clause.test)(dataset),
+  )
+  if (!failing) return null
+
+  /*
+   * Record volume is the one descriptor with a meaningful *negative*, and the
+   * generic rule below cannot see it.
+   *
+   * Every other clause turns on a flag being present — a Measure marked
+   * additive, a Dimension marked a state — so failing means nobody declared it,
+   * and "the publisher can declare it" is true. `recordVolume` can be declared
+   * `few`, and telling a publisher who said so that they have not said is both
+   * wrong and unactionable: there is no further declaration to make.
+   */
+  if (dataset.recordVolume === 'few' && failing.describe.includes('many records')) {
+    return {
+      kind: 'shape',
+      because: `${dataset.name} holds too few records for a distribution to mean anything.`,
+    }
+  }
+
+  return failing.undecidable
+    ? {
+        kind: 'undeclared',
+        because: `Needs ${failing.describe}. The publisher can declare it; ${dataset.name} has not.`,
+      }
+    : { kind: 'shape', because: `This widget needs ${failing.describe}.` }
 }
 
 function shortfall(entry: Slot, has: number): string {

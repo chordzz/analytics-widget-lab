@@ -369,3 +369,196 @@ describe('personal data is read, never inferred', () => {
     expect(exposes({ classification: 'internal' })).toBe(true)
   })
 })
+
+/*
+ * The Types the API accepts, and the property name they arrive under.
+ *
+ * There were no tests here at all, which is the reason this shipped broken.
+ * `visualizations()` read `entry.types`; the API sends `visualization_types`
+ * and always has — the published schema said otherwise until 18 September and
+ * we followed the schema. So every Family came back with an empty list from
+ * the day BE-5 was adopted.
+ *
+ * What made it survive is the fallback right below it: an empty answer is read
+ * as "the endpoint declined", and `acceptedByApi` then offers everything rather
+ * than locking the product. That is the correct behaviour for a 403 and it is
+ * perfect cover for a parse that silently yields nothing — a 200, no error, no
+ * diagnostic, and validation quietly not happening.
+ */
+describe('the accepted taxonomy', () => {
+  const entry = (types: Record<string, unknown>) => ({
+    family: 'trend',
+    requirement: 'at least one Measure and a Time Dimension',
+    single_value: false,
+    ...types,
+  })
+
+  test('reads the property name the API actually sends', async () => {
+    const catalogue = catalogueWith(() =>
+      json([entry({ visualization_types: ['line-chart', 'area-chart'] })]),
+    )
+    const [family] = await catalogue.visualizations()
+    expect(family.types).toEqual(['line-chart', 'area-chart'])
+  })
+
+  test('still reads the name the schema used to document', async () => {
+    // Not for the API's sake — it never sent this. For the next disagreement.
+    const catalogue = catalogueWith(() => json([entry({ types: ['line-chart'] })]))
+    const [family] = await catalogue.visualizations()
+    expect(family.types).toEqual(['line-chart'])
+  })
+
+  test('carries the requirement and the single-value flag', async () => {
+    const catalogue = catalogueWith(() =>
+      json([entry({ visualization_types: ['stat-card'], single_value: true })]),
+    )
+    const [family] = await catalogue.visualizations()
+    expect(family).toMatchObject({
+      family: 'trend',
+      requirement: 'at least one Measure and a Time Dimension',
+      singleValue: true,
+    })
+  })
+
+  test('a Family carrying no Types is empty, not broken', async () => {
+    const catalogue = catalogueWith(() => json([entry({})]))
+    const [family] = await catalogue.visualizations()
+    expect(family.types).toEqual([])
+  })
+
+  test('a refusal is an empty taxonomy, so nothing is locked', async () => {
+    // 403 is the likely one: `/v1/visualizations` needs `dataset.read`, which a
+    // viewer who can compose might not have.
+    const catalogue = catalogueWith(() => json({ message: 'forbidden' }, 403))
+    expect(await catalogue.visualizations()).toEqual([])
+  })
+})
+
+/*
+ * What the API gained on 17–18 September, and what we do with it.
+ *
+ * Each of these was previously either inferred from something adjacent or not
+ * read at all, and the inference is the interesting half: it was correct for
+ * the one case it could reach and silently wrong about the four it could not.
+ */
+describe('the declaration, now that it can carry meaning', () => {
+  const withFields = (fields: ApiDataset['fields'], extra: Partial<ApiDataset> = {}): ApiDataset => ({
+    ...settlements,
+    fields,
+    ...extra,
+  })
+
+  const dimension = (key: string, type: string, semantic?: string) => ({
+    key,
+    label: key,
+    type,
+    role: 'dimension' as const,
+    filterable: true,
+    orderable: true,
+    ...(semantic ? { semantic } : {}),
+  })
+
+  const measure = (key: string, semantic?: string) => ({
+    key,
+    label: key,
+    type: 'number',
+    role: 'measure' as const,
+    aggregations: ['sum'],
+    filterable: false,
+    orderable: true,
+    ...(semantic ? { semantic } : {}),
+  })
+
+  test('a declared semantic is read, not re-derived', () => {
+    const dataset = datasetFrom(withFields([dimension('status', 'category', 'state')]))
+    expect(dataset.fields[0].semantic).toBe('state')
+  })
+
+  test('the four semantics inference could never reach', () => {
+    /*
+     * The old rule was `type === 'location' && role === 'dimension'` →
+     * `geographic-area`, and nothing else. So `state`, `stage`,
+     * `additive-total` and the coordinate pair were unreachable however a
+     * publisher declared them, and four of the five Families stayed shut.
+     */
+    const dataset = datasetFrom(
+      withFields([
+        dimension('status', 'category', 'state'),
+        dimension('step', 'category', 'stage'),
+        measure('amount', 'additive-total'),
+        measure('lat', 'geographic-latitude'),
+        measure('lng', 'geographic-longitude'),
+      ]),
+    )
+    expect(dataset.fields.map((f) => f.semantic)).toEqual([
+      'state',
+      'stage',
+      'additive-total',
+      'geographic-latitude',
+      'geographic-longitude',
+    ])
+  })
+
+  test('a location Field with no semantic still names a place', () => {
+    // The backend kept this deliberately, so nothing that worked before stops
+    // working. We match them rather than treating `semantic` as a superset.
+    const dataset = datasetFrom(withFields([dimension('country', 'location')]))
+    expect(dataset.fields[0].semantic).toBe('geographic-area')
+  })
+
+  test('a declared semantic wins over the location inference', () => {
+    const dataset = datasetFrom(withFields([dimension('country', 'location', 'state')]))
+    expect(dataset.fields[0].semantic).toBe('state')
+  })
+
+  test('an unrecognised semantic is dropped rather than carried', () => {
+    // A vocabulary we do not share. Passing it through would put a value in the
+    // model that nothing tests for and every exhaustive check would miss.
+    const dataset = datasetFrom(withFields([dimension('thing', 'category', 'geographic-region')]))
+    expect(dataset.fields[0].semantic).toBeUndefined()
+  })
+
+  test('record volume reduces to the question a Family asks', () => {
+    const volumes = ['single-row', 'tens', 'thousands', 'millions'].map(
+      (record_volume) => datasetFrom({ ...settlements, record_volume }).recordVolume,
+    )
+    // The API's own threshold for `has_many_records`, not one of our invention.
+    expect(volumes).toEqual(['few', 'few', 'many', 'many'])
+  })
+
+  test('an undeclared volume is absent, not few', () => {
+    // Different answers: `few` is the publisher saying it is small, absent is
+    // nobody saying. Only the first justifies telling an Author no.
+    expect(datasetFrom(settlements).recordVolume).toBeUndefined()
+  })
+
+  test('a declared time range is read', () => {
+    const dataset = datasetFrom({
+      ...settlements,
+      filter_parameters: [
+        { name: 'start_date', type: 'date' },
+        { name: 'end_date', type: 'date' },
+      ],
+      time_range: { field: 'day', from_parameter: 'start_date', to_parameter: 'end_date' },
+    })
+    expect(dataset.timeRange).toEqual({ field: 'day', from: 'start_date', to: 'end_date' })
+  })
+
+  test('half a range is no range', () => {
+    // Sending `from` without `to` narrows one end and leaves the other open,
+    // which draws a chart that looks filtered and is not.
+    const dataset = datasetFrom({
+      ...settlements,
+      time_range: { field: 'day', from_parameter: 'start_date' },
+    })
+    expect(dataset.timeRange).toBeUndefined()
+  })
+
+  test('both ends the same parameter is not a range', () => {
+    const dataset = datasetFrom({
+      ...settlements,
+      time_range: { field: 'day', from_parameter: 'on', to_parameter: 'on' },
+    })
+    expect(dataset.timeRange).toBeUndefined()
+  })
+})

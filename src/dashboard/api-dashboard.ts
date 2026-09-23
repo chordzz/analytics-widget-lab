@@ -132,6 +132,28 @@ function widgetInputFrom(widget: PlacedWidget, widgetId: WidgetIdResolver): ApiW
         ? {}
         : { [BINDINGS_KEY]: widget.parameterBindings }),
     },
+    /*
+     * The declared home for a binding, and where it should have been going.
+     *
+     * `default_filters` is *"filter values applied unless a viewer changes an
+     * exposed one"*, with keys validated against the Dataset's published Filter
+     * Parameters. That is exactly what a binding is. We were writing them only
+     * to `presentation_options` under a private key — which Analytics treats as
+     * opaque, so nothing validated them and nothing but us could read them.
+     *
+     * The chart was still right, because we send the parameters ourselves on
+     * the query call. What was wrong is the *record*: a Dashboard whose Widget
+     * says "failed transactions" carried no stored evidence of the narrowing
+     * anywhere the API could see, so any other reader of that Dashboard — a
+     * second client, an export, their own admin surface — would have shown the
+     * unfiltered figure under our title.
+     *
+     * Still written to both. Boards saved before today carry only the private
+     * key, and `widgetFrom` reads whichever is present.
+     */
+    ...(widget.parameterBindings === undefined
+      ? {}
+      : { default_filters: widget.parameterBindings }),
     exposed_filters: widget.exposedFilters ?? [],
     layout: { x: widget.x, y: widget.y, w: widget.w, h: widget.h },
   }
@@ -197,6 +219,21 @@ export function boardFrom(api: ApiDashboard, fallbackAuthorId: string): Board {
     id: api.id,
     name: api.name,
     description: api.description ?? '',
+    /*
+     * The fallback decides two things now, and the second arrived later.
+     *
+     * It has always decided which boards are *yours* in the drafts list. Since
+     * `DashboardsScreen` gained in-place editing it also decides who is offered
+     * the Edit widgets button, because the API is "creator or Administrator only".
+     *
+     * So a Dashboard returned without a `creator_actor_id` reads as authored by
+     * whoever loaded it, and that person is offered an edit that PATCH may
+     * refuse. Kept anyway: the alternative is an empty `authorId`, which would
+     * make your own drafts vanish from your own list — a certain loss against a
+     * hypothetical one. The backend stores the actor id on every write and says
+     * it always has, so the absent case should not arise; this note is here for
+     * the day it does.
+     */
     authorId: api.creator_actor_id ?? fallbackAuthorId,
     status: api.status === 'published' ? 'published' : 'draft',
     scope: scopeFrom(api),
@@ -234,7 +271,13 @@ function specFrom(id: string, widget: ApiWidget): WidgetSpec {
     options: options[OPTIONS_KEY] as Record<string, unknown> | undefined,
     exposedFilters: widget.exposed_filters,
     exposedSorts: options[SORTS_KEY] as string[] | undefined,
-    parameterBindings: options[BINDINGS_KEY] as Record<string, string | number> | undefined,
+    /*
+     * `default_filters` first — it is the declared field and the one the API
+     * validates. The private key is the fallback for Widgets stored before we
+     * started writing the declared one.
+     */
+    parameterBindings: bindingsFrom(widget.default_filters) ??
+      (options[BINDINGS_KEY] as Record<string, string | number> | undefined),
   }
 }
 
@@ -296,3 +339,22 @@ const clamp = (value: number, low: number, high: number) =>
 
 /** A deleted Dashboard is a status, never a removed row. */
 export const isLive = (api: ApiDashboard): boolean => api.deleted !== true
+
+/**
+ * `default_filters` as bindings, or nothing.
+ *
+ * Unvalidated wire data: the schema says `additionalProperties: true`, so a
+ * value could be anything. Only strings and finite numbers are parameters a
+ * query can carry, and a binding that silently became `[object Object]`
+ * upstream would narrow to nothing and look like an empty Dataset.
+ */
+function bindingsFrom(
+  declared: Record<string, unknown> | undefined,
+): Record<string, string | number> | undefined {
+  if (!declared) return undefined
+  const usable = Object.entries(declared).filter(
+    (entry): entry is [string, string | number] =>
+      typeof entry[1] === 'string' || (typeof entry[1] === 'number' && Number.isFinite(entry[1])),
+  )
+  return usable.length === 0 ? undefined : Object.fromEntries(usable)
+}
