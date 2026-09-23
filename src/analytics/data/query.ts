@@ -365,7 +365,36 @@ export function queryFor(
      * A Dataset that declares no range parameters at all cannot be narrowed by
      * a Control, and `correspondenceFor` says so before it comes to this.
      */
-    const parameters = { ...rangeFor(dataset, withControl.timeRange), ...withControl.parameters }
+    const governed = rangeFor(dataset, withControl.timeRange)
+
+    /*
+     * Three layers, and a Control sits in the middle of them.
+     *
+     * It used to sit at the bottom: the Author's bindings were merged with the
+     * Viewer's choices first and the whole lot placed above the Control, so a
+     * board's date range lost to every Widget that had one. Every Peniremit
+     * Widget has one — they were given `from` and `to` as defaults so the
+     * required parameters would be sent at all — which meant a Viewer could
+     * move the board's range and watch all 55 cards ignore it.
+     *
+     * The distinction that was missing is not Author against Viewer. It is
+     * **which parameters a Control corresponds to**. A date Control owns the
+     * range and has nothing to say about anything else, so:
+     *
+     *   - the Author's bindings are the floor, and stay the floor for every
+     *     parameter the Control does not govern — `status: failed` is what that
+     *     Widget *is*, and no date range should touch it;
+     *   - the Control replaces the Author's value for the parameters it owns,
+     *     which is what `default_filters` means on the wire: "applied unless
+     *     something changes it";
+     *   - a Viewer's own choice on this Widget still wins over both, because it
+     *     is the most specific thing anyone has said (Finding 10) — and it is
+     *     session state, so moving the board's range again clears it.
+     *
+     * The same rule serves a future Control over `currency` or `region` without
+     * naming either: whatever a Control corresponds to, it governs.
+     */
+    const parameters = { ...bound, ...governed, ...chosen.parameters }
 
     /*
      * Finding 10 again, now that the two live in different places.

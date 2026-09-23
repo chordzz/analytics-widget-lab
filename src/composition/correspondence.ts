@@ -88,13 +88,6 @@ export type Correspondence =
  * differently for two Widgets over the same Dataset, which is not what "whose
  * bound Dataset supports it" says.
  */
-/** Whether the Author has already fixed the parameters a range would use. */
-function bindsTimeRange(widget: ControlSubject, dataset: Dataset): boolean {
-  const names = timeRangeParameters(dataset)
-  const bound = new Set(widget.boundParameters ?? [])
-  return [names.from, names.to].some((name) => name !== undefined && bound.has(name))
-}
-
 export function correspondenceFor(
   control: Control,
   widget: ControlSubject,
@@ -141,28 +134,6 @@ export function correspondenceFor(
            */
           const via = dataset.timeRange?.field ?? [names.from, names.to].filter(Boolean).join('/')
 
-          /*
-           * The same qualification the Field branch makes, and it matters more
-           * here: an aggregate cannot be narrowed in the browser at all. A
-           * trend that came back for the Author's window can at least be cut
-           * down locally; one pre-aggregated row is a number computed for a
-           * period, and no filtering turns it into a number for a different
-           * one. So a bound range on an aggregate means the Control does
-           * nothing whatever, and saying "affects this widget" would be simply
-           * untrue rather than over-promising.
-           *
-           * Every Peniremit Widget binds `from` and `to` today, so this is the
-           * branch they all take until a Control governs the parameters it
-           * corresponds to.
-           */
-          if (bindsTimeRange(widget, dataset)) {
-            return {
-              applies: true,
-              via,
-              limited: `${dataset.name} answers for the range the widget fixed, and a pre-aggregated figure cannot be narrowed after the fact`,
-            }
-          }
-
           return { applies: true, via }
         }
 
@@ -180,32 +151,20 @@ export function correspondenceFor(
         }
       }
       /*
-       * A Widget whose Author fixed the range cannot be widened past it.
+       * A bound range used to be reported as a limit here, and no longer is.
        *
-       * The binding is sent upstream and wins — Finding 10, the Widget's own
-       * choice being the more specific — so the Source System answers for the
-       * Author's window, and the Control's range is then applied in the browser
-       * over those rows. Narrowing works. Widening returns nothing, because
-       * nothing outside that window was ever fetched.
+       * It was true while the Widget's binding outranked the Control: the
+       * Source System answered for the Author's window, the Control's range was
+       * applied in the browser over those rows, so it could narrow and could
+       * not widen. A Viewer asking for August on a card bound to September got
+       * an empty chart, and saying so was the honest thing.
        *
-       * Saying "affects this widget" without the qualification is how a Viewer
-       * asks for August on a card bound to September and is shown an empty
-       * chart with no reason for it.
-       *
-       * A Dataset that simply declares no range parameters is *not* limited:
-       * nothing is sent, the endpoint answers with its full default, and the
-       * range narrows locally over all of it — which is the whole set. That
-       * costs bandwidth rather than correctness, so it is not this sentence's
-       * business.
+       * A Control now governs the parameters it corresponds to, so its range is
+       * what goes upstream and the endpoint answers for the window the Viewer
+       * asked for. There is nothing left to warn about — and leaving the
+       * warning would be the same failure in reverse, telling someone a Control
+       * is hobbled when it is not.
        */
-      if (role === 'time-dimension' && bindsTimeRange(widget, dataset)) {
-        return {
-          applies: true,
-          via: field.key,
-          limited: `${dataset.name} has a fixed range on the widget, so this narrows within it rather than replacing it`,
-        }
-      }
-
       return { applies: true, via: field.key }
     }
 

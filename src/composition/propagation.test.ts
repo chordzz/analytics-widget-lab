@@ -356,17 +356,18 @@ describe('a range reaches what can take a range', () => {
     expect(verdict.via).toBe('day')
   })
 
-  test('a bound range is still qualified, and more sharply here', () => {
+  test('a bound range does not limit it, because the Control replaces the range', () => {
     /*
-     * A trend fetched for the Author's window can at least be cut down in the
-     * browser. One pre-aggregated row is a number computed for a period, and no
-     * local filtering turns it into a number for a different one — so a bound
-     * range on an aggregate means the Control does nothing at all.
+     * It mattered most here. A trend fetched for the Author's window can at
+     * least be cut down in the browser; one pre-aggregated row is a number
+     * computed for a period, and no local filtering turns it into a number for
+     * a different one. So while the binding won, the Control did nothing at all
+     * to a stat card — which is every stat card on Peniremit's four boards.
      */
     const verdict = correspondenceFor(control, subject(['from', 'to']) as never, aggregate)
     expect(verdict.applies).toBe(true)
-    if (!verdict.applies || !('limited' in verdict)) throw new Error('expected a limit')
-    expect(verdict.limited).toContain('cannot be narrowed after the fact')
+    if (!verdict.applies) throw new Error('unreachable')
+    expect('limited' in verdict).toBe(false)
   })
 
   test('a Dataset that takes no range at all is still refused', () => {
