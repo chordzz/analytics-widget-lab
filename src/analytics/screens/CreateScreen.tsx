@@ -116,6 +116,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
     return (
       <WidgetComposer
         boardName={editing.name}
+        boardPeriod={controls.period}
         initial={
           isEditing(composing)
             ? {

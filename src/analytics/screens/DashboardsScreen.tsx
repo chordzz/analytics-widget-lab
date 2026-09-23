@@ -108,6 +108,7 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
     return (
       <WidgetComposer
         boardName={active.name}
+        boardPeriod={controls.period}
         initial={composer.initial}
         startWith={composer.startWith}
         onCommit={composer.commit}

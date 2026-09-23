@@ -49,5 +49,20 @@ export function useBoardControls(board: Board | undefined) {
     [board, byId, values],
   )
 
-  return { values, setValues, contribution }
+  /**
+   * The board's current date range, for a Widget being composed to inherit.
+   *
+   * The first date Control's value, because a board has one period — a second
+   * date Control would be two answers to one question, and nothing offers a
+   * way to add one.
+   */
+  const period = useMemo(() => {
+    const control = board?.controls.find((entry) => entry.controlType === 'date-range')
+    const value = control ? values[control.id] : undefined
+    return value && typeof value === 'object' && ('from' in value || 'to' in value)
+      ? (value as { from?: string; to?: string })
+      : undefined
+  }, [board, values])
+
+  return { values, setValues, contribution, period }
 }
