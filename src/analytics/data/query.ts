@@ -277,6 +277,55 @@ function rangeFor(
 }
 
 /**
+ * The parameter names a Control's contribution governs on this Dataset.
+ *
+ * The same translation `rangeFor` performs, exposed for the other half of
+ * governing: a Viewer's per-Widget override of a governed parameter is cleared
+ * when the Control moves, so the board's range re-asserts over a card somebody
+ * had nudged. One definition, because a key cleared that was never sent — or
+ * sent and never cleared — is the two halves disagreeing.
+ */
+export function governedParameters(
+  dataset: Dataset,
+  contribution: QueryContribution | undefined,
+): string[] {
+  return Object.keys(rangeFor(dataset, contribution?.timeRange))
+}
+
+/**
+ * A Viewer's choices with the Control's parameters dropped.
+ *
+ * Pure, and separate from the effect that calls it, because the decision is the
+ * part worth testing: which keys go, which stay, and returning the *same*
+ * object when nothing changes so React does not re-render a card for a clear
+ * that cleared nothing.
+ */
+export function withoutGoverned(choices: ViewerChoices, governed: readonly string[]): ViewerChoices {
+  const filters = choices.filters
+  if (!filters || governed.length === 0) return choices
+
+  const kept = Object.entries(filters).filter(([key]) => !governed.includes(key))
+  if (kept.length === Object.keys(filters).length) return choices
+
+  const next: ViewerChoices = { ...choices }
+  if (kept.length > 0) next.filters = Object.fromEntries(kept)
+  else delete next.filters
+  return next
+}
+
+/**
+ * A Control's range as one comparable string, or `null` where it sets none.
+ *
+ * Used to tell "the Viewer moved the board" from "React rendered again".
+ * Comparing the object identity would clear an override on every render, which
+ * is the same bug as never clearing it and harder to see.
+ */
+export const rangeSignature = (contribution: QueryContribution | undefined): string | null =>
+  contribution?.timeRange
+    ? `${contribution.timeRange.field}:${contribution.timeRange.from ?? ''}:${contribution.timeRange.to ?? ''}`
+    : null
+
+/**
  * The query a widget's spec amounts to.
  *
  * Most types return an empty query, and that is correct rather than lazy: a bar

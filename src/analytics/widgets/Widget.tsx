@@ -10,10 +10,10 @@
 import { WidgetCard, type WidgetAction, type WidgetState } from './WidgetCard'
 import { widgetType } from './catalog'
 import { thresholdFrom } from './threshold'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useDataset, useWidgetRows } from '../data/AnalyticsData'
 import { WidgetFilters } from './WidgetFilters'
-import { singleValueOf } from '../data/query'
+import { governedParameters, rangeSignature, singleValueOf, withoutGoverned } from '../data/query'
 import type { ViewerChoices } from '../data/query'
 import type { QueryContribution } from '../../composition/correspondence'
 import type { PartialResult } from '../../retrieval/port'
@@ -296,6 +296,38 @@ export function Widget({
    * thing, and it is Stage 6.3.
    */
   const [choices, setChoices] = useState<ViewerChoices>({})
+
+  /*
+   * Moving the board's range clears what this card was nudged to.
+   *
+   * Three layers decide a parameter — the Author's default, the Control, then
+   * the Viewer's own choice on this Widget — and the Viewer's wins. That is
+   * right while they are looking at one card, and wrong the moment they reach
+   * for the board's range again: the control they just used would be the one
+   * thing on screen that did nothing.
+   *
+   * So a Viewer's override is a deviation from the board rather than a
+   * replacement for it, and the board re-asserts. Only over the parameters the
+   * Control actually governs — a date range has nothing to say about a
+   * `status` this card was filtered to, and clearing that would throw away a
+   * choice nobody overruled.
+   *
+   * Keyed on the range's *value*, not the contribution's identity. Comparing
+   * objects would clear the override on every render, which is the same bug as
+   * never clearing it and considerably harder to see.
+   */
+  const lastRange = useRef(rangeSignature(contribution))
+  useEffect(() => {
+    const signature = rangeSignature(contribution)
+    if (signature === lastRange.current) return
+    lastRange.current = signature
+
+    const governed = dataset ? governedParameters(dataset, contribution) : []
+    if (governed.length === 0) return
+
+    setChoices((current) => withoutGoverned(current, governed))
+  }, [contribution, dataset])
+
   const retrieved = useWidgetRows(spec, dataset, choices, contribution)
 
   const controls =
