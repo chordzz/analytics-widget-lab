@@ -153,6 +153,20 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
                 Add widget
               </button>
             )}
+            {/*
+              One date range per board, which is the builder's rule and not an
+              arbitrary one: a second would give two controls the same reach
+              over the same Widgets, and nothing says which wins.
+            */}
+            {editingWidgets && active.controls.length === 0 && (
+              <button
+                type="button"
+                className="a-button"
+                onClick={() => { boards.addDateRangeControl(active.id) }}
+              >
+                Add date range
+              </button>
+            )}
             <button
               type="button"
               className="a-button"
@@ -172,11 +186,20 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
         identical in both, and why switching `editable` on was all that editing
         here required. The gestures stay off until asked for.
       */}
+      {/*
+        A Control is a Viewer's instrument and an Author's decision, so both
+        halves live here. A reader sets its value; only the author, and only in
+        edit mode, decides whether it exists — `onRemove` is what `BoardControls`
+        already keys that on.
+      */}
       <BoardControls
         controls={active.controls}
         widgets={placedWidgets(active)}
         values={controls.values}
         onChange={controls.setValues}
+        onRemove={
+          editingWidgets ? (controlId) => { boards.removeControl(active.id, controlId) } : undefined
+        }
       />
 
       <GridBoard
