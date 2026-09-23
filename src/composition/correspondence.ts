@@ -112,6 +112,60 @@ export function correspondenceFor(
       const field = mapped ?? dataset.fields.find((f) => f.role === role)
 
       if (!field) {
+        /*
+         * No Field of that role — which for a date range is not the end of it.
+         *
+         * An aggregate Dataset has no date column because it answers *for* a
+         * window rather than across one: its columns are `value`, `delta`,
+         * `changePercent`, all Measures. It still takes `from` and `to`, as
+         * **Filter Parameters** — a different list from Fields, and deliberately
+         * so (D24).
+         *
+         * Matching only on Fields refused 25 of Peniremit's 41 Datasets,
+         * including every one behind a stat card, with "declares no time
+         * dimension". True, and not the question a Viewer is asking when they
+         * move the board's date range.
+         *
+         * Nothing else needs to change for this: `rangeFor` already translates a
+         * Control's range into whatever parameter names the publisher declared,
+         * reading BE-8's `time_range` where there is one and falling back to
+         * `from`/`to`. Only this test was wrong.
+         */
+        const names = role === 'time-dimension' ? timeRangeParameters(dataset) : {}
+        if (names.from ?? names.to) {
+          /*
+           * `via` names what the range narrows. A Dataset declaring
+           * `time_range` says which Field that is even without carrying the
+           * column; one that only publishes the parameters is named by them,
+           * because that is the whole of what the publisher has said.
+           */
+          const via = dataset.timeRange?.field ?? [names.from, names.to].filter(Boolean).join('/')
+
+          /*
+           * The same qualification the Field branch makes, and it matters more
+           * here: an aggregate cannot be narrowed in the browser at all. A
+           * trend that came back for the Author's window can at least be cut
+           * down locally; one pre-aggregated row is a number computed for a
+           * period, and no filtering turns it into a number for a different
+           * one. So a bound range on an aggregate means the Control does
+           * nothing whatever, and saying "affects this widget" would be simply
+           * untrue rather than over-promising.
+           *
+           * Every Peniremit Widget binds `from` and `to` today, so this is the
+           * branch they all take until a Control governs the parameters it
+           * corresponds to.
+           */
+          if (bindsTimeRange(widget, dataset)) {
+            return {
+              applies: true,
+              via,
+              limited: `${dataset.name} answers for the range the widget fixed, and a pre-aggregated figure cannot be narrowed after the fact`,
+            }
+          }
+
+          return { applies: true, via }
+        }
+
         return {
           applies: false,
           reason: `${dataset.name} declares no ${role.replace('-', ' ')}.`,
