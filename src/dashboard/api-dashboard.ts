@@ -224,7 +224,7 @@ export function boardFrom(api: ApiDashboard, fallbackAuthorId: string): Board {
      *
      * It has always decided which boards are *yours* in the drafts list. Since
      * `DashboardsScreen` gained in-place editing it also decides who is offered
-     * the Arrange button, because the API is "creator or Administrator only".
+     * the Edit widgets button, because the API is "creator or Administrator only".
      *
      * So a Dashboard returned without a `creator_actor_id` reads as authored by
      * whoever loaded it, and that person is offered an edit that PATCH may

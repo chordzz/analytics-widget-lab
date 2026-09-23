@@ -4,7 +4,7 @@
  * Two gates that fail differently. The permission is unknown-offers, because
  * the API enforces regardless and a hidden button explains nothing. Authorship
  * is not: a board reaches someone else's screen through a Share Grant or a
- * Scope, and offering every reader an Arrange button that always ends in a
+ * Scope, and offering every reader an Edit widgets button that always ends in a
  * refusal is a button that does not work.
  */
 
@@ -41,7 +41,7 @@ describe('everyone else', () => {
   test('is not offered editing, however the permission reads', () => {
     /*
      * The case this gate exists for. A reader with `dashboard.update` on their
-     * own boards would otherwise see Arrange on a board shared with them, and
+     * own boards would otherwise see Edit widgets on a board shared with them, and
      * every save would be refused.
      */
     expect(mayEdit(held, 'someone-else', 'me')).toBe(false)

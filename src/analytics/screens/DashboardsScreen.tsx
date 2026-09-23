@@ -14,6 +14,14 @@
  * was the one board you could not change, and the way to change it was a button
  * that navigated somewhere else. Judging widgets together is the point of the
  * screen; leaving it to adjust one defeats that.
+ *
+ * Two doors, and the labels say which is which. **Edit widgets** changes what is
+ * *on* the board — add, retitle, remap, duplicate, remove, drag, resize.
+ * **Board settings** opens the builder, which changes what the board *is*: its
+ * name, its sections, its Controls, who it is shared with, whether it is
+ * published. They were "Arrange" and "Open in builder", and neither said that:
+ * arranging sounds like moving things when it also edits and adds them, and
+ * "the builder" names a screen rather than what you would go there to do.
  */
 
 import { useState } from 'react'
@@ -44,9 +52,9 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
   /*
    * A mode, not a permanent state. A published board is something other people
    * are reading, and one stray drag on a board that is always draggable
-   * rearranges what they see. Arranging is a thing you decide to do.
+   * rearranges what they see. Editing is a thing you decide to do.
    */
-  const [arranging, setArranging] = useState(false)
+  const [editingWidgets, setEditingWidgets] = useState(false)
 
   /*
    * Two conditions, and they fail differently.
@@ -59,7 +67,7 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
    * Authorship is not like that. The API is "creator or Administrator only",
    * and a board reaches somebody else's screen through a Share Grant or a
    * Scope — they are readers. Offering every reader of a shared board an
-   * Arrange button that always ends in a refusal is not the generous side of
+   * Edit widgets button that always ends in a refusal is not the generous side of
    * the asymmetry; it is a button that does not work.
    *
    * **Administrators lose it, and that is a known cost.** Nothing in the model
@@ -134,13 +142,13 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
           <div className="a-board-head__actions">
             <button
               type="button"
-              className={`a-button${arranging ? ' a-button--primary' : ''}`}
-              aria-pressed={arranging}
-              onClick={() => { setArranging((on) => !on) }}
+              className={`a-button${editingWidgets ? ' a-button--primary' : ''}`}
+              aria-pressed={editingWidgets}
+              onClick={() => { setEditingWidgets((on) => !on) }}
             >
-              {arranging ? 'Done' : 'Arrange'}
+              {editingWidgets ? 'Done' : 'Edit widgets'}
             </button>
-            {arranging && (
+            {editingWidgets && (
               <button type="button" className="a-button" onClick={() => { composer.open('new') }}>
                 Add widget
               </button>
@@ -153,7 +161,7 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
                 onNavigate('create')
               }}
             >
-              Open in builder
+              Board settings
             </button>
           </div>
         )}
@@ -175,7 +183,7 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
         widgets={placedWidgets(active)}
         contributionFor={controls.contribution}
         sections={active.sections}
-        editable={arranging}
+        editable={editingWidgets}
         onEdit={composer.open}
         onDuplicate={(widgetId) => { boards.duplicateWidget(active.id, widgetId) }}
         onRemove={(widgetId) => { boards.removeWidget(active.id, widgetId) }}
