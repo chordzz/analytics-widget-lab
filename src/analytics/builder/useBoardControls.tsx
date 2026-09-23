@@ -13,6 +13,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react'
+import { defaultPeriod } from '../../domain/default-period'
 import { contributionFor } from '../../composition/correspondence'
 import { controlSubjectFor } from '../data/query'
 import { useDatasets } from '../data/AnalyticsData'
@@ -25,7 +26,26 @@ const NOTHING: QueryContribution = {}
 
 export function useBoardControls(board: Board | undefined) {
   const { datasets } = useDatasets()
-  const [values, setValues] = useState<ControlValues>({})
+  const [chosen, setChosen] = useState<ControlValues>({})
+
+  /**
+   * What the Controls are showing: what a Viewer chose, or the default.
+   *
+   * A Control stores no value, so a board with one used to open with its range
+   * empty and governing nothing. Filling it here rather than in state keeps the
+   * distinction that matters — `chosen` is what somebody actually set, and
+   * clearing a Control returns it to the default instead of to nothing.
+   */
+  const values = useMemo<ControlValues>(() => {
+    const ranges = (board?.controls ?? []).filter((entry) => entry.controlType === 'date-range')
+    if (ranges.length === 0) return chosen
+
+    const filled: ControlValues = { ...chosen }
+    for (const control of ranges) if (filled[control.id] == null) filled[control.id] = defaultPeriod()
+    return filled
+  }, [board, chosen])
+
+  const setValues = setChosen
 
   const byId = useMemo(() => {
     const map: Record<string, Dataset> = {}
