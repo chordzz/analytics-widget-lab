@@ -52,6 +52,35 @@ const pair = (
     mapping: { x: 'date', series: trendKeys }, w: 9, h: 2 },
 ]
 
+/**
+ * A category breakdown, drawn as whatever the declaration supports.
+ *
+ * A donut answers "what are the parts of this whole?" and only means anything
+ * when the parts sum to a whole — which is precisely what `additive-total`
+ * states and nothing else can. Where the Measure carries it, Composition is
+ * satisfied and the donut is offered. Where it does not, a bar chart answers
+ * the neighbouring question — "how do these compare?" — which needs no such
+ * claim.
+ *
+ * Derived rather than switched by hand. The nine category Datasets were bars
+ * until Peniremit declared their money Measures additive on 23 September; had
+ * this been nine hardcoded type ids, adopting that would have been nine edits
+ * and a tenth Dataset would have been missed. It also self-corrects: if the
+ * live declaration turns out not to carry the semantic, the validator fails
+ * here rather than `POST /v1/dashboards` failing later.
+ */
+const share = (card: string, datasetId: string, key: string, w = 6): BoardCard => ({
+  card,
+  title: card,
+  datasetId,
+  typeId: (requirePeniremitDataset(datasetId).additive ?? []).includes(key)
+    ? 'donut-chart'
+    : 'bar-chart-vertical',
+  mapping: { x: 'category', value: key, series: [key] },
+  w,
+  h: 2,
+})
+
 export const GROWTH: BoardDefinition = {
   name: 'Growth',
   description: 'Registration, signup and first-transaction behaviour.',
@@ -75,15 +104,7 @@ export const GROWTH: BoardDefinition = {
       datasetId: 'peniremit.signup-outcomes', typeId: 'line-chart',
       mapping: { x: 'date', series: ['value', 'dropOffs'] }, w: 9, h: 2 },
 
-    /*
-     * A bar chart, not the donut the guide asks for. Composition needs a
-     * Measure declared `additive-total` and this Dataset declares none, so the
-     * donut is withheld — see `Analytics_Additive_Total_Request.md`. A bar
-     * chart answers the same question and is offered today.
-     */
-    { card: 'Sign up by channel', title: 'Signups by channel',
-      datasetId: 'peniremit.signup-by-channel', typeId: 'bar-chart-vertical',
-      mapping: { x: 'category', series: ['value'] }, w: 6, h: 2 },
+    share('Sign up by channel', 'peniremit.signup-by-channel', 'value'),
 
     { card: 'User Growth over time', title: 'User growth',
       datasetId: 'peniremit.user-growth', typeId: 'stat-card',
@@ -91,12 +112,6 @@ export const GROWTH: BoardDefinition = {
   ],
 }
 
-
-/** A category breakdown. A bar until `additive-total` lands; then a donut. */
-const share = (card: string, datasetId: string, key: string, w = 6): BoardCard => ({
-  card, title: card, datasetId, typeId: 'bar-chart-vertical',
-  mapping: { x: 'category', series: [key] }, w, h: 2,
-})
 
 export const TRANSACTION: BoardDefinition = {
   name: 'Transaction',
@@ -238,8 +253,14 @@ export const PENIREMIT_BOARDS: BoardDefinition[] = [GROWTH, TRANSACTION, REVENUE
 export const datasetsUsedBy = (board: BoardDefinition): string[] =>
   [...new Set(board.cards.map((card) => card.datasetId))]
 
-/** Fails loudly rather than returning undefined — a typo here is a broken board. */
-export const requirePeniremitDataset = (id: string) => {
+/**
+ * Fails loudly rather than returning undefined — a typo here is a broken board.
+ *
+ * A declaration rather than a `const`, because `share` calls it while the board
+ * constants above are still being evaluated. As an arrow it was in its own
+ * temporal dead zone and every board threw on import.
+ */
+export function requirePeniremitDataset(id: string) {
   const found = peniremitDataset(id)
   if (!found) throw new Error(`No Peniremit Dataset declared with id ${id}`)
   return found

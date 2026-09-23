@@ -8,8 +8,9 @@
  * card that passes here is a card the running app can bind.
  *
  * Roles follow the guide's own annotations: the leading `date` or `category` is
- * the Dimension, everything else is a Measure. No `semantic` is set, because
- * none is declared — which is exactly why the Composition charts are withheld.
+ * the Dimension, everything else is a Measure. `semantic: additive-total` is
+ * set from the catalogue's `additive` list and nowhere else — never inferred
+ * from a Field's name, which is the guess we asked the backend not to make.
  */
 
 import type { ApiDataset, ApiField } from '../catalogue/api-dataset'
@@ -18,7 +19,7 @@ import type { PeniremitDataset } from './peniremit-catalogue'
 /** Their permission key, from the guide's AUTH section. */
 export const PENIREMIT_PERMISSION = 'holdings.penilabs.peniremit::stats.read'
 
-const measure = (key: string): ApiField => ({
+const measure = (key: string, additive: readonly string[] = []): ApiField => ({
   key,
   label: labelFor(key),
   type: 'number',
@@ -27,6 +28,7 @@ const measure = (key: string): ApiField => ({
   // rates are averaged: this is the aggregation list, not a claim that the sum
   // means anything — that is `semantic`, and nothing here declares one.
   aggregations: /percent|rate|ratio|Ratio|Percent/.test(key) ? ['average'] : ['sum', 'average'],
+  ...(additive.includes(key) ? { semantic: 'additive-total' } : {}),
   filterable: false,
   orderable: true,
 })
@@ -45,9 +47,9 @@ export function toApiDataset(entry: PeniremitDataset): ApiDataset {
           filterable: true,
           orderable: entry.shape === 'date',
         },
-        ...rest.map(measure),
+        ...rest.map((key) => measure(key, entry.additive ?? [])),
       ]
-    : entry.keys.map(measure)
+    : entry.keys.map((key) => measure(key, entry.additive ?? []))
 
   return {
     id: entry.id,

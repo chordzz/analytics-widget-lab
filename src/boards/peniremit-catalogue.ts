@@ -11,9 +11,15 @@
  * `/v1/datasets` remains the authority, and `scripts/peniremit-boards.ts`
  * compares the two when it runs with a token.
  *
- * Nothing here declares a `semantic`. That is faithful: the guide declares
- * none, which is why no Composition chart can be offered on any of the nine
- * category Datasets, and why `Analytics_Additive_Total_Request.md` exists.
+ * `additive` records which Measures Peniremit declared `semantic:
+ * additive-total` after our 22 September request. Transcribed, not observed —
+ * `bun run conform` reads the live declarations and its BE-1 row names what it
+ * actually finds. If the two disagree, the live one is right and this is wrong.
+ *
+ * Only money and counts carry it. `percentage` and `changePercent` deliberately
+ * do not: summing percentages is permitted arithmetic and a meaningless total,
+ * which is the exact case `additive-total` exists to distinguish. A donut of
+ * shares that sums to 340% is the failure mode.
  */
 
 export type PeniremitShape = 'aggregate' | 'date' | 'category'
@@ -25,11 +31,21 @@ export interface PeniremitDataset {
   /** Field keys in declaration order. The first is the Dimension for a
    *  `date` or `category` Dataset; an `aggregate` one has no Dimension. */
   keys: string[]
+  /** Measures declared `semantic: additive-total`. Empty where none are. */
+  additive?: string[]
 }
 
-const d = (id: string, name: string, shape: PeniremitShape, keys: string[]): PeniremitDataset => ({
-  id: `peniremit.${id}`, name, shape, keys,
-})
+const d = (
+  id: string,
+  name: string,
+  shape: PeniremitShape,
+  keys: string[],
+  additive?: string[],
+): PeniremitDataset => ({
+  id: `peniremit.${id}`, name, shape, keys, ...(additive ? { additive } : {}) })
+
+/** Money totals. Every category Dataset that measures value in both currencies. */
+const MONEY_ADDITIVE = ['usd', 'ngn']
 
 const VALUE = ['value', 'delta', 'changePercent']
 const MONEY = ['usd', 'ngn', 'usdDelta', 'ngnDelta', 'usdChangePercent', 'ngnChangePercent']
@@ -46,7 +62,7 @@ export const PENIREMIT_DATASETS: PeniremitDataset[] = [
   d('signup-outcomes-summary', 'Signup Outcomes Summary', 'aggregate',
     ['completed', 'dropOffs', 'total', 'completedDelta', 'dropOffsDelta', 'completedChangePercent', 'dropOffsChangePercent']),
   d('signup-outcomes', 'Signup Outcomes', 'date', ['date', 'value', 'dropOffs', 'total']),
-  d('signup-by-channel', 'Signups by Channel', 'category', ['category', 'value', 'delta', 'changePercent']),
+  d('signup-by-channel', 'Signups by Channel', 'category', ['category', 'value', 'delta', 'changePercent'], ['value']),
   d('user-growth', 'User Growth', 'aggregate', VALUE),
 
   // Transaction
@@ -60,11 +76,11 @@ export const PENIREMIT_DATASETS: PeniremitDataset[] = [
   d('deposit-volume-trend', 'Total Deposit Trend', 'date', ['date', 'usd', 'ngn']),
   d('spend-volume-summary', 'Total Spend', 'aggregate', MONEY),
   d('avg-transaction-value-summary', 'Avg Transaction Value', 'aggregate', MONEY),
-  d('spend-by-category', 'Spend by Category', 'category', SHARE),
-  d('top-token-deposits', 'Top Token Deposits', 'category', SHARE),
-  d('top-token-spend', 'Top Token Spend', 'category', SHARE),
-  d('smart-spend-token', 'Smart Spend Token', 'category', SHARE),
-  d('failure-reasons', 'Top Failure Reasons', 'category', ['category', 'value', 'percentage', 'changePercent']),
+  d('spend-by-category', 'Spend by Category', 'category', SHARE, MONEY_ADDITIVE),
+  d('top-token-deposits', 'Top Token Deposits', 'category', SHARE, MONEY_ADDITIVE),
+  d('top-token-spend', 'Top Token Spend', 'category', SHARE, MONEY_ADDITIVE),
+  d('smart-spend-token', 'Smart Spend Token', 'category', SHARE, MONEY_ADDITIVE),
+  d('failure-reasons', 'Top Failure Reasons', 'category', ['category', 'value', 'percentage', 'changePercent'], ['value']),
 
   // Revenue
   d('gross-revenue', 'Gross Revenue', 'date', ['date', 'usd', 'ngn']),
@@ -74,9 +90,9 @@ export const PENIREMIT_DATASETS: PeniremitDataset[] = [
   d('revenue-summary', 'Revenue Summary', 'aggregate',
     ['grossFeeRevenueUsd', 'grossFeeRevenueNgn', 'palmpayFeesUsd', 'netMarginUsd',
      'avgFeePerTransactionUsd', 'marginPerTransactionUsd']),
-  d('revenue-by-token', 'Revenue by Token', 'category', SHARE),
-  d('revenue-by-product', 'Revenue by Product', 'category', SHARE),
-  d('fx-revenue-by-token', 'FX Revenue by Token', 'category', SHARE),
+  d('revenue-by-token', 'Revenue by Token', 'category', SHARE, MONEY_ADDITIVE),
+  d('revenue-by-product', 'Revenue by Product', 'category', SHARE, MONEY_ADDITIVE),
+  d('fx-revenue-by-token', 'FX Revenue by Token', 'category', SHARE, MONEY_ADDITIVE),
 
   // Engagement
   d('active-users-summary', 'Active Users Summary', 'aggregate',
