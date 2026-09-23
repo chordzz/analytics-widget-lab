@@ -93,6 +93,37 @@ describe('every card can actually be built', () => {
   })
 })
 
+describe('bound parameters are ones the Dataset advertises', () => {
+  test('every bound parameter is declared, with a permitted value', () => {
+    /*
+     * The query endpoint refuses any parameter a Dataset did not advertise, and
+     * any value outside `allowed_values`, before anything leaves Analytics. So
+     * a wrong name here is a 400 on every load of that Widget — and it is the
+     * mistake this file was written with: `status` was assumed undeclared and
+     * a working card was routed around.
+     */
+    const wrong: string[] = []
+    for (const board of PENIREMIT_BOARDS) {
+      for (const card of board.cards) {
+        for (const [name, value] of Object.entries(card.parameters ?? {})) {
+          const declared = domainOf(card.datasetId).filterParameters ?? []
+          const parameter = declared.find((entry) => entry.name === name)
+          if (!parameter) {
+            wrong.push(`${card.title} binds \`${name}\`, which ${card.datasetId} does not declare`)
+            continue
+          }
+          if (parameter.allowedValues && !parameter.allowedValues.includes(value)) {
+            wrong.push(
+              `${card.title} binds ${name}=${value}, outside ${parameter.allowedValues.join('|')}`,
+            )
+          }
+        }
+      }
+    }
+    expect(wrong).toEqual([])
+  })
+})
+
 describe('the layout is sane', () => {
   test('no card is wider than the board', () => {
     for (const board of PENIREMIT_BOARDS) {

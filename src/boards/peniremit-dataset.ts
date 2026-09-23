@@ -14,7 +14,13 @@
  */
 
 import type { ApiDataset, ApiField } from '../catalogue/api-dataset'
-import type { PeniremitDataset } from './peniremit-catalogue'
+import { BASE_PARAMS, type PeniremitDataset } from './peniremit-catalogue'
+
+/** The values each named parameter accepts, where the declaration enumerates them. */
+const ALLOWED: Record<string, string[]> = {
+  granularity: ['day', 'month'],
+  status: ['success', 'failed', 'all'],
+}
 
 /** Their permission key, from the guide's AUTH section. */
 export const PENIREMIT_PERMISSION = 'holdings.penilabs.peniremit::stats.read'
@@ -64,12 +70,22 @@ export function toApiDataset(entry: PeniremitDataset): ApiDataset {
     ...(entry.shape === 'date' ? { time_dimension_field: first } : {}),
     fields,
     filter_parameters: [
-      { name: 'from', type: 'date', required: true },
-      { name: 'to', type: 'date', required: true },
-      ...(entry.shape === 'date'
-        ? [{ name: 'granularity', type: 'category', allowed_values: ['day', 'month'] }]
-        : []),
+      ...BASE_PARAMS.map((name) => ({ name, type: 'date', required: true })),
+      ...(entry.params ?? []).map((name) => ({
+        name,
+        type: 'category',
+        ...(ALLOWED[name] ? { allowed_values: ALLOWED[name] } : {}),
+      })),
     ],
+    /*
+     * Only where there is a Field for it to name. `time_range.field` must be a
+     * declared Field and an aggregate Dataset has no date column — it answers
+     * for the window rather than across it, which is why conform's BE-8 row
+     * lists the trends and not the summaries.
+     */
+    ...(entry.shape === 'date'
+      ? { time_range: { field: first, from_parameter: 'from', to_parameter: 'to' } }
+      : {}),
   }
 }
 

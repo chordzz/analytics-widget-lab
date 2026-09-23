@@ -33,6 +33,23 @@ export interface PeniremitDataset {
   keys: string[]
   /** Measures declared `semantic: additive-total`. Empty where none are. */
   additive?: string[]
+  /**
+   * Filter Parameters beyond `from`/`to`, which every Dataset here declares.
+   *
+   * Stated per Dataset rather than assumed from its shape. The first version of
+   * this file inferred them — `granularity` for anything grained by date, and
+   * nothing else — and that inference was wrong in the direction that matters:
+   * it said `peniremit.transaction-count-summary` had no `status`, so a card
+   * the guide describes looked impossible. It declares one, with
+   * `allowed_values: ["success", "failed", "all"]`.
+   *
+   * The query endpoint refuses any parameter a Dataset did not advertise, so an
+   * over-declaration here produces a 400 at runtime and an under-declaration
+   * hides a card that works. Neither is recoverable by guessing, which is why
+   * `bun run conform --dump-catalogue` exists: it writes the live declarations,
+   * and those replace anything transcribed here.
+   */
+  params?: string[]
 }
 
 const d = (
@@ -40,9 +57,20 @@ const d = (
   name: string,
   shape: PeniremitShape,
   keys: string[],
-  additive?: string[],
+  extra: { additive?: string[]; params?: string[] } = {},
 ): PeniremitDataset => ({
-  id: `peniremit.${id}`, name, shape, keys, ...(additive ? { additive } : {}) })
+  id: `peniremit.${id}`,
+  name,
+  shape,
+  keys,
+  ...(extra.additive ? { additive: extra.additive } : {}),
+  // Everything grained by date takes `granularity`; the guide is consistent on
+  // that and the live declarations agree.
+  params: [...(shape === 'date' ? ['granularity'] : []), ...(extra.params ?? [])],
+})
+
+/** Every Dataset's `from`/`to`, which none of them omit. */
+export const BASE_PARAMS = ['from', 'to']
 
 /** Money totals. Every category Dataset that measures value in both currencies. */
 const MONEY_ADDITIVE = ['usd', 'ngn']
@@ -62,13 +90,13 @@ export const PENIREMIT_DATASETS: PeniremitDataset[] = [
   d('signup-outcomes-summary', 'Signup Outcomes Summary', 'aggregate',
     ['completed', 'dropOffs', 'total', 'completedDelta', 'dropOffsDelta', 'completedChangePercent', 'dropOffsChangePercent']),
   d('signup-outcomes', 'Signup Outcomes', 'date', ['date', 'value', 'dropOffs', 'total']),
-  d('signup-by-channel', 'Signups by Channel', 'category', ['category', 'value', 'delta', 'changePercent'], ['value']),
+  d('signup-by-channel', 'Signups by Channel', 'category', ['category', 'value', 'delta', 'changePercent'], { additive: ['value'] }),
   d('user-growth', 'User Growth', 'aggregate', VALUE),
 
   // Transaction
   d('transfer-volume', 'Total Transfer Volume', 'date', ['date', 'usd', 'ngn']),
-  d('transaction-count-summary', 'Total Transactions', 'aggregate', VALUE),
-  d('transaction-count-trend', 'Total Transactions Trend', 'date', ['date', 'value']),
+  d('transaction-count-summary', 'Total Transactions', 'aggregate', VALUE, { params: ['status'] }),
+  d('transaction-count-trend', 'Total Transactions Trend', 'date', ['date', 'value'], { params: ['status'] }),
   d('transaction-rate-summary', 'Transaction Rate Summary', 'aggregate',
     ['total', 'successful', 'failed', 'pending', 'successRate', 'totalDelta', 'successfulDelta', 'failedDelta']),
   d('transaction-rate', 'Transaction Rate', 'date', ['date', 'value', 'total', 'successful', 'failed', 'pending']),
@@ -76,11 +104,11 @@ export const PENIREMIT_DATASETS: PeniremitDataset[] = [
   d('deposit-volume-trend', 'Total Deposit Trend', 'date', ['date', 'usd', 'ngn']),
   d('spend-volume-summary', 'Total Spend', 'aggregate', MONEY),
   d('avg-transaction-value-summary', 'Avg Transaction Value', 'aggregate', MONEY),
-  d('spend-by-category', 'Spend by Category', 'category', SHARE, MONEY_ADDITIVE),
-  d('top-token-deposits', 'Top Token Deposits', 'category', SHARE, MONEY_ADDITIVE),
-  d('top-token-spend', 'Top Token Spend', 'category', SHARE, MONEY_ADDITIVE),
-  d('smart-spend-token', 'Smart Spend Token', 'category', SHARE, MONEY_ADDITIVE),
-  d('failure-reasons', 'Top Failure Reasons', 'category', ['category', 'value', 'percentage', 'changePercent'], ['value']),
+  d('spend-by-category', 'Spend by Category', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('top-token-deposits', 'Top Token Deposits', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('top-token-spend', 'Top Token Spend', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('smart-spend-token', 'Smart Spend Token', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('failure-reasons', 'Top Failure Reasons', 'category', ['category', 'value', 'percentage', 'changePercent'], { additive: ['value'] }),
 
   // Revenue
   d('gross-revenue', 'Gross Revenue', 'date', ['date', 'usd', 'ngn']),
@@ -90,9 +118,9 @@ export const PENIREMIT_DATASETS: PeniremitDataset[] = [
   d('revenue-summary', 'Revenue Summary', 'aggregate',
     ['grossFeeRevenueUsd', 'grossFeeRevenueNgn', 'palmpayFeesUsd', 'netMarginUsd',
      'avgFeePerTransactionUsd', 'marginPerTransactionUsd']),
-  d('revenue-by-token', 'Revenue by Token', 'category', SHARE, MONEY_ADDITIVE),
-  d('revenue-by-product', 'Revenue by Product', 'category', SHARE, MONEY_ADDITIVE),
-  d('fx-revenue-by-token', 'FX Revenue by Token', 'category', SHARE, MONEY_ADDITIVE),
+  d('revenue-by-token', 'Revenue by Token', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('revenue-by-product', 'Revenue by Product', 'category', SHARE, { additive: MONEY_ADDITIVE }),
+  d('fx-revenue-by-token', 'FX Revenue by Token', 'category', SHARE, { additive: MONEY_ADDITIVE }),
 
   // Engagement
   d('active-users-summary', 'Active Users Summary', 'aggregate',

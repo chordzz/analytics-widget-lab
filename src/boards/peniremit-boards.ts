@@ -27,6 +27,15 @@ export interface BoardCard {
   typeId: string
   /** Slot assignments, keyed as `WidgetMapping`. */
   mapping: Record<string, string | string[]>
+  /**
+   * Filter Parameters the Author binds, keyed by parameter name.
+   *
+   * Sent upstream, never applied to returned rows — a parameter name is not a
+   * column name. A bound parameter is the Author saying what this Widget is
+   * about; a Viewer with the permission can still move it, which is why
+   * "Failed transactions" is a bound `status` rather than a separate Dataset.
+   */
+  parameters?: Record<string, string>
   /** Columns on a 12-column board. */
   w: number
   h: number
@@ -132,15 +141,22 @@ export const TRANSACTION: BoardDefinition = {
       mapping: { x: 'date', series: ['value'] }, w: 9, h: 2 },
 
     /*
-     * The guide builds this card by re-querying the count Dataset with
-     * `status=failed`. That parameter is not in the published declaration, and
-     * the query endpoint refuses any parameter a Dataset did not advertise — so
-     * asking for it would be a 400. `transaction-rate-summary` already carries
-     * `failed` as its own Measure, which is the same figure without the guess.
+     * The guide's own route: the same count Dataset, narrowed to failures.
+     * `status` is a declared Filter Parameter taking `success | failed | all`,
+     * so this is a bound parameter rather than a different Dataset — and the
+     * Viewer can move it, which is the point of binding one.
+     *
+     * An earlier version of this file used `transaction-rate-summary.failed`
+     * instead, on the belief that `status` was undeclared. It is declared. The
+     * belief came from inferring the parameter list from a Dataset's shape,
+     * which is why the catalogue states them per Dataset now.
      */
     { card: 'Failed transactions', title: 'Failed transactions',
-      datasetId: 'peniremit.transaction-rate-summary', typeId: 'stat-card',
-      mapping: { value: 'failed' }, w: 3, h: 1 },
+      datasetId: 'peniremit.transaction-count-summary', typeId: 'stat-card',
+      mapping: { value: 'value' }, parameters: { status: 'failed' }, w: 3, h: 1 },
+    { card: 'Failed transactions', title: 'Failed transactions over time',
+      datasetId: 'peniremit.transaction-count-trend', typeId: 'line-chart',
+      mapping: { x: 'date', series: ['value'] }, parameters: { status: 'failed' }, w: 9, h: 2 },
 
     ...pair('Total deposit', 'peniremit.deposit-volume-summary',
       'peniremit.deposit-volume-trend', 'usd', ['usd', 'ngn']),
@@ -180,11 +196,22 @@ export const REVENUE: BoardDefinition = {
       mapping: { x: 'date', series: ['usd'] }, w: 6, h: 2 },
 
     /*
-     * Four of the guide's cards read one series each off the same trend —
-     * Palmpay, FX, Cards, and then all three together. The fourth is the one
-     * worth drawing: three series on one axis is the comparison, and three
-     * separate single-series charts are the same data made harder to read.
+     * Four cards off one trend: three single sources, then all three together.
+     *
+     * The combined chart is the better *comparison* and the three singles are
+     * not redundant to it — someone owning FX revenue wants their number
+     * without reading it off a shared axis, and "it is in the combined chart"
+     * is not the same as having it. Kept as the guide has them.
      */
+    { card: 'Palmpay processing fee', title: 'Palmpay processing fee',
+      datasetId: 'peniremit.fee-revenue-trend', typeId: 'line-chart',
+      mapping: { x: 'date', series: ['palmpayFeesUsd'] }, w: 4, h: 2 },
+    { card: 'FX Revenue (card)', title: 'FX revenue',
+      datasetId: 'peniremit.fee-revenue-trend', typeId: 'line-chart',
+      mapping: { x: 'date', series: ['fxFeesUsd'] }, w: 4, h: 2 },
+    { card: 'Cards (card)', title: 'Card fees',
+      datasetId: 'peniremit.fee-revenue-trend', typeId: 'line-chart',
+      mapping: { x: 'date', series: ['cardFeesUsd'] }, w: 4, h: 2 },
     { card: 'Gross revenue (Palmpay vs FX vs Cards)', title: 'Fee revenue by source',
       datasetId: 'peniremit.fee-revenue-trend', typeId: 'line-chart',
       mapping: { x: 'date', series: ['palmpayFeesUsd', 'fxFeesUsd', 'cardFeesUsd'] }, w: 12, h: 2 },
@@ -213,12 +240,18 @@ export const ENGAGEMENT: BoardDefinition = {
       datasetId: 'peniremit.active-users-summary', typeId: 'stat-card',
       mapping: { value: 'mau' }, w: 3, h: 1 },
 
+    { card: 'Daily active users', title: 'Daily active users over time',
+      datasetId: 'peniremit.active-users', typeId: 'line-chart',
+      mapping: { x: 'date', series: ['dau'] }, w: 6, h: 2 },
+    { card: 'Monthly active users', title: 'Monthly active users over time',
+      datasetId: 'peniremit.active-users', typeId: 'line-chart',
+      mapping: { x: 'date', series: ['mau'] }, w: 6, h: 2 },
     /*
-     * One chart for both, rather than the guide's two. `active-users` carries
-     * `dau` and `mau` as separate Measures, and the ratio between them is the
-     * engagement question — two charts on separate axes hide exactly that.
+     * And both on one axis. The DAU/MAU ratio is the engagement measure —
+     * `engagement-summary` publishes it as `dauMauRatio` — and it is the one
+     * thing two separate charts cannot show.
      */
-    { card: 'Daily active users (chart)', title: 'Active users, daily against monthly',
+    { card: 'Daily active users (chart)', title: 'Daily against monthly',
       datasetId: 'peniremit.active-users', typeId: 'line-chart',
       mapping: { x: 'date', series: ['dau', 'mau'] }, w: 12, h: 2 },
 
