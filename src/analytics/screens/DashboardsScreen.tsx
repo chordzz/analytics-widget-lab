@@ -24,7 +24,7 @@ import { useBoardControls } from '../builder/useBoardControls'
 import { useWidgetComposer } from '../builder/useWidgetComposer'
 import { placedWidgets, widgetCountOf } from '../builder/boards'
 import { useBoards } from '../builder/useBoards'
-import { useMay } from '../data/AnalyticsData'
+import { useAnalyticsData, useMay } from '../data/AnalyticsData'
 import type { ScreenId } from '../shell/nav'
 
 export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
@@ -49,12 +49,29 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
   const [arranging, setArranging] = useState(false)
 
   /*
-   * `dashboard.update` is what the API checks on PATCH, and it answers three
-   * ways. Unknown offers the affordance: the API enforces regardless, so a
-   * wrongly offered button costs one refusal and a wrongly hidden one costs
-   * somebody the feature.
+   * Two conditions, and they fail differently.
+   *
+   * `dashboard.update` is the permission the API checks on PATCH, and unknown
+   * offers the affordance — the API enforces regardless, so a wrongly offered
+   * button costs one refusal and a wrongly hidden one costs somebody the
+   * feature with nothing on screen to explain it.
+   *
+   * Authorship is not like that. The API is "creator or Administrator only",
+   * and a board reaches somebody else's screen through a Share Grant or a
+   * Scope — they are readers. Offering every reader of a shared board an
+   * Arrange button that always ends in a refusal is not the generous side of
+   * the asymmetry; it is a button that does not work.
+   *
+   * **Administrators lose it, and that is a known cost.** Nothing in the model
+   * says who one is: `ViewerIdentity` carries no flag, `/v1/me` publishes no
+   * role, and `analytics.administer` was deliberately ruled out as a superuser
+   * key because the spec scopes it to Source System registration. So an
+   * Administrator fixing someone else's board has to use the API. Restoring it
+   * needs a signal that does not exist yet rather than a different rule here.
    */
-  const mayEdit = useMay('dashboard.update')
+  const { viewer } = useAnalyticsData()
+  const isAuthor = active?.authorId === viewer.id
+  const mayEdit = useMay('dashboard.update') && isAuthor
 
   // An empty state shown while the store is still answering reads as "you have
   // nothing", which is a different and more alarming claim than "not yet".

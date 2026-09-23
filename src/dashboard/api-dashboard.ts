@@ -219,6 +219,21 @@ export function boardFrom(api: ApiDashboard, fallbackAuthorId: string): Board {
     id: api.id,
     name: api.name,
     description: api.description ?? '',
+    /*
+     * The fallback decides two things now, and the second arrived later.
+     *
+     * It has always decided which boards are *yours* in the drafts list. Since
+     * `DashboardsScreen` gained in-place editing it also decides who is offered
+     * the Arrange button, because the API is "creator or Administrator only".
+     *
+     * So a Dashboard returned without a `creator_actor_id` reads as authored by
+     * whoever loaded it, and that person is offered an edit that PATCH may
+     * refuse. Kept anyway: the alternative is an empty `authorId`, which would
+     * make your own drafts vanish from your own list — a certain loss against a
+     * hypothetical one. The backend stores the actor id on every write and says
+     * it always has, so the absent case should not arise; this note is here for
+     * the day it does.
+     */
     authorId: api.creator_actor_id ?? fallbackAuthorId,
     status: api.status === 'published' ? 'published' : 'draft',
     scope: scopeFrom(api),
