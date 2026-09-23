@@ -23,6 +23,25 @@ import { PENIREMIT_BOARDS, type BoardCard, type BoardDefinition } from '../src/b
 import { dashboardInputFrom } from '../src/dashboard/api-dashboard'
 import type { Board } from '../src/analytics/builder/boards'
 import { DASHBOARD_COLUMNS } from '../src/domain/composition'
+import { rowsForPx } from '../src/analytics/builder/grid'
+import { heightForType } from '../src/analytics/widgets/layout'
+
+/**
+ * The window every Widget opens on.
+ *
+ * `from` and `to` are `required: true` on all 41 Peniremit Datasets — the
+ * Source System cannot answer without them — so a Widget that binds neither is
+ * not a Widget with an unset filter, it is a query that will be refused. The
+ * first four Dashboards were created without them and every widget on them
+ * came back `Query rejected · from is required by this Dataset`.
+ *
+ * A default rather than a fixture: both are exposed below, so a Viewer moves
+ * the range and this is only where it starts.
+ */
+const DEFAULT_RANGE = { from: '2026-03-01', to: '2026-10-01' }
+
+/** The parameters every Dataset here publishes, and every Viewer may change. */
+const RANGE_PARAMETERS = ['from', 'to']
 
 const BASE =
   argAfter('--base') ?? process.env.ANALYTICS_BASE_URL ?? 'https://api.dev.analytics.penilabs.com'
@@ -62,6 +81,22 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
  * two Widgets end up in one cell. Order is the definition's order, which is the
  * guide's order.
  */
+/**
+ * A card's height in grid rows, from what the widget type actually needs.
+ *
+ * `h` is rows and a row is 24px, which is not what the first version of this
+ * file assumed: it wrote `h: 1` for a stat card and `h: 2` for a chart, giving
+ * them 24 and 64 pixels. Every widget on the four created Dashboards was
+ * clipped to a sliver — the narrow ones showed nothing at all, and the wide
+ * ones showed a title and the top half of an icon.
+ *
+ * `heightForType` already states what each type wants in pixels and
+ * `rowsForPx` is its exact inverse, so neither number is invented here. The
+ * definitions keep their widths, which are a layout decision, and no longer
+ * carry heights, which are a property of the type.
+ */
+const heightOf = (card: BoardCard): number => rowsForPx(card.h ?? heightForType(card.typeId))
+
 function place(cards: readonly BoardCard[]): Board['placements'] & { widgetId: string }[] {
   const placements: { widgetId: string; x: number; y: number; w: number; h: number }[] = []
   let x = 0
@@ -75,9 +110,10 @@ function place(cards: readonly BoardCard[]): Board['placements'] & { widgetId: s
       y += rowHeight
       rowHeight = 0
     }
-    placements.push({ widgetId: `local:w${String(index + 1)}`, x, y, w, h: card.h })
+    const h = heightOf(card)
+    placements.push({ widgetId: `local:w${String(index + 1)}`, x, y, w, h })
     x += w
-    rowHeight = Math.max(rowHeight, card.h)
+    rowHeight = Math.max(rowHeight, h)
   })
 
   return placements as never
@@ -97,7 +133,13 @@ export function boardFrom(definition: BoardDefinition): Board {
           datasetId: card.datasetId,
           title: card.title,
           mapping: card.mapping as never,
-          ...(card.parameters ? { parameterBindings: card.parameters } : {}),
+          /*
+           * The range first, so a card's own binding wins over the default —
+           * nothing overrides `from`/`to` today, but a card that narrowed to a
+           * single month should not have it silently replaced.
+           */
+          parameterBindings: { ...DEFAULT_RANGE, ...card.parameters },
+          exposedFilters: RANGE_PARAMETERS,
         },
       ]
     }),

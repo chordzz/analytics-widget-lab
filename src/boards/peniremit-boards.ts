@@ -36,9 +36,16 @@ export interface BoardCard {
    * "Failed transactions" is a bound `status` rather than a separate Dataset.
    */
   parameters?: Record<string, string>
-  /** Columns on a 12-column board. */
+  /** Columns on a 12-column board. A layout decision, so it is stated. */
   w: number
-  h: number
+  /**
+   * Rows, only where the type's own height is wrong for this card.
+   *
+   * Omitted almost always: `heightForType` knows what a stat card and a line
+   * chart need, and hand-written row counts is how every widget on the first
+   * four Dashboards came out 24 pixels tall.
+   */
+  h?: number
 }
 
 export interface BoardDefinition {
@@ -56,9 +63,9 @@ const pair = (
   trendKeys: string[],
 ): BoardCard[] => [
   { card, title: card, datasetId: summaryId, typeId: 'stat-card',
-    mapping: { value: valueKey }, w: 3, h: 1 },
+    mapping: { value: valueKey }, w: 3 },
   { card, title: `${card} over time`, datasetId: trendId, typeId: 'line-chart',
-    mapping: { x: 'date', series: trendKeys }, w: 9, h: 2 },
+    mapping: { x: 'date', series: trendKeys }, w: 9 },
 ]
 
 /**
@@ -87,7 +94,6 @@ const share = (card: string, datasetId: string, key: string, w = 6): BoardCard =
     : 'bar-chart-vertical',
   mapping: { x: 'category', value: key, series: [key] },
   w,
-  h: 2,
 })
 
 export const GROWTH: BoardDefinition = {
@@ -108,16 +114,16 @@ export const GROWTH: BoardDefinition = {
      */
     { card: 'New signups (Completed vs Drop-Offs)', title: 'Completed signups',
       datasetId: 'peniremit.signup-outcomes-summary', typeId: 'stat-card',
-      mapping: { value: 'completed' }, w: 3, h: 1 },
+      mapping: { value: 'completed' }, w: 3 },
     { card: 'New signups (Completed vs Drop-Offs)', title: 'Completed and dropped',
       datasetId: 'peniremit.signup-outcomes', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['value', 'dropOffs'] }, w: 9, h: 2 },
+      mapping: { x: 'date', series: ['value', 'dropOffs'] }, w: 9 },
 
     share('Sign up by channel', 'peniremit.signup-by-channel', 'value'),
 
     { card: 'User Growth over time', title: 'User growth',
       datasetId: 'peniremit.user-growth', typeId: 'stat-card',
-      mapping: { value: 'value' }, w: 3, h: 1 },
+      mapping: { value: 'value' }, w: 3 },
   ],
 }
 
@@ -128,17 +134,17 @@ export const TRANSACTION: BoardDefinition = {
   cards: [
     { card: 'Transaction volume', title: 'Transfer volume',
       datasetId: 'peniremit.transfer-volume', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['usd', 'ngn'] }, w: 12, h: 2 },
+      mapping: { x: 'date', series: ['usd', 'ngn'] }, w: 12 },
 
     ...pair('Total transactions', 'peniremit.transaction-count-summary',
       'peniremit.transaction-count-trend', 'value', ['value']),
 
     { card: 'Success rate', title: 'Success rate',
       datasetId: 'peniremit.transaction-rate-summary', typeId: 'stat-card',
-      mapping: { value: 'successRate' }, w: 3, h: 1 },
+      mapping: { value: 'successRate' }, w: 3 },
     { card: 'Success rate', title: 'Success rate over time',
       datasetId: 'peniremit.transaction-rate', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['value'] }, w: 9, h: 2 },
+      mapping: { x: 'date', series: ['value'] }, w: 9 },
 
     /*
      * The guide's own route: the same count Dataset, narrowed to failures.
@@ -153,24 +159,24 @@ export const TRANSACTION: BoardDefinition = {
      */
     { card: 'Failed transactions', title: 'Failed transactions',
       datasetId: 'peniremit.transaction-count-summary', typeId: 'stat-card',
-      mapping: { value: 'value' }, parameters: { status: 'failed' }, w: 3, h: 1 },
+      mapping: { value: 'value' }, parameters: { status: 'failed' }, w: 3 },
     { card: 'Failed transactions', title: 'Failed transactions over time',
       datasetId: 'peniremit.transaction-count-trend', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['value'] }, parameters: { status: 'failed' }, w: 9, h: 2 },
+      mapping: { x: 'date', series: ['value'] }, parameters: { status: 'failed' }, w: 9 },
 
     ...pair('Total deposit', 'peniremit.deposit-volume-summary',
       'peniremit.deposit-volume-trend', 'usd', ['usd', 'ngn']),
 
     { card: 'Total Spend', title: 'Total spend',
       datasetId: 'peniremit.spend-volume-summary', typeId: 'stat-card',
-      mapping: { value: 'usd' }, w: 3, h: 1 },
+      mapping: { value: 'usd' }, w: 3 },
     { card: 'Avg Transaction value', title: 'Average transaction value',
       datasetId: 'peniremit.avg-transaction-value-summary', typeId: 'stat-card',
-      mapping: { value: 'usd' }, w: 3, h: 1 },
+      mapping: { value: 'usd' }, w: 3 },
 
     { card: 'Transaction volume (Successful vs Failed)', title: 'Successful against failed',
       datasetId: 'peniremit.transaction-rate', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['successful', 'failed'] }, w: 12, h: 2 },
+      mapping: { x: 'date', series: ['successful', 'failed'] }, w: 12 },
 
     share('Spend by category', 'peniremit.spend-by-category', 'usd'),
     share('Top 5 token deposits', 'peniremit.top-token-deposits', 'usd'),
@@ -186,14 +192,14 @@ export const REVENUE: BoardDefinition = {
   cards: [
     { card: 'Gross fee revenue', title: 'Gross fee revenue',
       datasetId: 'peniremit.revenue-summary', typeId: 'stat-card',
-      mapping: { value: 'grossFeeRevenueUsd' }, w: 3, h: 1 },
+      mapping: { value: 'grossFeeRevenueUsd' }, w: 3 },
     { card: 'Gross fee revenue', title: 'Gross revenue over time',
       datasetId: 'peniremit.gross-revenue', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['usd'] }, w: 9, h: 2 },
+      mapping: { x: 'date', series: ['usd'] }, w: 9 },
 
     { card: 'Net margin', title: 'Net margin',
       datasetId: 'peniremit.net-revenue', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['usd'] }, w: 6, h: 2 },
+      mapping: { x: 'date', series: ['usd'] }, w: 6 },
 
     /*
      * Four cards off one trend: three single sources, then all three together.
@@ -205,16 +211,16 @@ export const REVENUE: BoardDefinition = {
      */
     { card: 'Palmpay processing fee', title: 'Palmpay processing fee',
       datasetId: 'peniremit.fee-revenue-trend', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['palmpayFeesUsd'] }, w: 4, h: 2 },
+      mapping: { x: 'date', series: ['palmpayFeesUsd'] }, w: 4 },
     { card: 'FX Revenue (card)', title: 'FX revenue',
       datasetId: 'peniremit.fee-revenue-trend', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['fxFeesUsd'] }, w: 4, h: 2 },
+      mapping: { x: 'date', series: ['fxFeesUsd'] }, w: 4 },
     { card: 'Cards (card)', title: 'Card fees',
       datasetId: 'peniremit.fee-revenue-trend', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['cardFeesUsd'] }, w: 4, h: 2 },
+      mapping: { x: 'date', series: ['cardFeesUsd'] }, w: 4 },
     { card: 'Gross revenue (Palmpay vs FX vs Cards)', title: 'Fee revenue by source',
       datasetId: 'peniremit.fee-revenue-trend', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['palmpayFeesUsd', 'fxFeesUsd', 'cardFeesUsd'] }, w: 12, h: 2 },
+      mapping: { x: 'date', series: ['palmpayFeesUsd', 'fxFeesUsd', 'cardFeesUsd'] }, w: 12 },
 
     share('Revenue by token', 'peniremit.revenue-by-token', 'usd'),
     share('Revenue by feature', 'peniremit.revenue-by-product', 'usd'),
@@ -222,10 +228,10 @@ export const REVENUE: BoardDefinition = {
 
     { card: "Today's PL", title: 'Average fee per transaction',
       datasetId: 'peniremit.revenue-summary', typeId: 'stat-card',
-      mapping: { value: 'avgFeePerTransactionUsd' }, w: 3, h: 1 },
+      mapping: { value: 'avgFeePerTransactionUsd' }, w: 3 },
     { card: "Today's PL", title: 'Margin per transaction',
       datasetId: 'peniremit.revenue-summary', typeId: 'stat-card',
-      mapping: { value: 'marginPerTransactionUsd' }, w: 3, h: 1 },
+      mapping: { value: 'marginPerTransactionUsd' }, w: 3 },
   ],
 }
 
@@ -235,17 +241,17 @@ export const ENGAGEMENT: BoardDefinition = {
   cards: [
     { card: 'Daily active users', title: 'Daily active users',
       datasetId: 'peniremit.active-users-summary', typeId: 'stat-card',
-      mapping: { value: 'dau' }, w: 3, h: 1 },
+      mapping: { value: 'dau' }, w: 3 },
     { card: 'Monthly active users', title: 'Monthly active users',
       datasetId: 'peniremit.active-users-summary', typeId: 'stat-card',
-      mapping: { value: 'mau' }, w: 3, h: 1 },
+      mapping: { value: 'mau' }, w: 3 },
 
     { card: 'Daily active users', title: 'Daily active users over time',
       datasetId: 'peniremit.active-users', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['dau'] }, w: 6, h: 2 },
+      mapping: { x: 'date', series: ['dau'] }, w: 6 },
     { card: 'Monthly active users', title: 'Monthly active users over time',
       datasetId: 'peniremit.active-users', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['mau'] }, w: 6, h: 2 },
+      mapping: { x: 'date', series: ['mau'] }, w: 6 },
     /*
      * And both on one axis. The DAU/MAU ratio is the engagement measure —
      * `engagement-summary` publishes it as `dauMauRatio` — and it is the one
@@ -253,7 +259,7 @@ export const ENGAGEMENT: BoardDefinition = {
      */
     { card: 'Daily active users (chart)', title: 'Daily against monthly',
       datasetId: 'peniremit.active-users', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['dau', 'mau'] }, w: 12, h: 2 },
+      mapping: { x: 'date', series: ['dau', 'mau'] }, w: 12 },
 
     ...pair('Average transaction value', 'peniremit.avg-transaction-value-summary',
       'peniremit.avg-transfer-size', 'usd', ['usd']),
@@ -264,17 +270,17 @@ export const ENGAGEMENT: BoardDefinition = {
 
     { card: 'KYC outcomes', title: 'KYC approved',
       datasetId: 'peniremit.kyc-outcomes-summary', typeId: 'stat-card',
-      mapping: { value: 'completed' }, w: 3, h: 1 },
+      mapping: { value: 'completed' }, w: 3 },
     { card: 'KYC outcomes', title: 'Approved against failed',
       datasetId: 'peniremit.kyc-outcomes', typeId: 'line-chart',
-      mapping: { x: 'date', series: ['completed', 'failed'] }, w: 9, h: 2 },
+      mapping: { x: 'date', series: ['completed', 'failed'] }, w: 9 },
 
     { card: 'Retention', title: '7-day retention',
       datasetId: 'peniremit.engagement-summary', typeId: 'stat-card',
-      mapping: { value: 'retention7d' }, w: 3, h: 1 },
+      mapping: { value: 'retention7d' }, w: 3 },
     { card: 'Retention', title: '30-day retention',
       datasetId: 'peniremit.engagement-summary', typeId: 'stat-card',
-      mapping: { value: 'retention30d' }, w: 3, h: 1 },
+      mapping: { value: 'retention30d' }, w: 3 },
 
     share('Token preference', 'peniremit.top-token-spend', 'usd'),
   ],

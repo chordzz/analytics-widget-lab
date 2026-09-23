@@ -81,19 +81,39 @@ describe('the payload', () => {
     }
   })
 
-  test('a bound parameter travels as `default_filters`', () => {
-    const transaction = payloadFor(1)
-    const bound = transaction.widgets.filter((widget) => widget.default_filters)
-    expect(bound).toHaveLength(2)
-    for (const widget of bound) expect(widget.default_filters).toEqual({ status: 'failed' })
-  })
-
-  test('and no other Widget claims a filter it was not given', () => {
-    // `{}` would read as "the Author fixed nothing", asserted rather than known.
+  test('every Widget carries the range it cannot be queried without', () => {
+    /*
+     * `from` and `to` are `required: true` on all 41 Datasets. A Widget binding
+     * neither is not a Widget with an unset filter — it is a query that will be
+     * refused, which is what happened to all 55 on the first create.
+     */
     for (let index = 0; index < PENIREMIT_BOARDS.length; index += 1) {
       for (const widget of payloadFor(index).widgets) {
-        expect(widget.default_filters === undefined || Object.keys(widget.default_filters).length > 0).toBe(true)
+        expect({ title: widget.title, from: widget.default_filters?.from, to: widget.default_filters?.to })
+          .toEqual({ title: widget.title, from: '2026-03-01', to: '2026-10-01' })
       }
+    }
+  })
+
+  test('and a Viewer may move it', () => {
+    // A default, not a fixture. Both are published Filter Parameters, which is
+    // what `exposed_filters` requires.
+    for (let index = 0; index < PENIREMIT_BOARDS.length; index += 1) {
+      for (const widget of payloadFor(index).widgets) {
+        expect(widget.exposed_filters).toEqual(['from', 'to'])
+      }
+    }
+  })
+
+  test("a card's own binding sits beside the range, not instead of it", () => {
+    const bound = payloadFor(1).widgets.filter((widget) => widget.default_filters?.status)
+    expect(bound).toHaveLength(2)
+    for (const widget of bound) {
+      expect(widget.default_filters).toEqual({
+        from: '2026-03-01',
+        to: '2026-10-01',
+        status: 'failed',
+      })
     }
   })
 

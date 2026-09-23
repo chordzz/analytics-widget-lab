@@ -57,8 +57,29 @@ export function resolveRenderState(outcome: RetrievalOutcome): WidgetRenderState
 }
 
 export function resolveFailure(error: unknown): WidgetRenderState {
-  return {
-    status: 'failed',
-    message: error instanceof Error ? error.message : 'Retrieval failed.',
-  }
+  return { status: 'failed', message: failureMessage(error) }
+}
+
+/**
+ * What went wrong, in terms the reader can act on.
+ *
+ * A rejected query answers `message: "Query rejected"` and puts the reason in
+ * `data.violations` — `{ field: "from", message: "is required by this Dataset" }`
+ * — and the envelope's own message is the part with no information in it. Every
+ * widget on Peniremit's first four Dashboards read "Query rejected" while the
+ * response beside it named the two missing parameters.
+ *
+ * All of them, not the first: the verifier reports every violation at once
+ * precisely so one round trip fixes the whole declaration, and showing one at a
+ * time turns that into four.
+ */
+function failureMessage(error: unknown): string {
+  if (!(error instanceof Error)) return 'Retrieval failed.'
+
+  const violations = (error as { violations?: { field: string; message: string }[] }).violations
+  if (!violations || violations.length === 0) return error.message
+
+  return `${error.message}: ${violations
+    .map((violation) => `\`${violation.field}\` ${violation.message}`)
+    .join(', ')}`
 }
