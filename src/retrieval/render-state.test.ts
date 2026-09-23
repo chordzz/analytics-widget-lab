@@ -17,8 +17,7 @@ import { ApiError } from '../api/errors'
 describe('a rejected query says what was rejected', () => {
   const rejected = (violations: { field: string; message: string }[]) =>
     new ApiError({
-      kind: 'invalid',
-      path: '/v1/datasets/x/query',
+      kind: 'validation',
       status: 400,
       message: 'Query rejected',
       violations,
