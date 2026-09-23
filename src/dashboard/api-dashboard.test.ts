@@ -235,3 +235,70 @@ function asDashboard(input: ReturnType<typeof dashboardInputFrom>): ApiDashboard
     updated_at: '2026-09-01T10:00:00Z',
   }
 }
+
+/*
+ * Bound Filter Parameters, and where they are stored.
+ *
+ * They were written only to `presentation_options` under a private key, which
+ * Analytics treats as opaque — so nothing validated them and nothing but us
+ * could read them. The chart was still right, because we send the parameters
+ * ourselves on the query call; the *record* was not. A Dashboard whose Widget
+ * is titled "Failed transactions" carried no evidence of the narrowing anywhere
+ * the API could see.
+ */
+describe('a binding is stored where the API declares it', () => {
+  const bound = (bindings?: Record<string, string | number>): Board => ({
+    ...board,
+    widgets: {
+      w1: {
+        id: 'w1',
+        typeId: 'stat-card',
+        datasetId: 'peniremit.transaction-count-summary',
+        mapping: { value: 'value' },
+        ...(bindings ? { parameterBindings: bindings } : {}),
+      },
+    },
+    placements: [{ widgetId: 'w1', x: 0, y: 0, w: 3, h: 1 }],
+  })
+
+  test('it travels as `default_filters`', () => {
+    const [widget] = dashboardInputFrom(bound({ status: 'failed' })).widgets
+    expect(widget.default_filters).toEqual({ status: 'failed' })
+  })
+
+  test('a Widget with no binding sends no filters at all', () => {
+    // `{}` would read as "the Author fixed nothing", which is the same thing
+    // said more confidently than we know it.
+    const [widget] = dashboardInputFrom(bound()).widgets
+    expect(widget.default_filters).toBeUndefined()
+  })
+
+  test('it comes back from the declared field', () => {
+    const board = boardFrom({ id: 'b', name: 'B', widgets: [
+      { id: 'w1', dataset_id: 'd', visualization_type: 'stat-card',
+        default_filters: { status: 'failed' } },
+    ] })
+    expect(board.widgets.w1.parameterBindings).toEqual({ status: 'failed' })
+  })
+
+  test('and from the private key, for Widgets stored before today', () => {
+    const board = boardFrom({ id: 'b', name: 'B', widgets: [
+      { id: 'w1', dataset_id: 'd', visualization_type: 'stat-card',
+        presentation_options: { 'smc.parameterBindings': { status: 'failed' } } },
+    ] })
+    expect(board.widgets.w1.parameterBindings).toEqual({ status: 'failed' })
+  })
+
+  test('a value no query could carry is dropped rather than sent', () => {
+    /*
+     * `default_filters` is `additionalProperties: true`, so anything may arrive.
+     * An object binding would stringify to `[object Object]` upstream, narrow to
+     * nothing, and look like an empty Dataset rather than a broken filter.
+     */
+    const board = boardFrom({ id: 'b', name: 'B', widgets: [
+      { id: 'w1', dataset_id: 'd', visualization_type: 'stat-card',
+        default_filters: { status: 'failed', broken: { nested: true }, nan: Number.NaN } },
+    ] })
+    expect(board.widgets.w1.parameterBindings).toEqual({ status: 'failed' })
+  })
+})
