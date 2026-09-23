@@ -53,7 +53,9 @@ export const PENIREMIT_DATASETS: PeniremitDataset[] = [
   d('transaction-count-summary', 'Total Transactions', 'aggregate', VALUE, { params: ['status'] }),
   d('transaction-count-trend', 'Total Transactions Trend', 'date', ['date', 'value'], { params: ['status'] }),
   d('transaction-rate-summary', 'Transaction Rate Summary', 'aggregate',
-    ['total', 'successful', 'failed', 'pending', 'successRate', 'totalDelta', 'successfulDelta', 'failedDelta']),
+    ['total', 'successful', 'failed', 'pending', 'successRate',
+     'totalDelta', 'successfulDelta', 'failedDelta', 'successRateDelta',
+     'totalChangePercent', 'successfulChangePercent', 'failedChangePercent', 'successRateChangePercent']),
   d('transaction-rate', 'Transaction Rate', 'date', ['date', 'value', 'total', 'successful', 'failed', 'pending']),
   d('deposit-volume-summary', 'Total Deposit', 'aggregate', MONEY),
   d('deposit-volume-trend', 'Total Deposit Trend', 'date', ['date', 'usd', 'ngn']),
@@ -70,9 +72,30 @@ export const PENIREMIT_DATASETS: PeniremitDataset[] = [
   d('fee-revenue-trend', 'Fee Revenue Trend', 'date',
     ['date', 'palmpayFeesUsd', 'palmpayFeesNgn', 'fxFeesUsd', 'fxFeesNgn', 'cardFeesUsd', 'cardFeesNgn']),
   d('net-revenue', 'Net Revenue', 'date', ['date', 'usd', 'ngn']),
+  /*
+   * Six measures in four currencies-and-deltas. Transcribing this by hand
+   * produced `netMarginUsd`, which does not exist — the Field is
+   * `netRevenueUsd`. No card bound it, so nothing broke; a card that had would
+   * have passed every check here and 400ed live, because the checks read the
+   * transcription rather than the declaration.
+   */
   d('revenue-summary', 'Revenue Summary', 'aggregate',
-    ['grossFeeRevenueUsd', 'grossFeeRevenueNgn', 'palmpayFeesUsd', 'netMarginUsd',
-     'avgFeePerTransactionUsd', 'marginPerTransactionUsd']),
+    ['grossFeeRevenueUsd', 'grossFeeRevenueNgn', 'grossFeeRevenueUsdDelta', 'grossFeeRevenueNgnDelta',
+     'grossFeeRevenueUsdChangePercent', 'grossFeeRevenueNgnChangePercent',
+     'netRevenueUsd', 'netRevenueNgn', 'netRevenueUsdDelta', 'netRevenueNgnDelta',
+     'netRevenueUsdChangePercent', 'netRevenueNgnChangePercent',
+     'palmpayFeesUsd', 'palmpayFeesNgn', 'palmpayFeesUsdDelta', 'palmpayFeesNgnDelta',
+     'palmpayFeesUsdChangePercent', 'palmpayFeesNgnChangePercent',
+     'fxFeesUsd', 'fxFeesNgn', 'fxFeesUsdDelta', 'fxFeesNgnDelta',
+     'fxFeesUsdChangePercent', 'fxFeesNgnChangePercent',
+     'cardFeesUsd', 'cardFeesNgn', 'cardFeesUsdDelta', 'cardFeesNgnDelta',
+     'cardFeesUsdChangePercent', 'cardFeesNgnChangePercent',
+     'avgFeePerTransactionUsd', 'avgFeePerTransactionNgn',
+     'avgFeePerTransactionUsdDelta', 'avgFeePerTransactionNgnDelta',
+     'avgFeePerTransactionUsdChangePercent', 'avgFeePerTransactionNgnChangePercent',
+     'marginPerTransactionUsd', 'marginPerTransactionNgn',
+     'marginPerTransactionUsdDelta', 'marginPerTransactionNgnDelta',
+     'marginPerTransactionUsdChangePercent', 'marginPerTransactionNgnChangePercent']),
   d('revenue-by-token', 'Revenue by Token', 'category', SHARE, { additive: MONEY_ADDITIVE }),
   d('revenue-by-product', 'Revenue by Product', 'category', SHARE, { additive: MONEY_ADDITIVE }),
   d('fx-revenue-by-token', 'FX Revenue by Token', 'category', SHARE, { additive: MONEY_ADDITIVE }),
@@ -90,7 +113,9 @@ export const PENIREMIT_DATASETS: PeniremitDataset[] = [
     ['completed', 'failed', 'completedDelta', 'failedDelta', 'completedChangePercent', 'failedChangePercent']),
   d('kyc-outcomes', 'KYC Outcomes', 'date', ['date', 'completed', 'failed']),
   d('engagement-summary', 'Engagement Summary', 'aggregate',
-    ['retention7d', 'retention30d', 'dauMauRatio', 'retention7dDelta', 'retention30dDelta', 'dauMauRatioDelta']),
+    ['retention7d', 'retention30d', 'dauMauRatio',
+     'retention7dDelta', 'retention30dDelta', 'dauMauRatioDelta',
+     'retention7dChangePercent', 'retention30dChangePercent', 'dauMauRatioChangePercent']),
 ]
 
 export const peniremitDataset = (id: string): PeniremitDataset | undefined =>
