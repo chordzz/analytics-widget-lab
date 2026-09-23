@@ -22,6 +22,7 @@
 import { PENIREMIT_BOARDS, type BoardCard, type BoardDefinition } from '../src/boards/peniremit-boards'
 import { dashboardInputFrom } from '../src/dashboard/api-dashboard'
 import type { Board } from '../src/analytics/builder/boards'
+import { dateRangeControl } from '../src/domain/composition'
 import { DASHBOARD_COLUMNS } from '../src/domain/composition'
 import { rowsForPx } from '../src/analytics/builder/grid'
 import { heightForType } from '../src/analytics/widgets/layout'
@@ -35,13 +36,12 @@ import { heightForType } from '../src/analytics/widgets/layout'
  * first four Dashboards were created without them and every widget on them
  * came back `Query rejected · from is required by this Dataset`.
  *
- * A default rather than a fixture: both are exposed below, so a Viewer moves
- * the range and this is only where it starts.
+ * A default rather than a fixture: the board's date Control governs the range
+ * and replaces this, so it is where a board opens rather than what it is stuck
+ * with. It still matters on its own — a Widget dragged onto a board with no
+ * Control has to send something.
  */
 const DEFAULT_RANGE = { from: '2026-03-01', to: '2026-10-01' }
-
-/** The parameters every Dataset here publishes, and every Viewer may change. */
-const RANGE_PARAMETERS = ['from', 'to']
 
 const BASE =
   argAfter('--base') ?? process.env.ANALYTICS_BASE_URL ?? 'https://api.dev.analytics.penilabs.com'
@@ -139,7 +139,24 @@ export function boardFrom(definition: BoardDefinition): Board {
            * single month should not have it silently replaced.
            */
           parameterBindings: { ...DEFAULT_RANGE, ...card.parameters },
-          exposedFilters: RANGE_PARAMETERS,
+          /*
+           * Nothing, deliberately.
+           *
+           * Every Widget exposed `from` and `to` when these boards were first
+           * created, which put twenty native date inputs on the Growth board
+           * alone — two per card, above the figure they belonged to. That was
+           * the only way to move a period at the time, because a board's date
+           * Control could not reach a Widget that bound one.
+           *
+           * It can now. The Control governs the range across every card, so the
+           * per-Widget pickers were a second way of saying the same thing —
+           * with the board's answer and twenty local answers free to disagree.
+           *
+           * Exposure is an Author's choice per Widget rather than a default:
+           * a card that genuinely wants its own window can still have one, and
+           * paying for it in screen space is the right way round.
+           */
+          exposedFilters: [],
         },
       ]
     }),
@@ -156,7 +173,20 @@ export function boardFrom(definition: BoardDefinition): Board {
     updated: new Date().toISOString().slice(0, 10),
     widgets,
     placements,
-    controls: [],
+    /*
+     * One period for the board, which is what replaces the per-Widget pickers.
+     *
+     * A Control stores no value — `ControlValues` is session state, so it opens
+     * empty and governs nothing until a Viewer sets it. Until then each Widget
+     * uses the range it carries as a default, which is the same range they all
+     * carry, so the board opens showing exactly what it showed before.
+     *
+     * That also means `boardPeriod` is undefined on a freshly loaded board, so
+     * a Widget added before anyone touches the Control inherits nothing and its
+     * Author states a range. Worth a stored default on the Control; that is a
+     * domain change rather than part of this one.
+     */
+    controls: [dateRangeControl('c-period', 'Period')],
     sections: [],
   } as Board
 }
