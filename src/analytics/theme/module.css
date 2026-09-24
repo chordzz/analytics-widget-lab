@@ -1288,26 +1288,50 @@
 
 /* --- unit toggle --------------------------------------------------------- */
 
+/*
+ * The currency switcher: two words and a rule under the live one.
+ *
+ * It was a segmented pill — a bordered track, a sunken ground, a raised chip.
+ * Three borrowed surfaces on a control that says one word, sitting in the
+ * corner of a card whose whole job is a single figure. An underline carries the
+ * same state with none of the furniture.
+ *
+ * Both options keep their weight whether or not they are chosen, so nothing
+ * reflows when the choice changes — a bolder "NGN" is wider than a regular one,
+ * and the pair would shuffle under the reader's cursor.
+ */
+/*
+ * A tile's title, shown only while it has no figure of its own.
+ *
+ * Inset to clear the corner cluster, so a long name wraps under the switcher
+ * rather than colliding with it.
+ */
+.a-card__title--bare {
+  margin: 0;
+  padding: var(--a-space-3) var(--a-space-4) 0;
+  padding-right: 96px;
+}
+
 .a-units {
   display: inline-flex;
-  padding: 2px;
-  border: 1px solid var(--a-border);
-  border-radius: var(--a-radius);
-  background: var(--a-surface-sunken);
+  gap: var(--a-space-2);
+  flex: none;
 }
 
 .a-units__option {
-  padding: 2px 8px;
+  padding: 0 0 2px;
   border: 0;
-  border-radius: calc(var(--a-radius) - 3px);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--a-text-muted);
   font: inherit;
-  font-size: 10px;
+  font-size: var(--a-text-xs);
   font-weight: 600;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
   cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
+  transition: color 120ms ease, border-color 120ms ease;
 }
 
 .a-units__option:hover {
@@ -1316,14 +1340,12 @@
 
 .a-units__option:focus-visible {
   outline: 2px solid var(--a-focus-ring);
-  outline-offset: 1px;
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
-/* Raised rather than tinted: the chosen unit has to read at a glance on a card
-   whose figure is the thing being looked at, and a colour alone competes with
-   the delta beneath it. */
 .a-units__option--on {
-  background: var(--a-surface);
   color: var(--a-text);
-  box-shadow: var(--a-shadow);
+  border-bottom-color: var(--a-accent);
 }
+

@@ -300,8 +300,22 @@ export function datasetFrom(api: ApiDataset): Dataset {
 function formatFor(key: string, type: string | undefined): ValueFormat | undefined {
   if (type !== 'number') return undefined
 
-  // `changePercent`, `successRate`, `dauMauRatio` — a fraction, drawn as one.
-  if (/(percent|rate|ratio)$/i.test(key)) return 'percent'
+  /*
+   * `changePercent`, `successRate` — a percentage, already scaled.
+   *
+   * `ratio` is deliberately not here. A rate named `successRate` is a
+   * percentage by convention and Peniremit's numbers confirm it; a ratio is as
+   * often a bare multiple, and drawing `dauMauRatio: 0.3` as `0.3%` would be a
+   * wrong number in the other direction. Unformatted is the honest answer where
+   * the convention is not clear.
+   */
+  /*
+   * The movement of a rate is measured in the same units as the rate, so
+   * `successRateDelta` is points too — it drew as a bare `-26.77` beneath a
+   * figure reading `66.67%`, which is the same number said two ways and one of
+   * them wrong.
+   */
+  if (/(percent|rate)(delta)?$/i.test(key)) return 'percent-points'
 
   /*
    * A currency code, as the whole key or a camelCase segment: `usd`,

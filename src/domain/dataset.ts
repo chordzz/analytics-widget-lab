@@ -105,7 +105,21 @@ export type ValueFormat =
   | 'number'
   | 'currency'
   | `currency:${string}`
+  /** A fraction. `0.0201` draws as `2.01%`. */
   | 'percent'
+  /**
+   * Already a percentage. `66.67` draws as `66.67%`.
+   *
+   * Two conventions exist and nothing in the declaration says which a Field
+   * uses — the two are indistinguishable from a single value, since `0.5` is
+   * either half a percent or a half. Peniremit publishes points: their own
+   * sample gives `value: 1420, delta: 28, changePercent: 2.01`, and 28/1392 is
+   * 2.01%, so the figure is the percentage rather than the fraction.
+   *
+   * Read as a fraction it drew `6,667%` where the answer was `66.67%` — a wrong
+   * number, confidently, which is the worst shape a formatting bug takes.
+   */
+  | 'percent-points'
   | 'compact'
   | 'duration'
   | 'text'

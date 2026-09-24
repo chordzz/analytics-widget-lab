@@ -49,6 +49,15 @@ const currencyOf = (format: string): string => {
   return marker === -1 ? 'USD' : format.slice(marker + 1).toUpperCase()
 }
 const percent = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 })
+/*
+ * Two decimals, because a publisher sending `66.67` chose them. Rounding to
+ * `66.7%` throws away a digit they went to the trouble of computing, and a
+ * success rate is exactly the figure someone reads to two places.
+ */
+const percentPoints = new Intl.NumberFormat(undefined, {
+  style: 'percent',
+  maximumFractionDigits: 2,
+})
 
 export function formatValue(value: unknown, format: ValueFormat = 'number'): string {
   if (value === null || value === undefined || value === '') return '—'
@@ -62,6 +71,9 @@ export function formatValue(value: unknown, format: ValueFormat = 'number'): str
   switch (format) {
     case 'percent':
       return percent.format(value)
+    // Already a percentage, so it is divided back before `Intl` multiplies it.
+    case 'percent-points':
+      return percentPoints.format(value / 100)
     case 'compact':
       return compact.format(value)
     case 'duration':
@@ -82,6 +94,8 @@ export function formatValue(value: unknown, format: ValueFormat = 'number'): str
 export function formatAxis(value: unknown, format: ValueFormat = 'number'): string {
   if (typeof value !== 'number') return String(value ?? '')
   if (format === 'percent') return percent.format(value)
+  // An axis stays at one place; the tick is for orientation, not precision.
+  if (format === 'percent-points') return percent.format(value / 100)
   if (format === 'duration') return value < 1 ? `${Math.round(value * 1000)}ms` : `${value}s`
   return compact.format(value)
 }

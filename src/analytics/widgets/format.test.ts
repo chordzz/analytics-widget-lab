@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { formatTimeLabel, formatValue } from './format'
+import { formatAxis, formatTimeLabel, formatValue } from './format'
 
 describe('a date names a day', () => {
   test('and is read as one', () => {
@@ -89,5 +89,46 @@ describe('money', () => {
   test('and an unrecognised code degrades rather than throwing', () => {
     // A card drawing nothing is worse than one drawing a plain number.
     expect(() => formatValue(31, 'currency:zzz' as never)).not.toThrow()
+  })
+})
+
+/*
+ * Percentages, and the two conventions a publisher may be using.
+ *
+ * Nothing in the declaration says which, and the two are indistinguishable from
+ * a single value — `0.5` is either half a percent or a half. Peniremit sends
+ * points, which their own sample proves: `value: 1420, delta: 28,
+ * changePercent: 2.01`, and 28/1392 is 2.01%.
+ *
+ * Read as a fraction, `66.67` drew as `6,667%` where the answer was `66.67%` —
+ * a wrong number, confidently, which is the worst shape a formatting bug takes.
+ */
+describe('percentages', () => {
+  test('a fraction is scaled up', () => {
+    expect(formatValue(0.0201, 'percent')).toBe('2%')
+  })
+
+  test('and a figure already in points is not', () => {
+    expect(formatValue(66.67, 'percent-points')).toBe('66.67%')
+    expect(formatValue(2.01, 'percent-points')).toBe('2.01%')
+  })
+
+  test('to the precision the publisher sent', () => {
+    /*
+     * Two places, because a publisher sending `66.67` chose them. Rounding to
+     * `66.7%` throws away a digit they computed, and a success rate is exactly
+     * the figure someone reads to two places.
+     */
+    expect(formatValue(66.67, 'percent-points')).not.toBe('66.7%')
+  })
+
+  test('a movement in points keeps its sign and its unit', () => {
+    // It drew as a bare `-26.77` beneath a figure reading `66.67%` — the same
+    // number said two ways, and one of them wrong.
+    expect(formatValue(-26.77, 'percent-points')).toBe('-26.77%')
+  })
+
+  test('an axis stays at one place, because a tick is for orientation', () => {
+    expect(formatAxis(66.67, 'percent-points')).toBe('66.7%')
   })
 })
