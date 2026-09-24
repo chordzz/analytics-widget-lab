@@ -313,10 +313,22 @@ export function GridBoard({
          * The card header is the handle. With the whole card draggable, a press
          * on the actions menu starts a drag instead of opening the menu — the
          * same conflict that forced the old canvas to disable dragging mid-resize.
+         *
+         * **A bare card is its own handle**, because it has no header to be
+         * one. A stat tile draws its own label and a header above it would say
+         * the same thing twice, so `bare` drops it — and with it went the only
+         * thing the grid would let you pick the card up by. Twenty-two of
+         * Peniremit's fifty-five Widgets are stat cards, so the commonest
+         * Widget in the product was the one that could not be moved, on a board
+         * where everything around it could.
+         *
+         * Safe to widen because a tile has no interactive content of its own:
+         * everything it holds — the actions menu, a unit toggle — is a button,
+         * and `cancel` already excludes those.
          */
         dragConfig={{
           enabled: interactive,
-          handle: '.a-card__head',
+          handle: '.a-card__head,.a-card--bare',
           cancel: '.a-menu,.a-menu__trigger,button,input,select,textarea',
         }}
         resizeConfig={{ enabled: interactive, handles: ['se'] }}
