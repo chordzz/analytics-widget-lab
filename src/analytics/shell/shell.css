@@ -339,3 +339,90 @@
   color: var(--a-text-secondary);
   font-size: var(--a-text-sm);
 }
+
+/* --- narrow: the sidebar becomes an overlay ------------------------------ */
+
+/*
+ * Below 720px the sidebar leaves the grid. As a column it took 233px of a
+ * 375px viewport, leaving 126px of content — narrower than a single stat card.
+ * The icon rail does not rescue it either: 56px of a phone spent on navigation
+ * that nobody opened a dashboard to read.
+ *
+ * Driven by `data-drawer` on the shell rather than by the media query alone,
+ * so the scrim, the open button and `aria-expanded` cannot disagree with the
+ * layout. The query still owns the geometry; the attribute owns the state.
+ */
+.a-shell[data-drawer] {
+  grid-template-columns: 1fr;
+}
+
+.a-shell[data-drawer] .a-side {
+  position: fixed;
+  z-index: 60;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(280px, 82vw);
+  transform: translateX(-100%);
+  transition: transform 180ms ease;
+  box-shadow: var(--a-shadow-raised);
+}
+
+.a-shell[data-drawer='open'] .a-side {
+  transform: translateX(0);
+}
+
+.a-shell__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  background: var(--a-scrim);
+}
+
+/* The button that opens it, which exists only while the drawer does. */
+.a-topbar__menu {
+  flex: none;
+  margin-right: var(--a-space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .a-shell[data-drawer] .a-side {
+    transition: none;
+  }
+}
+
+/*
+ * The topbar stacks its title above its actions rather than letting a long
+ * caption squeeze "New dashboard" into two lines of one word.
+ */
+@media (max-width: 720px) {
+  .a-topbar {
+    flex-wrap: wrap;
+    row-gap: var(--a-space-2);
+  }
+
+  .a-topbar__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /*
+   * Board tabs scroll sideways instead of wrapping into a block. Seven boards
+   * wrapped is four rows of chrome above the thing someone came to read; one
+   * scrolling row keeps the first board where the eye starts.
+   */
+  .a-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .a-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .a-tabs > * {
+    flex: none;
+  }
+}

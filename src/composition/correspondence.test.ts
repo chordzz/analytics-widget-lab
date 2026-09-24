@@ -240,19 +240,22 @@ describe('correspondence cases deferred to Phase 5', () => {
   })
 })
 
-describe('a Control cannot widen a Widget past the range its Author fixed', () => {
+describe('a Control governs the range, whatever the Author bound', () => {
   /*
-   * The case the third bucket exists for, and it is not hypothetical:
-   * peniremit.profit requires `from` and `to`, so every Widget over it carries
-   * a binding. That binding is sent upstream and wins — Finding 10, the
-   * Widget's own choice being the more specific — so the Source System answers
-   * for the Author's window and the Control's range is then applied in the
-   * browser over those rows.
+   * This block used to assert the opposite, and was right to.
    *
-   * Narrowing works. Widening returns nothing, because nothing outside that
-   * window was ever fetched. A Viewer asking for August on a card bound to
-   * September gets an empty chart, and "affects all widgets" would have been
-   * the only thing on screen explaining it.
+   * While a Widget's binding outranked the Control, `peniremit.profit`'s
+   * required `from` and `to` meant every Widget over it carried one, the
+   * Source System answered for the Author's window, and the Control's range was
+   * applied in the browser over those rows. It could narrow and could not
+   * widen: a Viewer asking for August on a card bound to September got an empty
+   * chart, and the reach sentence saying so was the only thing on screen
+   * explaining it.
+   *
+   * A Control now governs the parameters it corresponds to, so its range is
+   * what goes upstream and the endpoint answers for the window the Viewer
+   * asked for. The limit is gone rather than unreported, and these assert that
+   * — keeping the old ones would have pinned a caveat we deliberately removed.
    */
   const profit = datasetFrom({
     id: 'peniremit.profit',
@@ -282,25 +285,18 @@ describe('a Control cannot widen a Widget past the range its Author fixed', () =
   const reachFor = (boundParameters: string[]) =>
     resolveControlReach(control, [subject(boundParameters)], { 'peniremit.profit': profit })
 
-  test('a bound range is reported as limited, not as fully affected', () => {
+  test('a bound range is fully affected, not limited', () => {
     const reach = reachFor(['from', 'to'])
-    expect(reach.affected).toHaveLength(0)
-    expect(reach.limited).toHaveLength(1)
+    expect(reach.affected).toHaveLength(1)
+    expect(reach.limited).toHaveLength(0)
     expect(reach.unaffected).toHaveLength(0)
   })
 
-  test('and the reason says what the limit is, not that it failed', () => {
-    // It does move. What it cannot do is widen, and only the second half is
-    // news to anyone.
-    const [entry] = reachFor(['from', 'to']).limited
-    expect(entry.reason).toContain('narrows within it')
-    expect(entry.reason.toLowerCase()).not.toContain('unaffected')
-  })
-
-  test('binding one end is enough to cap it', () => {
-    // A range open at one end is still a window, and still cannot be widened
-    // past the end that is fixed.
-    expect(reachFor(['from']).limited).toHaveLength(1)
+  test('binding one end does not cap it either', () => {
+    // A range open at one end used to be a window the Control worked inside.
+    // The Control supplies both ends now, so there is no window to be inside.
+    expect(reachFor(['from']).limited).toHaveLength(0)
+    expect(reachFor(['from']).affected).toHaveLength(1)
   })
 
   test('with nothing bound the Control reaches it fully', () => {

@@ -95,13 +95,35 @@ describe('the payload', () => {
     }
   })
 
-  test('and a Viewer may move it', () => {
-    // A default, not a fixture. Both are published Filter Parameters, which is
-    // what `exposed_filters` requires.
+  test('and no Widget offers its own picker for it', () => {
+    /*
+     * This asserted `['from', 'to']` on every Widget, and was right when a
+     * board's date Control could not reach one that bound a range: exposing
+     * them per card was the only way to move a period at all. It put twenty
+     * native date inputs on the Growth board, two above every figure.
+     *
+     * The Control governs the range now, so a per-Widget picker is a second
+     * way of saying the same thing — with the board's answer and twenty local
+     * answers free to disagree. Exposure is an Author's choice per Widget
+     * rather than a default.
+     */
     for (let index = 0; index < PENIREMIT_BOARDS.length; index += 1) {
       for (const widget of payloadFor(index).widgets) {
-        expect(widget.exposed_filters).toEqual(['from', 'to'])
+        expect(widget.exposed_filters).toEqual([])
       }
+    }
+  })
+
+  test('the board carries one period instead', () => {
+    /*
+     * What replaces them. It stores no value — a Control's value is session
+     * state — so the board opens with each Widget on the range it carries as a
+     * default, which is the same range for all of them.
+     */
+    for (const definition of PENIREMIT_BOARDS) {
+      const controls = boardFrom(definition).controls
+      expect(controls).toHaveLength(1)
+      expect(controls[0].controlType).toBe('date-range')
     }
   })
 

@@ -31,10 +31,17 @@ const markup = (fieldKey: string) =>
 
 describe('a Time Dimension with nothing enumerated', () => {
   test('renders a date picker rather than an empty dropdown', () => {
-    // `revenue-daily.date` is filterable and declares no allowed values, which
-    // is the exact case: a dropdown containing only "All".
+    /*
+     * `revenue-daily.date` is filterable and declares no allowed values, which
+     * is the exact case: a dropdown containing only "All".
+     *
+     * Asserted on the field rather than on `type="date"`, which was the native
+     * input this replaced. The property is that a date gets a date control —
+     * not which one — and pinning the implementation is what made this fail for
+     * a change that was the point.
+     */
     const drawn = markup('date')
-    expect(drawn).toContain('type="date"')
+    expect(drawn).toContain('a-datefield')
     expect(drawn).not.toContain('<select')
   })
 

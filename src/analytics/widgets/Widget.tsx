@@ -10,10 +10,10 @@
 import { WidgetCard, type WidgetAction, type WidgetState } from './WidgetCard'
 import { widgetType } from './catalog'
 import { thresholdFrom } from './threshold'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useDataset, useWidgetRows } from '../data/AnalyticsData'
-import { WidgetFilters } from './WidgetFilters'
-import { singleValueOf } from '../data/query'
+import { UnitToggle, WidgetFilters } from './WidgetFilters'
+import { governedParameters, inUnit, rangeSignature, singleValueOf, withoutGoverned } from '../data/query'
 import type { ViewerChoices } from '../data/query'
 import type { QueryContribution } from '../../composition/correspondence'
 import type { PartialResult } from '../../retrieval/port'
@@ -62,6 +62,16 @@ export interface WidgetMapping {
   value?: string
   /** Measure holding the target, for gauges. */
   target?: string
+  /**
+   * Measure holding a change the *publisher* computed, for tiles.
+   *
+   * Not a second reading of `value`. A stat card receives one aggregated row,
+   * so it has one number and nothing to compare it against — which is why it
+   * showed a bare figure. Where a Dataset publishes the comparison as its own
+   * Measure, the card can show it without computing anything, which is the
+   * whole position: Analytics computes nothing and neither do we.
+   */
+  delta?: string
   /** Field holding a state, for status widgets. */
   state?: string
   /** Columns, for tables. */
@@ -95,6 +105,24 @@ export interface WidgetSpec {
   exposedFilters?: string[]
   /** FR-VZ-06 — Fields a Viewer may reorder by. Same constraint, via `sortable`. */
   exposedSorts?: string[]
+  /**
+   * Measures that are the same figure in different units, offered to a Viewer.
+   *
+   * Peniremit publishes `usd` and `ngn` on the same row, so switching between
+   * them changes which Measure is *drawn* and nothing about what was fetched —
+   * no re-query, no parameter, no round trip.
+   *
+   * Which is why this is not a Filter and not a `presentation-toggle`. A filter
+   * narrows rows; a presentation toggle changes how a figure is rendered
+   * (absolute against percentage); this substitutes one column for another.
+   * Conflating it with either would have meant a control that re-queried for
+   * data already on screen.
+   *
+   * The Author says which Measures are units of each other because nothing in
+   * the declaration can: `usd` and `ngn` are two Measures like any other pair,
+   * and only a publisher or an Author knows they answer the same question.
+   */
+  unitOptions?: string[]
   /**
    * Values the Author fixed for the Dataset's Filter Parameters — D24.
    *
@@ -154,6 +182,10 @@ export interface WidgetViewProps extends WidgetProps {
   errorMessage?: string
   /** The exposed filters, already resolved. Pure: this component owns no state. */
   controls?: ReactNode
+  /** A control small enough for the corner of a bare card. */
+  inlineControl?: ReactNode
+  /** The Viewer's choices, so the body can draw in the unit they picked. */
+  choices?: ViewerChoices
 }
 
 /**
@@ -176,6 +208,8 @@ export function WidgetView({
   errorMessage,
   partial,
   controls,
+  inlineControl,
+  choices,
 }: WidgetViewProps) {
   const type = widgetType(spec.typeId)
 
@@ -224,9 +258,10 @@ export function WidgetView({
       bare={bare}
       textLed={textLed}
       controls={controls}
+      inlineControl={inlineControl}
       style={height ? { height } : undefined}
     >
-      {state === 'ready' && dataset ? renderBody(spec, type.id, rows, dataset) : null}
+      {state === 'ready' && dataset ? renderBody(spec, type.id, rows, dataset, choices) : null}
     </WidgetCard>
   )
 }
@@ -296,9 +331,59 @@ export function Widget({
    * thing, and it is Stage 6.3.
    */
   const [choices, setChoices] = useState<ViewerChoices>({})
+
+  /*
+   * Moving the board's range clears what this card was nudged to.
+   *
+   * Three layers decide a parameter — the Author's default, the Control, then
+   * the Viewer's own choice on this Widget — and the Viewer's wins. That is
+   * right while they are looking at one card, and wrong the moment they reach
+   * for the board's range again: the control they just used would be the one
+   * thing on screen that did nothing.
+   *
+   * So a Viewer's override is a deviation from the board rather than a
+   * replacement for it, and the board re-asserts. Only over the parameters the
+   * Control actually governs — a date range has nothing to say about a
+   * `status` this card was filtered to, and clearing that would throw away a
+   * choice nobody overruled.
+   *
+   * Keyed on the range's *value*, not the contribution's identity. Comparing
+   * objects would clear the override on every render, which is the same bug as
+   * never clearing it and considerably harder to see.
+   */
+  const lastRange = useRef(rangeSignature(contribution))
+  useEffect(() => {
+    const signature = rangeSignature(contribution)
+    if (signature === lastRange.current) return
+    lastRange.current = signature
+
+    const governed = dataset ? governedParameters(dataset, contribution) : []
+    if (governed.length === 0) return
+
+    setChoices((current) => withoutGoverned(current, governed))
+  }, [contribution, dataset])
+
   const retrieved = useWidgetRows(spec, dataset, choices, contribution)
 
-  const controls =
+  /*
+   * Two controls, and they are different kinds of thing sitting side by side.
+   *
+   * The filters narrow what is *asked for*; the unit toggle changes which
+   * column is *drawn* from what already came back. Rendered together because a
+   * Viewer does not care which is which — both are "things I can change about
+   * this card" — and kept apart in the model because only one costs a request.
+   */
+  const unitToggle =
+    dataset && spec.unitOptions && spec.unitOptions.length > 1 ? (
+      <UnitToggle
+        units={spec.unitOptions}
+        dataset={dataset}
+        value={choices.unit}
+        onChange={(unit) => { setChoices((current) => ({ ...current, unit })) }}
+      />
+    ) : undefined
+
+  const filters =
     dataset && (spec.exposedFilters?.length || spec.exposedSorts?.length) ? (
       <WidgetFilters
         dataset={dataset}
@@ -312,6 +397,8 @@ export function Widget({
       />
     ) : undefined
 
+  const controls = filters
+
   if (override) {
     return (
       <WidgetView
@@ -321,6 +408,8 @@ export function Widget({
         state={override}
         partial={partialOverride}
         controls={controls}
+        inlineControl={unitToggle}
+        choices={choices}
         actions={actions}
         selected={selected}
         onSelect={onSelect}
@@ -366,6 +455,8 @@ export function Widget({
         (retrieved.status === 'failed' ? retrieved.message : undefined)
       }
       controls={controls}
+      inlineControl={unitToggle}
+      choices={choices}
       actions={actions}
       selected={selected}
       onSelect={onSelect}
@@ -379,8 +470,12 @@ function renderBody(
   typeId: string,
   rows: readonly Row[],
   dataset: Dataset,
+  choices?: ViewerChoices,
 ) {
-  const { mapping, options = {} } = spec
+  const { options = {} } = spec
+  // Substituted here rather than at every use, so a Widget added later cannot
+  // forget to honour the unit somebody picked.
+  const mapping = inUnit(spec.mapping, spec, choices)
 
   const seriesSpecs = (mapping.series ?? []).map((key) => ({
     key,
@@ -497,17 +592,37 @@ function renderBody(
        */
       const comparable = !isAggregate && values.length > 1 && previous !== 0
 
+      /*
+       * A change the publisher computed, where the Author mapped one.
+       *
+       * Read off the same aggregated row as the figure, so the two describe the
+       * same period — which the old computed delta did not: it showed a whole
+       * period's total beside a movement derived from the last two *records*, a
+       * 24-month figure labelled "vs. last month".
+       *
+       * Rendered with the mapped Field's own declared format, because only the
+       * publisher knows whether their `2.01` is two per cent or two hundred and
+       * one. Nothing is converted here; a wrong declaration is theirs to fix and
+       * visible when it is wrong.
+       */
+      const deltaField = mapping.delta ? fieldOf(dataset, mapping.delta) : undefined
+      const published =
+        mapping.delta && rows.length > 0 ? Number(rows[rows.length - 1][mapping.delta]) : undefined
+      const publishedDelta = Number.isFinite(published) ? published : undefined
+
       return (
         <StatTile
           label={spec.title ?? fieldOf(dataset, key)?.label ?? key}
           value={isAggregate ? aggregate : latest}
           format={primaryFormat}
-          delta={comparable ? latest / previous - 1 : undefined}
+          delta={publishedDelta ?? (comparable ? latest / previous - 1 : undefined)}
+          deltaFormat={publishedDelta === undefined ? undefined : (deltaField?.format ?? 'number')}
           direction={
             (options.direction as 'up-is-good' | 'down-is-good' | 'neutral') ?? 'up-is-good'
           }
           comparisonLabel={
-            comparable && typeof options.comparisonLabel === 'string'
+            (comparable || publishedDelta !== undefined) &&
+            typeof options.comparisonLabel === 'string'
               ? options.comparisonLabel
               : undefined
           }

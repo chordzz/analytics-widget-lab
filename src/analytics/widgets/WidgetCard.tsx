@@ -11,7 +11,8 @@
  * the board should be a different composition, not a squashed one.
  */
 
-import { forwardRef, useState, type HTMLAttributes, type ReactNode } from 'react'
+import { forwardRef, type HTMLAttributes, type ReactNode, useCallback, useRef, useState } from 'react'
+import { useClickAway } from '../shell/use-click-away'
 
 /**
  * The six render states, and why there are six.
@@ -70,7 +71,25 @@ export interface WidgetCardProps {
    * the wrong number before noticing.
    */
   controls?: ReactNode
-  /** Drops the header. For a stat tile whose value is its own headline. */
+  /**
+   * A control small enough to sit in the corner of a bare card.
+   *
+   * Separate from `controls` because a tile has nowhere else to put one: its
+   * content is centred and a row beneath the figure would push the figure off
+   * the card. On a card with a header it simply joins the others.
+   */
+  inlineControl?: ReactNode
+  /**
+   * Drops the header. For a stat tile whose value is its own headline.
+   *
+   * **Only while it has one.** A tile carries its own label inside `StatTile`,
+   * so a header would repeat it — but every state other than `ready` renders a
+   * placeholder instead, and the label goes with it. Four empty tiles in a
+   * column then say "No data for this selection" and nothing else, and there is
+   * no way to tell which Widget is which, or which Dataset to go and look at.
+   *
+   * So the header comes back whenever the tile is not showing its own number.
+   */
   bare?: boolean
   /**
    * Text-led rather than plot-led — keeps the roomier inset. A chart wants the
@@ -98,6 +117,7 @@ export const WidgetCard = forwardRef<
     partial,
     footer,
     controls,
+    inlineControl,
     bare = false,
     textLed = false,
     selected = false,
@@ -124,20 +144,55 @@ export const WidgetCard = forwardRef<
         .join(' ')}
       {...rest}
     >
-      {!bare && (
+      {!(bare && state === 'ready') ? (
         <header className="a-card__head">
           <div className="a-card__titles">
             <h3 className="a-card__title">{title}</h3>
             {subtitle && <p className="a-card__subtitle">{subtitle}</p>}
           </div>
           <div className="a-card__head-end">
+            {/*
+              The Viewer's controls sit in the header rather than in a row of
+              their own beneath it. That row cost a full line and a rule on
+              every card carrying a filter — on a two-row Widget, a third of its
+              height spent on chrome above the picture.
+            */}
+            {controls}
+            {inlineControl}
             {badge}
             {actions && actions.length > 0 && <ActionsMenu actions={actions} />}
           </div>
         </header>
+      ) : (
+        (badge ?? inlineControl ?? (actions && actions.length > 0)) && (
+          /*
+           * A bare card has no header, and until now that also meant no
+           * actions: a stat card could not be edited, duplicated or removed
+           * from the board it was on. Twenty-two of Peniremit's fifty-five
+           * Widgets are stat cards, so the commonest Widget in the product was
+           * the one you could not change.
+           *
+           * The header is still the wrong answer — a tile draws its own label,
+           * and a second one above it would say the same thing twice. So the
+           * actions sit in the corner instead, over a tile that has room for
+           * them by construction: its content is centred, and the corner is
+           * where a reader already looks for a menu because that is where every
+           * other card keeps one.
+           */
+          <div className="a-card__corner">
+            {inlineControl}
+            {badge}
+            {actions && actions.length > 0 && <ActionsMenu actions={actions} />}
+          </div>
+        )
       )}
 
-      {controls && <div className="a-card__controls">{controls}</div>}
+      {/*
+        A bare card keeps them below: a tile centres its own content, and a
+        control floated into the corner beside the menu would crowd the one
+        place a reader looks for the figure.
+      */}
+      {bare && controls && <div className="a-card__controls">{controls}</div>}
 
       <div className="a-card__body">
         {state === 'ready' && children}
@@ -167,9 +222,19 @@ export const WidgetCard = forwardRef<
 
 function ActionsMenu({ actions }: { actions: WidgetAction[] }) {
   const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+
+  /*
+   * Same defect as the two new fields had: a `position: fixed` scrim is
+   * contained by any ancestor carrying a transform, and this menu lives inside
+   * a grid that positions by transform. So the scrim covered its own card
+   * rather than the screen, and clicking elsewhere on the board left the menu
+   * open.
+   */
+  useClickAway(open, root, useCallback(() => { setOpen(false) }, []))
 
   return (
-    <div className="a-menu">
+    <div className="a-menu" ref={root}>
       <button
         type="button"
         className="a-menu__trigger"
@@ -189,9 +254,7 @@ function ActionsMenu({ actions }: { actions: WidgetAction[] }) {
       </button>
 
       {open && (
-        <>
-          <div className="a-menu__scrim" onClick={() => setOpen(false)} />
-          <div role="menu" className="a-menu__list">
+        <div role="menu" className="a-menu__list">
             {actions.map((action) => (
               <button
                 key={action.label}
@@ -206,9 +269,8 @@ function ActionsMenu({ actions }: { actions: WidgetAction[] }) {
               >
                 {action.label}
               </button>
-            ))}
-          </div>
-        </>
+          ))}
+        </div>
       )}
     </div>
   )

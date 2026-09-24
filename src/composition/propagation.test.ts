@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { canSwitchTo, effectFor, resolveControlReach } from './correspondence'
+import { canSwitchTo, correspondenceFor, effectFor, resolveControlReach } from './correspondence'
 import {
   dateRangeControl,
   presentationToggleControl,
@@ -290,5 +290,92 @@ describe('several Controls on one Dashboard', () => {
     for (const widget of [settlementsBars, settlementsTrend, coverageBars]) {
       expect(effect(controls, {}, widget)).toEqual({ query: {}, presentation: {} })
     }
+  })
+})
+
+/*
+ * A date range reaches a Dataset that takes one, not only one that has a date
+ * column.
+ *
+ * Correspondence matched on Fields alone, which refused 25 of Peniremit's 41
+ * Datasets — every one behind a stat card — with "declares no time dimension".
+ * True, and not the question a Viewer asks when they move the board's range: an
+ * aggregate has no date column because it answers *for* a window rather than
+ * across one, and it takes `from` and `to` as Filter Parameters, which is a
+ * different list from Fields.
+ */
+describe('a range reaches what can take a range', () => {
+  const control = dateRangeControl('period', 'Period')
+
+  /** An aggregate: Measures only, `from`/`to` published as parameters. */
+  const aggregate: Dataset = {
+    id: 'peniremit.signups-summary',
+    name: 'Signups Summary',
+    description: '',
+    sourceSystem: 'peniremit',
+    classification: 'internal',
+    exposesPersonalData: false,
+    grain: [],
+    fields: [
+      { key: 'value', label: 'Value', role: 'measure', aggregations: ['sum'], filterable: false, sortable: true },
+      { key: 'delta', label: 'Delta', role: 'measure', aggregations: ['sum'], filterable: false, sortable: true },
+    ],
+    filterParameters: [
+      { name: 'from', label: 'From', valueType: 'date', required: true },
+      { name: 'to', label: 'To', valueType: 'date', required: true },
+    ],
+  }
+
+  const subject = (boundParameters: string[] = []) => ({
+    id: 'w',
+    datasetId: aggregate.id,
+    visualizationTypeId: 'stat-card',
+    boundParameters,
+  })
+
+  test('it applies, though the Dataset has no Field of that role', () => {
+    const verdict = correspondenceFor(control, subject() as never, aggregate)
+    expect(verdict.applies).toBe(true)
+  })
+
+  test('and names the parameters, because that is all the publisher has said', () => {
+    const verdict = correspondenceFor(control, subject() as never, aggregate)
+    if (!verdict.applies) throw new Error('unreachable')
+    expect(verdict.via).toBe('from/to')
+  })
+
+  test('a declared `time_range` names the Field instead', () => {
+    // BE-8. The publisher says which Field the range narrows even where the
+    // response does not carry the column.
+    const declared: Dataset = {
+      ...aggregate,
+      timeRange: { field: 'day', from: 'from', to: 'to' },
+    }
+    const verdict = correspondenceFor(control, subject() as never, declared)
+    if (!verdict.applies) throw new Error('unreachable')
+    expect(verdict.via).toBe('day')
+  })
+
+  test('a bound range does not limit it, because the Control replaces the range', () => {
+    /*
+     * It mattered most here. A trend fetched for the Author's window can at
+     * least be cut down in the browser; one pre-aggregated row is a number
+     * computed for a period, and no local filtering turns it into a number for
+     * a different one. So while the binding won, the Control did nothing at all
+     * to a stat card — which is every stat card on Peniremit's four boards.
+     */
+    const verdict = correspondenceFor(control, subject(['from', 'to']) as never, aggregate)
+    expect(verdict.applies).toBe(true)
+    if (!verdict.applies) throw new Error('unreachable')
+    expect('limited' in verdict).toBe(false)
+  })
+
+  test('a Dataset that takes no range at all is still refused', () => {
+    // The honest "no": nothing to send, and nothing to say it reaches.
+    const noRange: Dataset = { ...aggregate, filterParameters: [] }
+    const verdict = correspondenceFor(control, subject() as never, noRange)
+    expect(verdict.applies).toBe(false)
+    if (verdict.applies) throw new Error('unreachable')
+    expect(verdict.reason).toContain('no time dimension')
   })
 })

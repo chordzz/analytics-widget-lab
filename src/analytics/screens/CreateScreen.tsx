@@ -15,7 +15,7 @@ import { SharePanel } from '../builder/SharePanel'
 import { BoardControls } from '../builder/BoardControls'
 import { useBoardControls } from '../builder/useBoardControls'
 import { WidgetComposer, type ComposerDraft } from '../builder/WidgetComposer'
-import { useMay } from '../data/AnalyticsData'
+import { useAnalyticsData, useMay } from '../data/AnalyticsData'
 import { useBoards } from '../builder/useBoards'
 import { settledName } from '../builder/boards'
 import { useComposeIntent } from '../builder/useComposeIntent'
@@ -25,6 +25,7 @@ import type { ScreenId } from '../shell/nav'
 export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const boards = useBoards()
   const mayPublish = useMay('dashboard.publish')
+  const { viewer } = useAnalyticsData()
   const { editing } = boards
   const controls = useBoardControls(editing)
 
@@ -75,6 +76,39 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
   if (boards.loading) return <p className="a-muted">Loading your boards…</p>
   if (!editing) return null
 
+  /*
+   * The builder is the Author's, and this screen had no guard of any kind.
+   *
+   * `DashboardsScreen` gates its way in on authorship, but that is one route.
+   * `editingId` is persisted, so a board opened before a rule existed — or
+   * reached by typing the hash — arrives here with someone else's board loaded,
+   * and every affordance on the screen works right up until `PATCH` refuses it.
+   * The API is "creator or Administrator only", so the save was always going to
+   * fail; what was wrong is letting somebody compose a board for ten minutes
+   * first.
+   *
+   * Said rather than blanked. A screen that renders nothing is indistinguishable
+   * from one that is broken, and the reader needs to know their work is not
+   * lost so much as never possible.
+   *
+   * Administrators lose this too, the same known cost recorded in
+   * `DashboardsScreen` and `SharePanel`: nothing in the model says who one is.
+   */
+  if (editing.authorId !== viewer.id) {
+    return (
+      <div className="a-placeholder a-placeholder--neutral" role="status">
+        <p className="a-placeholder__heading">This dashboard belongs to someone else</p>
+        <p>
+          Only the person who created a dashboard can change it. You can still open it from
+          Dashboards, and duplicate it if you want one of your own.
+        </p>
+        <button type="button" className="a-button" onClick={() => { onNavigate('dashboards') }}>
+          Back to dashboards
+        </button>
+      </div>
+    )
+  }
+
   const isEditing = (value: typeof composing): value is PlacedWidget =>
     value !== null && value !== 'new' && 'id' in value
 
@@ -116,6 +150,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
     return (
       <WidgetComposer
         boardName={editing.name}
+        boardPeriod={controls.period}
         initial={
           isEditing(composing)
             ? {
@@ -220,6 +255,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
         values={controls.values}
         onChange={controls.setValues}
         onRemove={(controlId) => boards.removeControl(editing.id, controlId)}
+        onSetDefault={(controlId, value) => { boards.setControlDefault(editing.id, controlId, value) }}
       />
 
       <GridBoard

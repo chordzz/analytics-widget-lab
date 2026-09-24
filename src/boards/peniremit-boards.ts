@@ -18,6 +18,33 @@
 
 import { peniremitDataset } from './peniremit-catalogue'
 
+/** The two currencies, where a Dataset publishes a figure in both. */
+export const CURRENCIES = ['usd', 'ngn']
+
+/**
+ * Whether this card draws a figure that comes in both currencies.
+ *
+ * Derived from the declaration rather than listed by hand, for the same reason
+ * the donuts are: seventeen cards qualify today, a hand-kept list would be
+ * seventeen edits and an eighteenth Dataset would be missed, and a card whose
+ * Dataset stops publishing `ngn` would keep offering a button that selects
+ * nothing.
+ */
+const currencyUnits = (datasetId: string, mapping: Record<string, string | string[]>) => {
+  const keys = requirePeniremitDataset(datasetId).keys
+  if (!CURRENCIES.every((unit) => keys.includes(unit))) return undefined
+  const mapped = Object.values(mapping).flat().map(String)
+  const used = new Set(mapped.filter((key) => CURRENCIES.includes(key)))
+
+  /*
+   * Exactly one. A card mapping both — `series: ['usd', 'ngn']` on the transfer
+   * volume trend — is drawing the two side by side and has nothing to toggle
+   * between; offering one there would ask a reader to pick between two lines
+   * they can already see.
+   */
+  return used.size === 1 ? CURRENCIES : undefined
+}
+
 export interface BoardCard {
   /** The card's title in the guide, so the two can be read side by side. */
   card: string
@@ -39,6 +66,13 @@ export interface BoardCard {
   /** Columns on a 12-column board. A layout decision, so it is stated. */
   w: number
   /**
+   * Measures that are the same figure in different units.
+   *
+   * Applied by `withUnits` rather than written per card, so a card gets the
+   * toggle by being the right shape instead of by someone remembering.
+   */
+  unitOptions?: string[]
+  /**
    * Rows, only where the type's own height is wrong for this card.
    *
    * Omitted almost always: `heightForType` knows what a stat card and a line
@@ -55,6 +89,35 @@ export interface BoardDefinition {
 }
 
 /** A number and the line beneath it: one card, two Widgets. */
+/**
+ * The change a summary Dataset publishes alongside its figure, if any.
+ *
+ * Peniremit's aggregates carry `delta` — an absolute movement — beside `value`,
+ * and a per-measure equivalent where the figure is money: `usd` is paired with
+ * `usdDelta`. Mapped rather than computed: a stat card receives one aggregated
+ * row and cannot derive movement from it, which is why these were bare numbers.
+ *
+ * `changePercent` is deliberately not used yet. `2.01` is either two per cent
+ * or two hundred and one depending on a convention nobody has stated, and a
+ * card confidently showing the wrong one is worse than a card showing the
+ * absolute change. The question is with them.
+ */
+const publishedDelta = (datasetId: string, valueKey: string): string | undefined => {
+  const keys = requirePeniremitDataset(datasetId).keys
+  const candidate = valueKey === 'value' ? 'delta' : `${valueKey}Delta`
+  return keys.includes(candidate) ? candidate : undefined
+}
+
+/** A stat card over a summary Dataset, showing a published change where there is one. */
+const summaryCard = (card: string, datasetId: string, valueKey: string, title = card): BoardCard => {
+  const delta = publishedDelta(datasetId, valueKey)
+  return {
+    card, title, datasetId, typeId: 'stat-card',
+    mapping: { value: valueKey, ...(delta ? { delta } : {}) },
+    w: 3,
+  }
+}
+
 const pair = (
   card: string,
   summaryId: string,
@@ -62,8 +125,7 @@ const pair = (
   valueKey: string,
   trendKeys: string[],
 ): BoardCard[] => [
-  { card, title: card, datasetId: summaryId, typeId: 'stat-card',
-    mapping: { value: valueKey }, w: 3 },
+  summaryCard(card, summaryId, valueKey),
   { card, title: `${card} over time`, datasetId: trendId, typeId: 'line-chart',
     mapping: { x: 'date', series: trendKeys }, w: 9 },
 ]
@@ -112,18 +174,14 @@ export const GROWTH: BoardDefinition = {
      * so one chart shows the comparison the card is named for — where the
      * summary can only show one number at a time.
      */
-    { card: 'New signups (Completed vs Drop-Offs)', title: 'Completed signups',
-      datasetId: 'peniremit.signup-outcomes-summary', typeId: 'stat-card',
-      mapping: { value: 'completed' }, w: 3 },
+    summaryCard('New signups (Completed vs Drop-Offs)', 'peniremit.signup-outcomes-summary', 'completed', 'Completed signups'),
     { card: 'New signups (Completed vs Drop-Offs)', title: 'Completed and dropped',
       datasetId: 'peniremit.signup-outcomes', typeId: 'line-chart',
       mapping: { x: 'date', series: ['value', 'dropOffs'] }, w: 9 },
 
     share('Sign up by channel', 'peniremit.signup-by-channel', 'value'),
 
-    { card: 'User Growth over time', title: 'User growth',
-      datasetId: 'peniremit.user-growth', typeId: 'stat-card',
-      mapping: { value: 'value' }, w: 3 },
+    summaryCard('User Growth over time', 'peniremit.user-growth', 'value', 'User growth'),
   ],
 }
 
@@ -139,9 +197,7 @@ export const TRANSACTION: BoardDefinition = {
     ...pair('Total transactions', 'peniremit.transaction-count-summary',
       'peniremit.transaction-count-trend', 'value', ['value']),
 
-    { card: 'Success rate', title: 'Success rate',
-      datasetId: 'peniremit.transaction-rate-summary', typeId: 'stat-card',
-      mapping: { value: 'successRate' }, w: 3 },
+    summaryCard('Success rate', 'peniremit.transaction-rate-summary', 'successRate'),
     { card: 'Success rate', title: 'Success rate over time',
       datasetId: 'peniremit.transaction-rate', typeId: 'line-chart',
       mapping: { x: 'date', series: ['value'] }, w: 9 },
@@ -157,9 +213,10 @@ export const TRANSACTION: BoardDefinition = {
      * belief came from inferring the parameter list from a Dataset's shape,
      * which is why the catalogue states them per Dataset now.
      */
-    { card: 'Failed transactions', title: 'Failed transactions',
-      datasetId: 'peniremit.transaction-count-summary', typeId: 'stat-card',
-      mapping: { value: 'value' }, parameters: { status: 'failed' }, w: 3 },
+    {
+      ...summaryCard('Failed transactions', 'peniremit.transaction-count-summary', 'value'),
+      parameters: { status: 'failed' },
+    },
     { card: 'Failed transactions', title: 'Failed transactions over time',
       datasetId: 'peniremit.transaction-count-trend', typeId: 'line-chart',
       mapping: { x: 'date', series: ['value'] }, parameters: { status: 'failed' }, w: 9 },
@@ -167,12 +224,8 @@ export const TRANSACTION: BoardDefinition = {
     ...pair('Total deposit', 'peniremit.deposit-volume-summary',
       'peniremit.deposit-volume-trend', 'usd', ['usd', 'ngn']),
 
-    { card: 'Total Spend', title: 'Total spend',
-      datasetId: 'peniremit.spend-volume-summary', typeId: 'stat-card',
-      mapping: { value: 'usd' }, w: 3 },
-    { card: 'Avg Transaction value', title: 'Average transaction value',
-      datasetId: 'peniremit.avg-transaction-value-summary', typeId: 'stat-card',
-      mapping: { value: 'usd' }, w: 3 },
+    summaryCard('Total Spend', 'peniremit.spend-volume-summary', 'usd', 'Total spend'),
+    summaryCard('Avg Transaction value', 'peniremit.avg-transaction-value-summary', 'usd', 'Average transaction value'),
 
     { card: 'Transaction volume (Successful vs Failed)', title: 'Successful against failed',
       datasetId: 'peniremit.transaction-rate', typeId: 'line-chart',
@@ -190,9 +243,7 @@ export const REVENUE: BoardDefinition = {
   name: 'Revenue',
   description: 'Fee revenue, margin, and where it comes from.',
   cards: [
-    { card: 'Gross fee revenue', title: 'Gross fee revenue',
-      datasetId: 'peniremit.revenue-summary', typeId: 'stat-card',
-      mapping: { value: 'grossFeeRevenueUsd' }, w: 3 },
+    summaryCard('Gross fee revenue', 'peniremit.revenue-summary', 'grossFeeRevenueUsd'),
     { card: 'Gross fee revenue', title: 'Gross revenue over time',
       datasetId: 'peniremit.gross-revenue', typeId: 'line-chart',
       mapping: { x: 'date', series: ['usd'] }, w: 9 },
@@ -226,12 +277,8 @@ export const REVENUE: BoardDefinition = {
     share('Revenue by feature', 'peniremit.revenue-by-product', 'usd'),
     share('FX revenue by token', 'peniremit.fx-revenue-by-token', 'usd'),
 
-    { card: "Today's PL", title: 'Average fee per transaction',
-      datasetId: 'peniremit.revenue-summary', typeId: 'stat-card',
-      mapping: { value: 'avgFeePerTransactionUsd' }, w: 3 },
-    { card: "Today's PL", title: 'Margin per transaction',
-      datasetId: 'peniremit.revenue-summary', typeId: 'stat-card',
-      mapping: { value: 'marginPerTransactionUsd' }, w: 3 },
+    summaryCard("Today's PL", 'peniremit.revenue-summary', 'avgFeePerTransactionUsd', 'Average fee per transaction'),
+    summaryCard("Today's PL", 'peniremit.revenue-summary', 'marginPerTransactionUsd', 'Margin per transaction'),
   ],
 }
 
@@ -239,12 +286,8 @@ export const ENGAGEMENT: BoardDefinition = {
   name: 'Engagement',
   description: 'Who is active, how often, and whether they stay.',
   cards: [
-    { card: 'Daily active users', title: 'Daily active users',
-      datasetId: 'peniremit.active-users-summary', typeId: 'stat-card',
-      mapping: { value: 'dau' }, w: 3 },
-    { card: 'Monthly active users', title: 'Monthly active users',
-      datasetId: 'peniremit.active-users-summary', typeId: 'stat-card',
-      mapping: { value: 'mau' }, w: 3 },
+    summaryCard('Daily active users', 'peniremit.active-users-summary', 'dau'),
+    summaryCard('Monthly active users', 'peniremit.active-users-summary', 'mau'),
 
     { card: 'Daily active users', title: 'Daily active users over time',
       datasetId: 'peniremit.active-users', typeId: 'line-chart',
@@ -268,25 +311,36 @@ export const ENGAGEMENT: BoardDefinition = {
     ...pair('Active cards', 'peniremit.active-cards-summary',
       'peniremit.active-cards', 'value', ['value']),
 
-    { card: 'KYC outcomes', title: 'KYC approved',
-      datasetId: 'peniremit.kyc-outcomes-summary', typeId: 'stat-card',
-      mapping: { value: 'completed' }, w: 3 },
+    summaryCard('KYC outcomes', 'peniremit.kyc-outcomes-summary', 'completed', 'KYC approved'),
     { card: 'KYC outcomes', title: 'Approved against failed',
       datasetId: 'peniremit.kyc-outcomes', typeId: 'line-chart',
       mapping: { x: 'date', series: ['completed', 'failed'] }, w: 9 },
 
-    { card: 'Retention', title: '7-day retention',
-      datasetId: 'peniremit.engagement-summary', typeId: 'stat-card',
-      mapping: { value: 'retention7d' }, w: 3 },
-    { card: 'Retention', title: '30-day retention',
-      datasetId: 'peniremit.engagement-summary', typeId: 'stat-card',
-      mapping: { value: 'retention30d' }, w: 3 },
+    summaryCard('Retention', 'peniremit.engagement-summary', 'retention7d', '7-day retention'),
+    summaryCard('Retention', 'peniremit.engagement-summary', 'retention30d', '30-day retention'),
 
     share('Token preference', 'peniremit.top-token-spend', 'usd'),
   ],
 }
 
-export const PENIREMIT_BOARDS: BoardDefinition[] = [GROWTH, TRANSACTION, REVENUE, ENGAGEMENT]
+/**
+ * The boards, with a currency toggle on every card that can carry one.
+ *
+ * Applied here rather than at each card so no definition has to remember it,
+ * and so adding a card gets the toggle by being the right shape rather than by
+ * someone noticing.
+ */
+const withUnits = (board: BoardDefinition): BoardDefinition => ({
+  ...board,
+  cards: board.cards.map((card) => {
+    const units = currencyUnits(card.datasetId, card.mapping)
+    return units ? { ...card, unitOptions: units } : card
+  }),
+})
+
+export const PENIREMIT_BOARDS: BoardDefinition[] = [GROWTH, TRANSACTION, REVENUE, ENGAGEMENT].map(
+  withUnits,
+)
 
 /** Every Dataset a board binds, so a missing one is caught as a set. */
 export const datasetsUsedBy = (board: BoardDefinition): string[] =>

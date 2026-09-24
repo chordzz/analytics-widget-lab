@@ -205,7 +205,7 @@ does not produce trend charts.
 
 | Type | Needs | Request today | Grain | Fixture rows |
 |---|---|---|---|---|
-| `stat-card`<br>Stat card | **Measure** — 1 × Measure | `sum(revenue)` | single aggregate | 1 |
+| `stat-card`<br>Stat card | **Measure** — 1 × Measure<br>**Change** — up to 1 × Measure | `sum(revenue)` | single aggregate | 1 |
 | `sparkline-card`<br>Sparkline card | **Measure** — 1 × Measure<br>**Period** — 1 × Time Dimension | order by `date` ↑ | records | 365 |
 | `delta-card`<br>Delta card | **Measure** — 1 × Measure<br>**Period** — 1 × Time Dimension | order by `month` ↑ | records | 24 |
 | `progress-tracker`<br>Progress tracker | **Actual** — 1 × Measure<br>**Target** — 1 × Measure | order by `month` ↑ | records | 24 |

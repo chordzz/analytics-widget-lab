@@ -24,7 +24,7 @@ import { currentTypeId, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
 import type { WidgetSpec } from '../widgets/Widget'
 import type { Dashboard, DashboardScope, DashboardStatus, ShareGrant } from '../../domain/dashboard'
-import type { Control, Section } from '../../domain/composition'
+import type { Control, ControlValue, Section } from '../../domain/composition'
 import type { Placement as DashboardPlacement } from '../../domain/composition'
 
 export type { Control, DashboardScope, Section, ShareGrant }
@@ -129,6 +129,8 @@ export type BoardsAction =
   | { type: 'add-grant'; id: string; grant: ShareGrant; at: string }
   | { type: 'remove-grant'; id: string; grantId: string; at: string }
   | { type: 'add-control'; id: string; control: Control; at: string }
+  /** FR-CO-05 — what the board opens on, as the Author chose it. */
+  | { type: 'set-control-default'; id: string; controlId: string; value: ControlValue | null; at: string }
   | { type: 'remove-control'; id: string; controlId: string; at: string }
   | { type: 'add-section'; id: string; section: Section; at: string }
   | { type: 'rename-section'; id: string; sectionId: string; label: string; at: string }
@@ -257,7 +259,7 @@ function applyToBoard(board: Board, action: BoardsAction): Board {
 
   /** A board with its widget records and placements replaced, and redated. */
   const touched = (
-    next: Partial<Pick<Board, 'widgets' | 'placements'>>,
+    next: Partial<Pick<Board, 'widgets' | 'placements' | 'controls'>>,
   ): Board => ({ ...board, ...next, updated: at })
 
   const placementOf = (widgetId: string) =>
@@ -325,6 +327,24 @@ function applyToBoard(board: Board, action: BoardsAction): Board {
      * an existing Control with no reconfiguration — and removes the whole class
      * of bug where a Control's Widget list goes stale.
      */
+    case 'set-control-default': {
+      /*
+       * `null` clears it rather than storing an empty window. A Control with
+       * no default falls back to the render-time one, which stays relative and
+       * therefore current; a stored `{}` would be an Author saying "open on
+       * nothing", which nobody means.
+       */
+      return touched({
+        controls: board.controls.map((control) =>
+          control.id === action.controlId
+            ? action.value == null
+              ? withoutDefault(control)
+              : { ...control, defaultValue: action.value }
+            : control,
+        ),
+      })
+    }
+
     case 'add-control':
       return { ...board, controls: [...board.controls, action.control], updated: at }
 
@@ -762,4 +782,10 @@ function isBoard(value: unknown): value is Board {
     (typeof board.widgets === 'object' && board.widgets !== null)
 
   return typeof board.id === 'string' && typeof board.name === 'string' && hasWidgets
+}
+
+/** A Control with no stated window, so the render-time default applies again. */
+function withoutDefault(control: Control): Control {
+  const { defaultValue: _cleared, ...rest } = control
+  return rest
 }

@@ -31,9 +31,10 @@ import {
   type QueryContribution,
 } from '../../composition/correspondence'
 import { requiredParameters, timeRangeParameters } from '../../domain/dataset'
+import { dayEnd, dayStart } from '../../domain/default-period'
 import type { Aggregation, Dataset, FilterParameter } from '../../domain/dataset'
 import type { DatasetQuery, MeasureSelection } from '../../domain/query'
-import type { WidgetSpec } from '../widgets/Widget'
+import type { WidgetMapping, WidgetSpec } from '../widgets/Widget'
 import { rowsFor } from './datasets'
 import { fieldOf, timeFields } from './types'
 import type { Row } from './types'
@@ -163,6 +164,14 @@ export interface ViewerChoices {
   /** Keyed by Field key. */
   filters?: Record<string, string | number>
   sort?: { field: string; direction: 'ascending' | 'descending' }
+  /**
+   * The unit a Viewer picked, as a Field key from the Widget's `unitOptions`.
+   *
+   * Session state like the rest: reading a chart in naira is reading the
+   * Author's dashboard, not editing it, and persisting it would change what
+   * everyone else sees because one person looked.
+   */
+  unit?: string
 }
 
 /**
@@ -271,8 +280,110 @@ function rangeFor(
   if (!range) return {}
   const names = timeRangeParameters(dataset)
   return {
-    ...(range.from && names.from ? { [names.from]: range.from } : {}),
-    ...(range.to && names.to ? { [names.to]: range.to } : {}),
+    /*
+     * Sent as instants, not as the days the Viewer picked.
+     *
+     * A date-only `2026-09-24` names no moment, so the Source System decides
+     * which zone's 24th it means — and whichever it decides is somebody's 23rd.
+     * The API takes "ISO 8601 date or date-time (UTC)", so the ambiguity is one
+     * we were choosing rather than one we were stuck with.
+     *
+     * `from` is the first instant of that local day and `to` the last, because
+     * both ends of a declared range are inclusive. Sending midnight for both
+     * would ask for a window of zero width and come back empty, which reads as
+     * a Dataset with no data rather than as a bad question.
+     */
+    ...(range.from && names.from ? { [names.from]: dayStart(range.from) } : {}),
+    ...(range.to && names.to ? { [names.to]: dayEnd(range.to) } : {}),
+  }
+}
+
+/**
+ * The parameter names a Control's contribution governs on this Dataset.
+ *
+ * The same translation `rangeFor` performs, exposed for the other half of
+ * governing: a Viewer's per-Widget override of a governed parameter is cleared
+ * when the Control moves, so the board's range re-asserts over a card somebody
+ * had nudged. One definition, because a key cleared that was never sent — or
+ * sent and never cleared — is the two halves disagreeing.
+ */
+export function governedParameters(
+  dataset: Dataset,
+  contribution: QueryContribution | undefined,
+): string[] {
+  return Object.keys(rangeFor(dataset, contribution?.timeRange))
+}
+
+/**
+ * A Viewer's choices with the Control's parameters dropped.
+ *
+ * Pure, and separate from the effect that calls it, because the decision is the
+ * part worth testing: which keys go, which stay, and returning the *same*
+ * object when nothing changes so React does not re-render a card for a clear
+ * that cleared nothing.
+ */
+export function withoutGoverned(choices: ViewerChoices, governed: readonly string[]): ViewerChoices {
+  const filters = choices.filters
+  if (!filters || governed.length === 0) return choices
+
+  const kept = Object.entries(filters).filter(([key]) => !governed.includes(key))
+  if (kept.length === Object.keys(filters).length) return choices
+
+  const next: ViewerChoices = { ...choices }
+  if (kept.length > 0) next.filters = Object.fromEntries(kept)
+  else delete next.filters
+  return next
+}
+
+/**
+ * A Control's range as one comparable string, or `null` where it sets none.
+ *
+ * Used to tell "the Viewer moved the board" from "React rendered again".
+ * Comparing the object identity would clear an override on every render, which
+ * is the same bug as never clearing it and harder to see.
+ */
+export const rangeSignature = (contribution: QueryContribution | undefined): string | null =>
+  contribution?.timeRange
+    ? `${contribution.timeRange.field}:${contribution.timeRange.from ?? ''}:${contribution.timeRange.to ?? ''}`
+    : null
+
+
+/**
+ * A mapping with the Viewer's unit substituted for whichever was mapped.
+ *
+ * Substitution rather than assignment, because the unit appears in different
+ * slots depending on the Widget — `value` on a stat card, `series` on a trend,
+ * both on a donut — and a rule per slot would miss the next one. Any mapped key
+ * that is *some* unit becomes *the chosen* unit, and everything else is left
+ * alone: a `usdDelta` beside a `usd` is not a unit of it and must not be
+ * rewritten to `ngn`.
+ */
+export function inUnit(mapping: WidgetMapping, spec: WidgetSpec, choices?: ViewerChoices): WidgetMapping {
+  const units = spec.unitOptions
+  const chosen = choices?.unit
+  if (!units || !chosen || !units.includes(chosen)) return mapping
+
+  /*
+   * A Widget already drawing two units is showing them side by side, not
+   * choosing between them — `series: ['usd', 'ngn']` is a chart of both.
+   * Substituting there collapsed it to `['ngn', 'ngn']`: the same line twice,
+   * one hidden exactly beneath the other, with a legend naming it twice and
+   * nothing on screen saying a currency had gone missing.
+   *
+   * `currencyUnits` already declines to offer a toggle on those cards. This is
+   * the second guard, because the first lives in board definitions and this
+   * runs for every Widget from anywhere.
+   */
+  const mapped = [mapping.value, ...(mapping.series ?? [])].filter(
+    (key): key is string => typeof key === 'string',
+  )
+  if (new Set(mapped.filter((key) => units.includes(key))).size > 1) return mapping
+
+  const swap = (key: string) => (units.includes(key) ? chosen : key)
+  return {
+    ...mapping,
+    ...(mapping.value ? { value: swap(mapping.value) } : {}),
+    ...(mapping.series ? { series: mapping.series.map(swap) } : {}),
   }
 }
 
@@ -365,7 +476,36 @@ export function queryFor(
      * A Dataset that declares no range parameters at all cannot be narrowed by
      * a Control, and `correspondenceFor` says so before it comes to this.
      */
-    const parameters = { ...rangeFor(dataset, withControl.timeRange), ...withControl.parameters }
+    const governed = rangeFor(dataset, withControl.timeRange)
+
+    /*
+     * Three layers, and a Control sits in the middle of them.
+     *
+     * It used to sit at the bottom: the Author's bindings were merged with the
+     * Viewer's choices first and the whole lot placed above the Control, so a
+     * board's date range lost to every Widget that had one. Every Peniremit
+     * Widget has one — they were given `from` and `to` as defaults so the
+     * required parameters would be sent at all — which meant a Viewer could
+     * move the board's range and watch all 55 cards ignore it.
+     *
+     * The distinction that was missing is not Author against Viewer. It is
+     * **which parameters a Control corresponds to**. A date Control owns the
+     * range and has nothing to say about anything else, so:
+     *
+     *   - the Author's bindings are the floor, and stay the floor for every
+     *     parameter the Control does not govern — `status: failed` is what that
+     *     Widget *is*, and no date range should touch it;
+     *   - the Control replaces the Author's value for the parameters it owns,
+     *     which is what `default_filters` means on the wire: "applied unless
+     *     something changes it";
+     *   - a Viewer's own choice on this Widget still wins over both, because it
+     *     is the most specific thing anyone has said (Finding 10) — and it is
+     *     session state, so moving the board's range again clears it.
+     *
+     * The same rule serves a future Control over `currency` or `region` without
+     * naming either: whatever a Control corresponds to, it governs.
+     */
+    const parameters = { ...bound, ...governed, ...chosen.parameters }
 
     /*
      * Finding 10 again, now that the two live in different places.

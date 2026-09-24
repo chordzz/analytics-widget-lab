@@ -18,6 +18,7 @@ const GROUPS: { key: NavItem['group']; label: string }[] = [
 export function Sidebar({
   current,
   collapsed,
+  onClose,
   onNavigate,
   onToggleCollapsed,
   theme,
@@ -25,6 +26,12 @@ export function Sidebar({
 }: {
   current: ScreenId
   collapsed: boolean
+  /**
+   * Present when the sidebar is an overlay, so the rail toggle becomes a
+   * close. Collapsing to a rail is meaningless in a drawer — it is already all
+   * or nothing — and dismissing is what a reader wants there.
+   */
+  onClose?: () => void
   onNavigate: (id: ScreenId) => void
   onToggleCollapsed: () => void
   theme: 'light' | 'dark'
@@ -65,10 +72,10 @@ export function Sidebar({
       <div className="a-side__foot">
         <button
           type="button"
-          className={`a-icon-button ${collapsed ? '' : 'a-icon-button--rotated'}`}
-          onClick={onToggleCollapsed}
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          className={`a-icon-button ${collapsed || onClose ? '' : 'a-icon-button--rotated'}`}
+          onClick={onClose ?? onToggleCollapsed}
+          aria-label={onClose ? 'Close navigation' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={onClose ? 'Close navigation' : collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           <Icon name="chevron" />
         </button>

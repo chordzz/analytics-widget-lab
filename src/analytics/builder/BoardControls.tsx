@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useId, useMemo, useState } from 'react'
+import { DateField } from '../shell/DateField'
 import { resolveControlReach } from '../../composition/correspondence'
 import { controlSubjectFor } from '../data/query'
 import { useDatasets } from '../data/AnalyticsData'
@@ -39,6 +40,12 @@ export interface BoardControlsProps {
   onChange: (next: ControlValues) => void
   /** Shown to an Author; a Viewer only sets values. */
   onRemove?: (controlId: string) => void
+  /**
+   * Stores the current value as what the board opens on. Author-only, and the
+   * reason `onRemove` is not the only Author affordance here: a Viewer moving
+   * the range is reading the board, an Author fixing it is composing it.
+   */
+  onSetDefault?: (controlId: string, value: ControlValues[string] | null) => void
 }
 
 export function BoardControls({
@@ -47,6 +54,7 @@ export function BoardControls({
   values,
   onChange,
   onRemove,
+  onSetDefault,
 }: BoardControlsProps) {
   const { datasets } = useDatasets()
 
@@ -73,6 +81,7 @@ export function BoardControls({
           value={values[control.id]}
           onChange={(next) => onChange({ ...values, [control.id]: next })}
           onRemove={onRemove}
+          onSetDefault={onSetDefault}
         />
       ))}
     </div>
@@ -86,6 +95,7 @@ function ControlField({
   value,
   onChange,
   onRemove,
+  onSetDefault,
 }: {
   control: Control
   subjects: ReturnType<typeof controlSubjectFor>[]
@@ -93,6 +103,7 @@ function ControlField({
   value: ControlValues[string]
   onChange: (next: ControlValues[string]) => void
   onRemove?: (controlId: string) => void
+  onSetDefault?: (controlId: string, value: ControlValues[string] | null) => void
 }) {
   const id = useId()
   const reach = resolveControlReach(control, subjects, datasets, { value })
@@ -108,6 +119,30 @@ function ControlField({
           <DateRange value={value as DateRangeValue | undefined} onChange={onChange} labelledBy={`${id}-label`} />
         ) : (
           <span className="a-muted">Not yet available</span>
+        )}
+
+        {onSetDefault && (
+          /*
+           * Two states, because the difference matters to whoever composed the
+           * board. With a stored window it says so and offers to drop back to
+           * the rolling default; without one it offers to fix what is on
+           * screen. A single "Set default" would leave an Author unable to tell
+           * whether their board has a window of its own.
+           */
+          <button
+            type="button"
+            className="a-filters__clear"
+            onClick={() => {
+              onSetDefault(control.id, control.defaultValue == null ? value : null)
+            }}
+            title={
+              control.defaultValue == null
+                ? 'Open the board on this range for everyone'
+                : 'Open the board on the last thirty days again'
+            }
+          >
+            {control.defaultValue == null ? 'Open on this' : 'Opens on this'}
+          </button>
         )}
 
         {onRemove && (
@@ -206,21 +241,9 @@ function DateRange({
 
   return (
     <span className="a-controls__range" role="group" aria-labelledby={labelledBy}>
-      <input
-        type="date"
-        className="a-filters__select"
-        aria-label="From"
-        value={from}
-        onChange={(event) => setFrom(event.target.value)}
-      />
+      <DateField label="From" value={from} onChange={setFrom} placeholder="Start" />
       <span className="a-muted">to</span>
-      <input
-        type="date"
-        className="a-filters__select"
-        aria-label="To"
-        value={to}
-        onChange={(event) => setTo(event.target.value)}
-      />
+      <DateField label="To" value={to} onChange={setTo} placeholder="End" />
       {(from || to) && (
         <button
           type="button"

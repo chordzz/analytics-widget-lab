@@ -31,6 +31,7 @@ import {
   type LayoutEntry,
 } from './boards'
 import { dateRangeControl, section } from '../../domain/composition'
+import type { ControlValue } from '../../domain/composition'
 import { nextSectionRow } from './sections'
 import { visibleDashboards } from '../../access/dashboard-access'
 import { useAnalyticsData } from '../data/AnalyticsData'
@@ -85,6 +86,11 @@ interface BoardsContextValue {
   /** FR-CO-05 — a Composition Element that changes how Widgets present data. */
   addDateRangeControl: (id: string, label?: string) => void
   removeControl: (id: string, controlId: string) => void
+  /**
+   * What the board opens on. `null` clears it, so the render-time default —
+   * which stays relative and therefore current — applies again.
+   */
+  setControlDefault: (id: string, controlId: string, value: ControlValue | null) => void
   /** FR-CO-07 — a Container that organizes Widgets spatially. */
   addSection: (id: string, label?: string) => void
   renameSection: (id: string, sectionId: string, label: string) => void
@@ -226,6 +232,8 @@ export function BoardsProvider({
       removeGrant: (id, grantId) => dispatch({ type: 'remove-grant', id, grantId, at }),
       addDateRangeControl: (id, label) =>
         dispatch({ type: 'add-control', id, control: dateRangeControl(newId('control'), label), at }),
+      setControlDefault: (id, controlId, value) =>
+        dispatch({ type: 'set-control-default', id, controlId, value, at }),
       removeControl: (id, controlId) => dispatch({ type: 'remove-control', id, controlId, at }),
       addSection: (id, label) => {
         const board = boardById(state, id)

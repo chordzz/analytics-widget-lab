@@ -17,6 +17,8 @@
  */
 
 import { useId } from 'react'
+import { DateField } from '../shell/DateField'
+import { SelectField } from '../shell/SelectField'
 import { fieldOf } from '../data/types'
 import type { FilterParameter } from '../../domain/dataset'
 import type { Dataset } from '../data/types'
@@ -144,33 +146,36 @@ function ParameterControl({
       <span className="a-filters__label">{parameter.label}</span>
 
       {allowed && allowed.length > 0 ? (
-        <select
+        <SelectField
           id={id}
-          className="a-filters__select"
-          value={current}
-          onChange={(event) => {
-            // The raw option value is a string; a numeric parameter has to come
-            // back as a number or the endpoint compares a string to a number.
-            const raw = event.target.value
-            onChange(allowed.find((entry) => String(entry) === raw) ?? raw)
+          value={String(current)}
+          onChange={(next) => {
+            // The option value is a string; a numeric parameter has to come back
+            // as a number or the endpoint compares a string to a number.
+            onChange(allowed.find((entry) => String(entry) === next) ?? next)
           }}
-        >
-          {/*
-            A required parameter has no "All": the endpoint cannot answer
-            without a value, so offering the empty option would hand a Viewer a
-            way to break the widget.
-          */}
-          {!parameter.required && <option value="">All</option>}
-          {allowed.map((entry) => (
-            <option key={String(entry)} value={String(entry)}>
-              {String(entry)}
-            </option>
-          ))}
-        </select>
+          options={allowed.map((entry) => ({ value: String(entry), label: String(entry) }))}
+          /*
+           * A required parameter has no "All": the endpoint cannot answer
+           * without a value, so offering the empty option would hand a Viewer a
+           * way to break the widget.
+           */
+          clearable={!parameter.required}
+          placeholder="All"
+          label={parameter.label}
+        />
+      ) : parameter.valueType === 'date' ? (
+        /*
+         * The same field the board's Control uses, so a date looks like a date
+         * wherever it is asked for. It reads and writes `YYYY-MM-DD` exactly as
+         * `input[type=date]` did — the format is what the endpoint takes, and a
+         * picker that emitted a locale string would fail every query silently.
+         */
+        <DateField label={parameter.label} value={current} onChange={onChange} />
       ) : (
         <input
           id={id}
-          type={parameter.valueType === 'date' ? 'date' : parameter.valueType === 'number' ? 'number' : 'text'}
+          type={parameter.valueType === 'number' ? 'number' : 'text'}
           className="a-filters__select"
           value={current}
           onChange={(event) => onChange(event.target.value)}
@@ -204,25 +209,82 @@ function SortSelect({
   return (
     <label className="a-filters__field" htmlFor={id}>
       <span className="a-filters__label">Sort</span>
-      <select
+      {/*
+        Flattened out of `<optgroup>`, which is not a loss: every option already
+        names its Field — "Revenue, high to low" — so the group label repeated
+        the word directly above it. A group carrying nothing the rows do not is
+        structure for its own sake.
+      */}
+      <SelectField
         id={id}
-        className="a-filters__select"
         value={current}
-        onChange={(event) => {
-          const raw = event.target.value
-          if (!raw) return onChange(undefined)
-          const [field, direction] = raw.split(':')
+        onChange={(next) => {
+          if (!next) {
+            onChange(undefined)
+            return
+          }
+          const [field, direction] = next.split(':')
           onChange({ field, direction: direction as 'ascending' | 'descending' })
         }}
-      >
-        <option value="">Default</option>
-        {fields.map((field) => (
-          <optgroup key={field.key} label={field.label}>
-            <option value={`${field.key}:descending`}>{field.label}, high to low</option>
-            <option value={`${field.key}:ascending`}>{field.label}, low to high</option>
-          </optgroup>
-        ))}
-      </select>
+        options={fields.flatMap((field) => [
+          { value: `${field.key}:descending`, label: `${field.label}, high to low` },
+          { value: `${field.key}:ascending`, label: `${field.label}, low to high` },
+        ])}
+        clearable
+        placeholder="Default"
+        label="Sort"
+      />
     </label>
+  )
+}
+
+/**
+ * The unit a Viewer is reading in — USD or NGN, on the cards that publish both.
+ *
+ * A segmented control rather than a select, because there are two options and
+ * both fit: a dropdown to choose between two things costs a click to show what
+ * a pair of buttons already says. It sits in the card header beside the other
+ * controls.
+ *
+ * Nothing is re-queried when it changes. Both Measures came back on the same
+ * row, so this substitutes one column for another in what is already drawn —
+ * which is the whole reason it is not a filter.
+ */
+export function UnitToggle({
+  units,
+  dataset,
+  value,
+  onChange,
+}: {
+  units: readonly string[]
+  dataset: Dataset
+  value: string | undefined
+  onChange: (next: string) => void
+}) {
+  // Only units the Dataset actually declares. An Author naming a Field that is
+  // not there would otherwise draw a button that selects nothing.
+  const options = units
+    .map((key) => ({ key, field: fieldOf(dataset, key) }))
+    .filter((entry): entry is { key: string; field: NonNullable<typeof entry.field> } =>
+      entry.field !== undefined,
+    )
+
+  if (options.length < 2) return null
+  const current = value && units.includes(value) ? value : options[0].key
+
+  return (
+    <div className="a-units" role="group" aria-label="Units">
+      {options.map(({ key, field }) => (
+        <button
+          key={key}
+          type="button"
+          className={`a-units__option${key === current ? ' a-units__option--on' : ''}`}
+          aria-pressed={key === current}
+          onClick={() => { onChange(key) }}
+        >
+          {field.label}
+        </button>
+      ))}
+    </div>
   )
 }

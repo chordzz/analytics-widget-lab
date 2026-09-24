@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { SelectField } from '../shell/SelectField'
 import { Widget, type WidgetMapping, type WidgetSpec } from '../widgets/Widget'
 import { FAMILIES, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
@@ -36,7 +37,7 @@ import {
   unfilledSlots,
 } from './requirements'
 import { WIDGET_TYPES } from '../widgets/catalog'
-import { requiredParameters } from '../../domain/dataset'
+import { requiredParameters, timeRangeParameters } from '../../domain/dataset'
 import type { Dataset } from '../data/types'
 import type { FilterParameter } from '../../domain/dataset'
 
@@ -54,6 +55,41 @@ export interface ComposerDraft {
   parameterBindings: Record<string, string | number>
 }
 
+/**
+ * A new Widget's range, inherited from what the board is showing.
+ *
+ * Pure so the rule is testable without a composer, and there are four parts to
+ * it worth stating:
+ *
+ *   - **Only what this Dataset declares.** The names come from
+ *     `timeRangeParameters`, so a publisher spelling the range
+ *     `start_date`/`end_date` gets those and one that takes no range gets
+ *     nothing. Writing `from`/`to` blindly is how a parameter the endpoint
+ *     never advertised produces a 400 on the Widget's first load.
+ *   - **Never over a value already there.** An Author who typed a period meant
+ *     it; a board's Control is a default, not an instruction.
+ *   - **Never while editing.** `initial` means an existing Widget, and
+ *     re-seeding it would silently rewrite a period somebody chose on purpose
+ *     the moment they reopened the composer to change its title.
+ *   - **Only ends the board actually has.** A Control with one end set seeds
+ *     that end, because half a window is still more than the Author had.
+ */
+export function inheritPeriod(
+  bindings: Record<string, string | number>,
+  dataset: Dataset,
+  period: { from?: string; to?: string } | undefined,
+  editing: boolean,
+): Record<string, string | number> {
+  if (editing || !period) return bindings
+
+  const names = timeRangeParameters(dataset)
+  const seeded: Record<string, string | number> = {}
+  if (names.from && period.from && bindings[names.from] === undefined) seeded[names.from] = period.from
+  if (names.to && period.to && bindings[names.to] === undefined) seeded[names.to] = period.to
+
+  return Object.keys(seeded).length > 0 ? { ...bindings, ...seeded } : bindings
+}
+
 const BUILT_COUNT = WIDGET_TYPES.filter((type) => type.built).length
 
 /** Opens on an existing widget, or empty to start from the data source. */
@@ -63,6 +99,7 @@ export function WidgetComposer({
   onCommit,
   onCancel,
   boardName,
+  boardPeriod,
 }: {
   initial?: ComposerDraft
   /**
@@ -73,6 +110,19 @@ export function WidgetComposer({
    * from Data sources is a new widget with a head start, not an edit.
    */
   startWith?: { datasetId: string }
+  /**
+   * What the board's date Control is currently showing.
+   *
+   * A new Widget inherits it as the value for whichever parameters its Dataset
+   * declares as a range. Without this the Author has to type a period by hand
+   * before the Widget can be committed at all — every Peniremit Dataset
+   * requires `from` and `to` — and the one they type is then a second opinion
+   * about what the board is showing.
+   *
+   * Absent on a board with no Control, where there is no period to inherit and
+   * the Author states one.
+   */
+  boardPeriod?: { from?: string; to?: string }
   onCommit: (draft: ComposerDraft) => void
   /** The board this will land on, so the commit button can say so. */
   boardName?: string
@@ -145,6 +195,7 @@ export function WidgetComposer({
     }
 
     if (!titled) setTitle(next.name)
+    setParameterBindings((current) => inheritPeriod(current, next, boardPeriod, Boolean(initial)))
   }
 
   const chooseType = (nextId: string) => {
@@ -680,18 +731,15 @@ function RequiredParameters({
           <label key={parameter.name} className="a-filters__field">
             <span className="a-filters__label">{parameter.label}</span>
             {parameter.allowedValues && parameter.allowedValues.length > 0 ? (
-              <select
-                className="a-filters__select"
+              <SelectField
                 value={current}
-                onChange={(event) => set(parameter.name, event.target.value, parameter.allowedValues)}
-              >
-                <option value="">Choose one</option>
-                {parameter.allowedValues.map((entry) => (
-                  <option key={String(entry)} value={String(entry)}>
-                    {String(entry)}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => { set(parameter.name, next, parameter.allowedValues) }}
+                options={parameter.allowedValues.map((entry) => ({
+                  value: String(entry),
+                  label: String(entry),
+                }))}
+                label={parameter.name}
+              />
             ) : (
               /*
                * No declared values, so no list to offer. The publisher knows what

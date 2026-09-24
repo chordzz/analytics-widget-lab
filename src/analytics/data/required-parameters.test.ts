@@ -15,6 +15,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import { boundParameters, queryFor, unboundRequirements } from './query'
+import { dayEnd, dayStart } from '../../domain/default-period'
 import { requireDataset } from './datasets'
 import { dashboardInputFrom, boardFrom, type ApiDashboard } from '../../dashboard/api-dashboard'
 import { upstreamParameters } from '../../retrieval/http-retrieval'
@@ -248,11 +249,26 @@ describe('a Control reaches the endpoint only under names it declared', () => {
 
   const range = { timeRange: { field: 'date', from: '2026-08-01', to: '2026-08-31' } }
 
-  test('a Dataset declaring from and to gets both', () => {
+  test('a Dataset declaring from and to gets both, as instants', () => {
+    /*
+     * Asserted through the same helpers that produce them, not against written
+     * timestamps: the conversion is from the *reader's* day, so a literal would
+     * pass in London and fail in Lagos. What is being pinned is that a day
+     * becomes a moment at all, and that the two ends bracket the day rather
+     * than both landing on its start.
+     */
     expect(queryFor(spec, withParameters(['from', 'to']), undefined, range).parameters).toEqual({
-      from: '2026-08-01',
-      to: '2026-08-31',
+      from: dayStart('2026-08-01'),
+      to: dayEnd('2026-08-31'),
     })
+  })
+
+  test('and the range covers whole days rather than collapsing to a point', () => {
+    // Midnight at both ends is a window of zero width, which comes back empty
+    // and reads as a Dataset with no data rather than as a bad question.
+    const { parameters } = queryFor(spec, withParameters(['from', 'to']), undefined, range)
+    expect(String(parameters?.from) < String(parameters?.to)).toBe(true)
+    expect(String(parameters?.to)).toContain('23:59:59')
   })
 
   test('one declaring neither gets nothing rather than a 400', () => {
@@ -267,7 +283,7 @@ describe('a Control reaches the endpoint only under names it declared', () => {
 
   test('one declaring only `from` sends only that', () => {
     expect(queryFor(spec, withParameters(['from']), undefined, range).parameters).toEqual({
-      from: '2026-08-01',
+      from: dayStart('2026-08-01'),
     })
   })
 

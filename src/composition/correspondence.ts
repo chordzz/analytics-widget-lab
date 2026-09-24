@@ -88,13 +88,6 @@ export type Correspondence =
  * differently for two Widgets over the same Dataset, which is not what "whose
  * bound Dataset supports it" says.
  */
-/** Whether the Author has already fixed the parameters a range would use. */
-function bindsTimeRange(widget: ControlSubject, dataset: Dataset): boolean {
-  const names = timeRangeParameters(dataset)
-  const bound = new Set(widget.boundParameters ?? [])
-  return [names.from, names.to].some((name) => name !== undefined && bound.has(name))
-}
-
 export function correspondenceFor(
   control: Control,
   widget: ControlSubject,
@@ -112,6 +105,38 @@ export function correspondenceFor(
       const field = mapped ?? dataset.fields.find((f) => f.role === role)
 
       if (!field) {
+        /*
+         * No Field of that role — which for a date range is not the end of it.
+         *
+         * An aggregate Dataset has no date column because it answers *for* a
+         * window rather than across one: its columns are `value`, `delta`,
+         * `changePercent`, all Measures. It still takes `from` and `to`, as
+         * **Filter Parameters** — a different list from Fields, and deliberately
+         * so (D24).
+         *
+         * Matching only on Fields refused 25 of Peniremit's 41 Datasets,
+         * including every one behind a stat card, with "declares no time
+         * dimension". True, and not the question a Viewer is asking when they
+         * move the board's date range.
+         *
+         * Nothing else needs to change for this: `rangeFor` already translates a
+         * Control's range into whatever parameter names the publisher declared,
+         * reading BE-8's `time_range` where there is one and falling back to
+         * `from`/`to`. Only this test was wrong.
+         */
+        const names = role === 'time-dimension' ? timeRangeParameters(dataset) : {}
+        if (names.from ?? names.to) {
+          /*
+           * `via` names what the range narrows. A Dataset declaring
+           * `time_range` says which Field that is even without carrying the
+           * column; one that only publishes the parameters is named by them,
+           * because that is the whole of what the publisher has said.
+           */
+          const via = dataset.timeRange?.field ?? [names.from, names.to].filter(Boolean).join('/')
+
+          return { applies: true, via }
+        }
+
         return {
           applies: false,
           reason: `${dataset.name} declares no ${role.replace('-', ' ')}.`,
@@ -126,32 +151,20 @@ export function correspondenceFor(
         }
       }
       /*
-       * A Widget whose Author fixed the range cannot be widened past it.
+       * A bound range used to be reported as a limit here, and no longer is.
        *
-       * The binding is sent upstream and wins — Finding 10, the Widget's own
-       * choice being the more specific — so the Source System answers for the
-       * Author's window, and the Control's range is then applied in the browser
-       * over those rows. Narrowing works. Widening returns nothing, because
-       * nothing outside that window was ever fetched.
+       * It was true while the Widget's binding outranked the Control: the
+       * Source System answered for the Author's window, the Control's range was
+       * applied in the browser over those rows, so it could narrow and could
+       * not widen. A Viewer asking for August on a card bound to September got
+       * an empty chart, and saying so was the honest thing.
        *
-       * Saying "affects this widget" without the qualification is how a Viewer
-       * asks for August on a card bound to September and is shown an empty
-       * chart with no reason for it.
-       *
-       * A Dataset that simply declares no range parameters is *not* limited:
-       * nothing is sent, the endpoint answers with its full default, and the
-       * range narrows locally over all of it — which is the whole set. That
-       * costs bandwidth rather than correctness, so it is not this sentence's
-       * business.
+       * A Control now governs the parameters it corresponds to, so its range is
+       * what goes upstream and the endpoint answers for the window the Viewer
+       * asked for. There is nothing left to warn about — and leaving the
+       * warning would be the same failure in reverse, telling someone a Control
+       * is hobbled when it is not.
        */
-      if (role === 'time-dimension' && bindsTimeRange(widget, dataset)) {
-        return {
-          applies: true,
-          via: field.key,
-          limited: `${dataset.name} has a fixed range on the widget, so this narrows within it rather than replacing it`,
-        }
-      }
-
       return { applies: true, via: field.key }
     }
 

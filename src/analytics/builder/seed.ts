@@ -179,6 +179,19 @@ export const revenueOverview: Board = {
       title: 'Revenue by region',
       mapping: { x: 'region', value: 'revenue' },
       options: { centerLabel: 'All regions' },
+      /*
+       * The one seeded Widget a Viewer can filter, and it is here so that two
+       * behaviours are reachable outside a unit test.
+       *
+       * Exposure became an Author's choice rather than a default when the
+       * board's Control took over the period, and the fixtures had exposed
+       * nothing since — so a card's controls in the header had nowhere to draw,
+       * and a Control clearing a Viewer's override had nothing to clear.
+       * `region` is a good candidate for its own filter in a way `from`/`to`
+       * never were: the board has no Control for it, and narrowing one chart to
+       * one region while its neighbours stay whole is a real thing to want.
+       */
+      exposedFilters: ['region'],
       w: 4,
     },
 

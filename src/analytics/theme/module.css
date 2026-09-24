@@ -24,11 +24,29 @@
  * survives on `min-width: 0` and honest truncation.
  */
 
+.a-stat__label {
+  margin: 0;
+  font-size: var(--a-text-sm);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--a-text-secondary);
+  /* Matches `.a-card__title`, because on a tile that is what it is. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .a-stat__value {
   margin: 4px 0 0;
   font-size: var(--a-text-3xl);
   font-weight: 600;
   line-height: 1.05;
+  /*
+   * Display numerals need tracking pulled in. Default spacing is set for text
+   * at reading size; at 36px the gaps between figures read as gaps between
+   * groups, so `1,420` looks like two numbers before it looks like one.
+   */
+  letter-spacing: -0.02em;
   color: var(--a-text);
 }
 
@@ -51,6 +69,10 @@
     font-size: var(--a-text-xl);
   }
 
+  .a-stat__label {
+    font-size: var(--a-text-xs);
+  }
+
   /* At this width the subtitle is two ellipsised words. The title carries the
      meaning; the subtitle is only costing a line. */
   .a-card__subtitle {
@@ -66,7 +88,8 @@
   min-height: 0;
   background: var(--a-surface);
   border: 1px solid var(--a-border);
-  border-radius: var(--a-radius);
+  /* A step above the controls it holds — see `--a-radius-lg`. */
+  border-radius: var(--a-radius-lg);
   box-shadow: var(--a-shadow);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
@@ -82,6 +105,9 @@
   justify-content: space-between;
   gap: var(--a-space-3);
   padding: var(--a-space-3) var(--a-space-3) var(--a-space-1);
+  /* Controls wrap under the title on a narrow card rather than squeezing it to
+     an ellipsis — the title is what names the figure. */
+  flex-wrap: wrap;
 }
 
 .a-card__titles {
@@ -113,6 +139,21 @@
   align-items: center;
   gap: var(--a-space-2);
   flex-shrink: 0;
+  /* The titles keep the line where both fit; the controls take it where they
+     do not. `auto` on both would split it evenly and ellipsise a title that
+     had room. */
+  margin-left: auto;
+}
+
+/* In the header the filters are a row of chips, not a form: no labels above,
+   no wrapping to a second line inside an already-wrapping header. */
+.a-card__head-end .a-filters {
+  flex-wrap: nowrap;
+  gap: var(--a-space-2);
+}
+
+.a-card__head-end .a-filters__label {
+  display: none;
 }
 
 /* Tight on purpose. A chart's own axis labels already sit inside its box, so
@@ -242,12 +283,6 @@
 .a-menu__trigger:hover {
   background: var(--a-surface-hover);
   color: var(--a-text);
-}
-
-.a-menu__scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
 }
 
 .a-menu__list {
@@ -631,6 +666,9 @@
 .a-controls {
   display: flex;
   flex-wrap: wrap;
+  /* A flex child's default `min-width: auto` is what lets a long control push
+     past its parent rather than wrapping inside it. */
+  min-width: 0;
   gap: var(--a-space-3) var(--a-space-5);
   padding: var(--a-space-3) var(--a-space-4);
   margin-bottom: var(--a-space-4);
@@ -643,6 +681,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .a-controls__field {
@@ -656,6 +695,19 @@
   display: inline-flex;
   align-items: center;
   gap: var(--a-space-2);
+  /*
+   * Two date fields and the word between them are one unit at any width the
+   * row can give them, and two lines when it cannot. Without this the second
+   * field ran off the card on a phone — visible only as a date with its year
+   * missing, which reads as a rendering fault rather than as something to
+   * scroll to.
+   */
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.a-controls__range > * {
+  min-width: 0;
 }
 
 /*
@@ -957,4 +1009,321 @@
   min-width: 11ch;
   font-weight: 500;
   color: var(--a-text);
+}
+
+/* --- date field ---------------------------------------------------------- */
+
+.a-datefield {
+  position: relative;
+  display: inline-block;
+}
+
+.a-datefield__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--a-space-2);
+  padding: 6px 10px;
+  min-width: 9.5rem;
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+  background: var(--a-surface);
+  color: var(--a-text);
+  font: inherit;
+  font-size: var(--a-text-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.a-datefield__trigger:hover {
+  border-color: var(--a-border-strong);
+}
+
+.a-datefield__trigger:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 1px;
+}
+
+/* Muted only when empty, so a set date reads as content and not as a prompt. */
+.a-datefield__trigger--empty {
+  color: var(--a-text-muted);
+}
+
+.a-datefield__pop {
+  position: absolute;
+  z-index: 41;
+  top: calc(100% + 6px);
+  left: 0;
+  padding: var(--a-space-3);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-lg);
+  background: var(--a-surface);
+  box-shadow: var(--a-shadow-raised);
+  width: max-content;
+}
+
+.a-datefield__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--a-space-2);
+  margin-bottom: var(--a-space-2);
+}
+
+.a-datefield__month {
+  font-size: var(--a-text-xs);
+  font-weight: 600;
+  color: var(--a-text);
+}
+
+.a-datefield__step {
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--a-radius-sm);
+  background: transparent;
+  color: var(--a-text-secondary);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.a-datefield__step:hover {
+  background: var(--a-surface-hover);
+  color: var(--a-text);
+}
+
+.a-datefield__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 30px);
+  gap: 2px;
+}
+
+.a-datefield__weekday {
+  display: grid;
+  place-items: center;
+  height: 24px;
+  font-size: 10px;
+  color: var(--a-text-muted);
+}
+
+.a-datefield__day {
+  height: 30px;
+  border: 0;
+  border-radius: var(--a-radius-sm);
+  background: transparent;
+  color: var(--a-text);
+  font: inherit;
+  font-size: var(--a-text-xs);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.a-datefield__day:hover {
+  background: var(--a-surface-hover);
+}
+
+.a-datefield__day:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: -2px;
+}
+
+/* Today is outlined, the selection is filled — so a selected today reads as
+   both rather than one hiding the other. */
+.a-datefield__day--today {
+  box-shadow: inset 0 0 0 1px var(--a-border-strong);
+}
+
+.a-datefield__day--on,
+.a-datefield__day--on:hover {
+  background: var(--a-accent);
+  color: var(--a-text-inverse);
+  font-weight: 600;
+}
+
+.a-datefield__clear {
+  margin-top: var(--a-space-2);
+  width: 100%;
+  padding: 5px;
+  border: 0;
+  border-radius: var(--a-radius-sm);
+  background: transparent;
+  color: var(--a-text-secondary);
+  font: inherit;
+  font-size: var(--a-text-xs);
+  cursor: pointer;
+}
+
+.a-datefield__clear:hover {
+  background: var(--a-surface-hover);
+  color: var(--a-text);
+}
+
+/* --- select field -------------------------------------------------------- */
+
+.a-select2 {
+  position: relative;
+  display: block;
+}
+
+.a-select2__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--a-space-2);
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+  background: var(--a-surface);
+  color: var(--a-text);
+  font: inherit;
+  font-size: var(--a-text-xs);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+}
+
+.a-select2__trigger:hover:not(:disabled) {
+  border-color: var(--a-border-strong);
+}
+
+.a-select2__trigger:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 1px;
+}
+
+.a-select2__trigger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.a-select2__trigger--empty {
+  color: var(--a-text-muted);
+}
+
+.a-select2__list {
+  position: absolute;
+  z-index: 41;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+  background: var(--a-surface);
+  box-shadow: var(--a-shadow-raised);
+}
+
+.a-select2__option {
+  display: flex;
+  align-items: baseline;
+  gap: var(--a-space-2);
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--a-radius-sm);
+  background: transparent;
+  color: var(--a-text);
+  font: inherit;
+  font-size: var(--a-text-xs);
+  text-align: left;
+  cursor: pointer;
+}
+
+.a-select2__option:hover,
+.a-select2__option:focus-visible {
+  background: var(--a-surface-hover);
+  outline: none;
+}
+
+/*
+ * The chosen option is weighted rather than filled. A filled row plus the
+ * focus background would read as two selections while arrowing through.
+ */
+.a-select2__option--on .a-select2__label {
+  font-weight: 600;
+  color: var(--a-accent);
+}
+
+.a-select2__label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.a-select2__hint {
+  flex: none;
+  font-size: 10px;
+  color: var(--a-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A bare card's actions.
+ *
+ * Absolutely placed rather than in a header, because a tile draws its own label
+ * and a header above it would say the same thing twice. Above the body in
+ * stacking order so it stays reachable over a sparkline, and out of the flow so
+ * the tile's own vertical centring is unaffected — a menu that shifted the
+ * figure down by a row would be worse than no menu.
+ */
+.a-card__corner {
+  position: absolute;
+  top: var(--a-space-2);
+  right: var(--a-space-2);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-1);
+}
+
+/* The corner is positioned against the card, which needs to say so. */
+.a-card--bare {
+  position: relative;
+}
+
+/* --- unit toggle --------------------------------------------------------- */
+
+.a-units {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius);
+  background: var(--a-surface-sunken);
+}
+
+.a-units__option {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: calc(var(--a-radius) - 3px);
+  background: transparent;
+  color: var(--a-text-muted);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.a-units__option:hover {
+  color: var(--a-text);
+}
+
+.a-units__option:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 1px;
+}
+
+/* Raised rather than tinted: the chosen unit has to read at a glance on a card
+   whose figure is the thing being looked at, and a colour alone competes with
+   the delta beneath it. */
+.a-units__option--on {
+  background: var(--a-surface);
+  color: var(--a-text);
+  box-shadow: var(--a-shadow);
 }
