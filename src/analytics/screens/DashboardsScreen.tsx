@@ -46,7 +46,6 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
     boards.published[0] ??
     boards.boards[0]
 
-  const controls = useBoardControls(active)
   const composer = useWidgetComposer(active?.id)
 
   /*
@@ -55,6 +54,7 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
    * rearranges what they see. Editing is a thing you decide to do.
    */
   const [editingWidgets, setEditingWidgets] = useState(false)
+
 
   /*
    * Two conditions, and they fail differently.
@@ -80,6 +80,21 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
   const { viewer } = useAnalyticsData()
   const isAuthor = active?.authorId === viewer.id
   const mayEdit = useMay('dashboard.update') && isAuthor
+
+  /*
+   * Two readings of the same gesture, told apart by the mode already on screen.
+   *
+   * In edit mode the Author is composing, and a period they set is the board's
+   * — saved exactly as a drag or a rename is, with no separate button to press.
+   * Out of it, anyone moving the range is reading the board, and their choice
+   * lasts as long as they are looking.
+   */
+  const controls = useBoardControls(
+    active,
+    mayEdit && editingWidgets
+      ? { persist: (controlId, value) => { boards.setControlDefault(active?.id ?? '', controlId, value) } }
+      : undefined,
+  )
 
   // An empty state shown while the store is still answering reads as "you have
   // nothing", which is a different and more alarming claim than "not yet".

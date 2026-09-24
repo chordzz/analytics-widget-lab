@@ -292,16 +292,27 @@ export function useWidgetRows(
   const { retrieval, viewer } = useAnalyticsData()
   const [state, setState] = useState<WidgetRenderState>({ status: 'loading' })
 
-  // The query is derived, so it must not be a new object every render or the
-  // effect below re-runs forever.
-  // Serialised, because a fresh `choices` object every render would restart the
-  // retrieval every render. The *values* are what changed, not the identity.
-  const choiceKey = JSON.stringify([choices ?? null, contribution ?? null])
+  /*
+   * Keyed by value, because none of these keep their identity between renders.
+   *
+   * `choices` and `contribution` were already serialised: a fresh object every
+   * render would restart the retrieval every render, and the *values* are what
+   * changed. `spec` needed the same treatment and did not get it.
+   * `placedWidgets` rebuilds every Widget on every call — it joins a stored
+   * spec to its placement, so the object is new each time and value-equal —
+   * which meant any re-render of the screen above re-ran the query for every
+   * Widget on the board.
+   *
+   * Invisible against fixtures, which resolve before a frame is drawn. Against
+   * HTTP it is the whole board dropping to skeletons, and a window resize —
+   * which re-renders continuously — turns that into a flicker.
+   */
+  const queryKey = JSON.stringify([spec, choices ?? null, contribution ?? null])
 
   const query = useMemo(
     () => (dataset ? queryFor(spec, dataset, choices, contribution) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [spec, dataset, choiceKey],
+    [dataset, queryKey],
   )
 
   useEffect(() => {

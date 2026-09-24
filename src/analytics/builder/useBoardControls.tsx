@@ -17,14 +17,28 @@ import { defaultPeriod } from '../../domain/default-period'
 import { contributionFor } from '../../composition/correspondence'
 import { controlSubjectFor } from '../data/query'
 import { useDatasets } from '../data/AnalyticsData'
-import type { ControlValues } from '../../domain/composition'
+import type { ControlValue, ControlValues } from '../../domain/composition'
 import type { QueryContribution } from '../../composition/correspondence'
 import type { Board, PlacedWidget } from './boards'
 import type { Dataset } from '../data/types'
 
 const NOTHING: QueryContribution = {}
 
-export function useBoardControls(board: Board | undefined) {
+export function useBoardControls(
+  board: Board | undefined,
+  /**
+   * Set while the Author is editing the board, and it changes what a Control
+   * change *means*.
+   *
+   * A Viewer moving the range is reading the board — session state, gone on
+   * reload. The Author moving it in edit mode is composing the board, and
+   * everything else they do there saves itself: dragging a Widget, renaming
+   * the board, adding a Control. A period that needed a separate "Open on
+   * this" button was the one thing that did not, which is a seam nobody should
+   * have to know about.
+   */
+  authoring?: { persist: (controlId: string, value: ControlValue | null) => void },
+) {
   const { datasets } = useDatasets()
   const [chosen, setChosen] = useState<ControlValues>({})
 
@@ -64,7 +78,26 @@ export function useBoardControls(board: Board | undefined) {
     return filled
   }, [board, chosen])
 
-  const setValues = setChosen
+  /**
+   * Takes the new values, and where the Author is composing, stores them.
+   *
+   * Only what actually changed: a Control whose value already matches its
+   * stored default is left alone rather than rewritten on every render of the
+   * board, which would redate it for nothing.
+   */
+  const setValues = useCallback(
+    (next: ControlValues) => {
+      setChosen(next)
+      if (!authoring || !board) return
+
+      for (const control of board.controls) {
+        const value = next[control.id] ?? null
+        const stored = control.defaultValue ?? null
+        if (JSON.stringify(value) !== JSON.stringify(stored)) authoring.persist(control.id, value)
+      }
+    },
+    [authoring, board],
+  )
 
   const byId = useMemo(() => {
     const map: Record<string, Dataset> = {}
