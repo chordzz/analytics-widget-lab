@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { SelectField } from '../shell/SelectField'
 import { useAnalyticsData, useMay } from '../data/AnalyticsData'
 import { useBoards } from './useBoards'
 import type { Board, DashboardScope } from './boards'
@@ -106,23 +107,20 @@ export function SharePanel({ board }: { board: Board }) {
         <label className="a-field__label" htmlFor="board-scope">
           Who can see this
         </label>
-        <select
+        <SelectField
           id="board-scope"
-          className="a-select"
           value={scopeValue}
+          onChange={chooseScope}
+          options={[
+            { value: 'personal', label: 'Only you' },
+            ...groups.map((group) => ({ value: `scope:${group.scopeId}`, label: group.label })),
+            { value: 'organization-wide', label: 'Everyone' },
+          ]}
           // Scope decides who can see the board, so it is the same decision the
           // grant list expresses and sits behind the same permission.
           disabled={!mayShare}
-          onChange={(event) => chooseScope(event.target.value)}
-        >
-          <option value="personal">Only you</option>
-          {groups.map((group) => (
-            <option key={group.scopeId} value={`scope:${group.scopeId}`}>
-              {group.label}
-            </option>
-          ))}
-          <option value="organization-wide">Everyone</option>
-        </select>
+          label="Who can see this"
+        />
       </div>
 
       <p className="a-share__summary">

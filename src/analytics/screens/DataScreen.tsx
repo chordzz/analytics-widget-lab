@@ -11,6 +11,7 @@
  */
 
 import { useId, useState, type ReactNode } from 'react'
+import { SelectField } from '../shell/SelectField'
 import { useAnalyticsData, useCatalogue, useDataset } from '../data/AnalyticsData'
 import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
 import { WidgetCard } from '../widgets/WidgetCard'
@@ -177,22 +178,22 @@ function BuildWidget({
           <label className="a-source-build__label" htmlFor={selectId}>
             Add to
           </label>
-          <select
+          <SelectField
             id={selectId}
-            className="a-filters__select a-source-build__select"
             value={chosen}
-            onChange={(event) => setTarget(event.target.value)}
-          >
-            {mine.map((board) => (
-              <option key={board.id} value={board.id}>
-                {board.name}
-                {board.status === 'draft' ? ' — draft' : ''}
-              </option>
-            ))}
-            {/* An empty value is the *chosen* new board, not an absent answer —
-                `composeWith` reads it as an explicit null. */}
-            <option value="">New dashboard</option>
-          </select>
+            onChange={setTarget}
+            options={[
+              ...mine.map((board) => ({
+                value: board.id,
+                label: board.name,
+                // Was folded into the label with an em dash, because an option
+                // cannot carry a second line. It can now.
+                ...(board.status === 'draft' ? { hint: 'draft' } : {}),
+              })),
+              { value: '', label: 'New dashboard' },
+            ]}
+            label="Add to dashboard"
+          />
         </>
       )}
 

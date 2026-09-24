@@ -19,6 +19,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { SelectField } from '../shell/SelectField'
 import { Widget, type WidgetMapping, type WidgetSpec } from '../widgets/Widget'
 import { FAMILIES, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
@@ -730,18 +731,15 @@ function RequiredParameters({
           <label key={parameter.name} className="a-filters__field">
             <span className="a-filters__label">{parameter.label}</span>
             {parameter.allowedValues && parameter.allowedValues.length > 0 ? (
-              <select
-                className="a-filters__select"
+              <SelectField
                 value={current}
-                onChange={(event) => set(parameter.name, event.target.value, parameter.allowedValues)}
-              >
-                <option value="">Choose one</option>
-                {parameter.allowedValues.map((entry) => (
-                  <option key={String(entry)} value={String(entry)}>
-                    {String(entry)}
-                  </option>
-                ))}
-              </select>
+                onChange={(next) => { set(parameter.name, next, parameter.allowedValues) }}
+                options={parameter.allowedValues.map((entry) => ({
+                  value: String(entry),
+                  label: String(entry),
+                }))}
+                label={parameter.name}
+              />
             ) : (
               /*
                * No declared values, so no list to offer. The publisher knows what

@@ -11,7 +11,8 @@
  * the board should be a different composition, not a squashed one.
  */
 
-import { forwardRef, useState, type HTMLAttributes, type ReactNode } from 'react'
+import { forwardRef, type HTMLAttributes, type ReactNode, useCallback, useRef, useState } from 'react'
+import { useClickAway } from '../shell/use-click-away'
 
 /**
  * The six render states, and why there are six.
@@ -167,9 +168,19 @@ export const WidgetCard = forwardRef<
 
 function ActionsMenu({ actions }: { actions: WidgetAction[] }) {
   const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
+
+  /*
+   * Same defect as the two new fields had: a `position: fixed` scrim is
+   * contained by any ancestor carrying a transform, and this menu lives inside
+   * a grid that positions by transform. So the scrim covered its own card
+   * rather than the screen, and clicking elsewhere on the board left the menu
+   * open.
+   */
+  useClickAway(open, root, useCallback(() => { setOpen(false) }, []))
 
   return (
-    <div className="a-menu">
+    <div className="a-menu" ref={root}>
       <button
         type="button"
         className="a-menu__trigger"
@@ -189,9 +200,7 @@ function ActionsMenu({ actions }: { actions: WidgetAction[] }) {
       </button>
 
       {open && (
-        <>
-          <div className="a-menu__scrim" onClick={() => setOpen(false)} />
-          <div role="menu" className="a-menu__list">
+        <div role="menu" className="a-menu__list">
             {actions.map((action) => (
               <button
                 key={action.label}
@@ -206,9 +215,8 @@ function ActionsMenu({ actions }: { actions: WidgetAction[] }) {
               >
                 {action.label}
               </button>
-            ))}
-          </div>
-        </>
+          ))}
+        </div>
       )}
     </div>
   )

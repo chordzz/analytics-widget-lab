@@ -1,3 +1,4 @@
+import { SelectField } from '../shell/SelectField'
 /**
  * The field mapper — which column plays which role.
  *
@@ -86,20 +87,20 @@ function SingleSlot({
   return (
     <label className={`a-field ${missing ? 'a-field--missing' : ''}`}>
       <SlotLabel slot={slot} />
-      <select
-        className="a-select"
+      {/*
+        An optional slot can be emptied again; a required one starts blank only
+        until a dataset is chosen, and autoMap fills it immediately.
+        The key rides alongside the label rather than inside it — two Fields may
+        share a label, and which is which is the whole question here.
+      */}
+      <SelectField
         value={chosen ?? ''}
-        onChange={(event) => onChange(event.target.value || undefined)}
-      >
-        {/* An optional slot can be emptied again; a required one starts blank
-            only until a dataset is chosen, and autoMap fills it immediately. */}
-        {(slot.min === 0 || !chosen) && <option value="">{slot.min === 0 ? 'None' : 'Choose a field'}</option>}
-        {options.map((field) => (
-          <option key={field.key} value={field.key}>
-            {field.label}
-          </option>
-        ))}
-      </select>
+        onChange={(next) => { onChange(next || undefined) }}
+        options={options.map((field) => ({ value: field.key, label: field.label, hint: field.key }))}
+        placeholder={slot.min === 0 ? 'None' : 'Choose a field'}
+        clearable={slot.min === 0 || !chosen}
+        label={slot.label}
+      />
       <p className="a-field__help">{slot.help}</p>
     </label>
   )
@@ -179,18 +180,13 @@ function MultiSlot({
       </ol>
 
       {!atMax && available.length > 0 && (
-        <select
-          className="a-select"
+        <SelectField
           value=""
-          onChange={(event) => event.target.value && onChange([...chosen, event.target.value])}
-        >
-          <option value="">Add a field…</option>
-          {available.map((field) => (
-            <option key={field.key} value={field.key}>
-              {field.label}
-            </option>
-          ))}
-        </select>
+          onChange={(next) => { if (next) onChange([...chosen, next]) }}
+          options={available.map((field) => ({ value: field.key, label: field.label, hint: field.key }))}
+          placeholder="Add a field…"
+          label={`Add to ${slot.label}`}
+        />
       )}
 
       <p className="a-field__help">{slot.help}</p>

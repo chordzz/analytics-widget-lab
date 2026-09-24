@@ -16,7 +16,8 @@
  * query, silently, with a 400 from the Source System.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useClickAway } from './use-click-away'
 
 export interface DateFieldProps {
   /** `YYYY-MM-DD`, or empty for no date. */
@@ -132,6 +133,8 @@ export function DateField({ value, onChange, label, placeholder = 'Any date', cl
   }, [shown, first])
 
   const box = useRef<HTMLDivElement>(null)
+  useClickAway(open, box, useCallback(() => { setOpen(false) }, []))
+
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
@@ -165,10 +168,7 @@ export function DateField({ value, onChange, label, placeholder = 'Any date', cl
       </button>
 
       {open && (
-        <>
-          {/* Closes on any click elsewhere, including on another field's trigger. */}
-          <div className="a-datefield__scrim" onClick={() => { setOpen(false) }} />
-          <div className="a-datefield__pop" role="dialog" aria-label={label}>
+        <div className="a-datefield__pop" role="dialog" aria-label={label}>
             <div className="a-datefield__head">
               <button type="button" className="a-datefield__step" aria-label="Previous month" onClick={() => { step(-1) }}>
                 ‹
@@ -227,8 +227,7 @@ export function DateField({ value, onChange, label, placeholder = 'Any date', cl
                 Clear
               </button>
             )}
-          </div>
-        </>
+        </div>
       )}
     </div>
   )

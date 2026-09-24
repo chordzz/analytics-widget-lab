@@ -145,29 +145,24 @@ function ParameterControl({
       <span className="a-filters__label">{parameter.label}</span>
 
       {allowed && allowed.length > 0 ? (
-        <select
+        <SelectField
           id={id}
-          className="a-filters__select"
-          value={current}
-          onChange={(event) => {
-            // The raw option value is a string; a numeric parameter has to come
-            // back as a number or the endpoint compares a string to a number.
-            const raw = event.target.value
-            onChange(allowed.find((entry) => String(entry) === raw) ?? raw)
+          value={String(current)}
+          onChange={(next) => {
+            // The option value is a string; a numeric parameter has to come back
+            // as a number or the endpoint compares a string to a number.
+            onChange(allowed.find((entry) => String(entry) === next) ?? next)
           }}
-        >
-          {/*
-            A required parameter has no "All": the endpoint cannot answer
-            without a value, so offering the empty option would hand a Viewer a
-            way to break the widget.
-          */}
-          {!parameter.required && <option value="">All</option>}
-          {allowed.map((entry) => (
-            <option key={String(entry)} value={String(entry)}>
-              {String(entry)}
-            </option>
-          ))}
-        </select>
+          options={allowed.map((entry) => ({ value: String(entry), label: String(entry) }))}
+          /*
+           * A required parameter has no "All": the endpoint cannot answer
+           * without a value, so offering the empty option would hand a Viewer a
+           * way to break the widget.
+           */
+          clearable={!parameter.required}
+          placeholder="All"
+          label={parameter.label}
+        />
       ) : parameter.valueType === 'date' ? (
         /*
          * The same field the board's Control uses, so a date looks like a date
@@ -213,25 +208,31 @@ function SortSelect({
   return (
     <label className="a-filters__field" htmlFor={id}>
       <span className="a-filters__label">Sort</span>
-      <select
+      {/*
+        Flattened out of `<optgroup>`, which is not a loss: every option already
+        names its Field — "Revenue, high to low" — so the group label repeated
+        the word directly above it. A group carrying nothing the rows do not is
+        structure for its own sake.
+      */}
+      <SelectField
         id={id}
-        className="a-filters__select"
         value={current}
-        onChange={(event) => {
-          const raw = event.target.value
-          if (!raw) return onChange(undefined)
-          const [field, direction] = raw.split(':')
+        onChange={(next) => {
+          if (!next) {
+            onChange(undefined)
+            return
+          }
+          const [field, direction] = next.split(':')
           onChange({ field, direction: direction as 'ascending' | 'descending' })
         }}
-      >
-        <option value="">Default</option>
-        {fields.map((field) => (
-          <optgroup key={field.key} label={field.label}>
-            <option value={`${field.key}:descending`}>{field.label}, high to low</option>
-            <option value={`${field.key}:ascending`}>{field.label}, low to high</option>
-          </optgroup>
-        ))}
-      </select>
+        options={fields.flatMap((field) => [
+          { value: `${field.key}:descending`, label: `${field.label}, high to low` },
+          { value: `${field.key}:ascending`, label: `${field.label}, low to high` },
+        ])}
+        clearable
+        placeholder="Default"
+        label="Sort"
+      />
     </label>
   )
 }
