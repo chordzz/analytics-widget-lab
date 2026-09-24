@@ -24,11 +24,29 @@
  * survives on `min-width: 0` and honest truncation.
  */
 
+.a-stat__label {
+  margin: 0;
+  font-size: var(--a-text-sm);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--a-text-secondary);
+  /* Matches `.a-card__title`, because on a tile that is what it is. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .a-stat__value {
   margin: 4px 0 0;
   font-size: var(--a-text-3xl);
   font-weight: 600;
   line-height: 1.05;
+  /*
+   * Display numerals need tracking pulled in. Default spacing is set for text
+   * at reading size; at 36px the gaps between figures read as gaps between
+   * groups, so `1,420` looks like two numbers before it looks like one.
+   */
+  letter-spacing: -0.02em;
   color: var(--a-text);
 }
 
@@ -51,6 +69,10 @@
     font-size: var(--a-text-xl);
   }
 
+  .a-stat__label {
+    font-size: var(--a-text-xs);
+  }
+
   /* At this width the subtitle is two ellipsised words. The title carries the
      meaning; the subtitle is only costing a line. */
   .a-card__subtitle {
@@ -66,7 +88,8 @@
   min-height: 0;
   background: var(--a-surface);
   border: 1px solid var(--a-border);
-  border-radius: var(--a-radius);
+  /* A step above the controls it holds — see `--a-radius-lg`. */
+  border-radius: var(--a-radius-lg);
   box-shadow: var(--a-shadow);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }

@@ -76,17 +76,17 @@ export function StatTile({
        */
       style={{ display: 'flex', flexDirection: 'column', justifyContent: 'safe center', minHeight: 0 }}
     >
-      <p
-        style={{
-          margin: 0,
-          fontSize: 'var(--a-text-xs)',
-          color: token('textSecondary'),
-          textTransform: 'uppercase',
-          letterSpacing: '0.04em',
-        }}
-      >
-        {label}
-      </p>
+      {/*
+        Sentence case, not small caps.
+        
+        This was uppercase and letter-spaced, which is the convention for a
+        *column header* — a label over a table of many values. A stat card has
+        one value, and the label is its title: "Total deposit", not "TOTAL
+        DEPOSIT". The card sits beside other cards whose titles are sentence
+        case, so the old treatment also made a tile read as a different kind of
+        thing from its neighbours.
+      */}
+      <p className="a-stat__label">{label}</p>
 
       {/* The size lives in CSS, not here, so it can answer a container query.
           An inline font-size cannot be overridden by one. */}
