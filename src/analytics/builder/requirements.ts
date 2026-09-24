@@ -87,7 +87,16 @@ const slot = (
  */
 const SLOTS: Record<string, Slot[]> = {
   // Single value
-  'stat-card': [slot('value', 'Measure', 'The number on the tile.', MEASURE)],
+  'stat-card': [
+    slot('value', 'Measure', 'The number on the tile.', MEASURE),
+    /*
+     * Optional, and read rather than computed. A stat card receives one
+     * aggregated row, so it cannot derive movement — a Dataset that publishes
+     * the comparison as its own Measure can show one, and one that does not
+     * shows a bare figure as before.
+     */
+    slot('delta', 'Change', 'A change the publisher computed. Leave empty for a bare figure.', MEASURE, 0, 1),
+  ],
   'sparkline-card': [
     slot('value', 'Measure', 'The number, and the line behind it.', MEASURE),
     slot('x', 'Period', 'Orders the sparkline.', TIME),

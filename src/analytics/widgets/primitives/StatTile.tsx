@@ -20,8 +20,22 @@ export interface StatTileProps {
   label: string
   value: number
   format?: ValueFormat
-  /** Change against the comparison period, as a fraction. `0.12` is +12%. */
+  /**
+   * Change against the comparison period.
+   *
+   * A fraction by default — `0.12` is +12% — which is what a card computing its
+   * own movement produces. Pass `deltaFormat` where the number came from the
+   * publisher instead, since theirs is whatever their Field declares.
+   */
   delta?: number
+  /**
+   * How to render `delta`, where it is not a fraction.
+   *
+   * Absent keeps the percentage reading, so nothing that computed its own delta
+   * changes. Present defers to the Field's declared format, which is the only
+   * party that knows whether `2.01` means two per cent or two hundred and one.
+   */
+  deltaFormat?: ValueFormat
   /** Which direction is good. @default 'up-is-good' */
   direction?: 'up-is-good' | 'down-is-good' | 'neutral'
   /** What the delta is measured against, e.g. "vs. last month". */
@@ -37,6 +51,7 @@ export function StatTile({
   value,
   format = 'number',
   delta,
+  deltaFormat,
   direction = 'up-is-good',
   comparisonLabel,
   trend,
@@ -91,8 +106,12 @@ export function StatTile({
             }}
           >
             {/* An arrow as well as a colour — direction never rests on hue alone. */}
+            {/* The sign is unambiguous whichever convention the number uses,
+                so tone and arrow are safe even where the format is not. */}
             <Arrow up={delta >= 0} />
-            {formatDelta(delta)}
+            {deltaFormat
+              ? `${delta > 0 ? '+' : ''}${formatValue(delta, deltaFormat)}`
+              : formatDelta(delta)}
           </span>
           {comparisonLabel && (
             <span style={{ fontSize: 'var(--a-text-xs)', color: token('textMuted') }}>

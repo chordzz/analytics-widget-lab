@@ -62,6 +62,16 @@ export interface WidgetMapping {
   value?: string
   /** Measure holding the target, for gauges. */
   target?: string
+  /**
+   * Measure holding a change the *publisher* computed, for tiles.
+   *
+   * Not a second reading of `value`. A stat card receives one aggregated row,
+   * so it has one number and nothing to compare it against — which is why it
+   * showed a bare figure. Where a Dataset publishes the comparison as its own
+   * Measure, the card can show it without computing anything, which is the
+   * whole position: Analytics computes nothing and neither do we.
+   */
+  delta?: string
   /** Field holding a state, for status widgets. */
   state?: string
   /** Columns, for tables. */
@@ -529,17 +539,37 @@ function renderBody(
        */
       const comparable = !isAggregate && values.length > 1 && previous !== 0
 
+      /*
+       * A change the publisher computed, where the Author mapped one.
+       *
+       * Read off the same aggregated row as the figure, so the two describe the
+       * same period — which the old computed delta did not: it showed a whole
+       * period's total beside a movement derived from the last two *records*, a
+       * 24-month figure labelled "vs. last month".
+       *
+       * Rendered with the mapped Field's own declared format, because only the
+       * publisher knows whether their `2.01` is two per cent or two hundred and
+       * one. Nothing is converted here; a wrong declaration is theirs to fix and
+       * visible when it is wrong.
+       */
+      const deltaField = mapping.delta ? fieldOf(dataset, mapping.delta) : undefined
+      const published =
+        mapping.delta && rows.length > 0 ? Number(rows[rows.length - 1][mapping.delta]) : undefined
+      const publishedDelta = Number.isFinite(published) ? published : undefined
+
       return (
         <StatTile
           label={spec.title ?? fieldOf(dataset, key)?.label ?? key}
           value={isAggregate ? aggregate : latest}
           format={primaryFormat}
-          delta={comparable ? latest / previous - 1 : undefined}
+          delta={publishedDelta ?? (comparable ? latest / previous - 1 : undefined)}
+          deltaFormat={publishedDelta === undefined ? undefined : (deltaField?.format ?? 'number')}
           direction={
             (options.direction as 'up-is-good' | 'down-is-good' | 'neutral') ?? 'up-is-good'
           }
           comparisonLabel={
-            comparable && typeof options.comparisonLabel === 'string'
+            (comparable || publishedDelta !== undefined) &&
+            typeof options.comparisonLabel === 'string'
               ? options.comparisonLabel
               : undefined
           }

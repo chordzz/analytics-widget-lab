@@ -135,3 +135,52 @@ describe('the layout is sane', () => {
     }
   })
 })
+
+/*
+ * A stat card showing the movement its publisher computed.
+ *
+ * All 22 were bare figures. A stat card receives one aggregated row, so it
+ * cannot derive movement — and deriving it was worse than not: the old code
+ * showed a whole period's total beside a delta computed from the last two
+ * records, a 24-month figure labelled "vs. last month".
+ *
+ * Peniremit publishes the comparison as its own Measure, so there is nothing
+ * to derive. This is the model working: Analytics computes nothing, the
+ * publisher does, and we read it.
+ */
+describe('a published change', () => {
+  const statCards = PENIREMIT_BOARDS.flatMap((board) =>
+    board.cards.filter((card) => card.typeId === 'stat-card'),
+  )
+
+  test('every stat card maps one', () => {
+    const bare = statCards.filter((card) => !card.mapping.delta)
+    expect(bare.map((card) => card.title)).toEqual([])
+  })
+
+  test('and it is a Measure the Dataset declares', () => {
+    // A key the Dataset does not carry reads as empty rather than erroring, so
+    // a wrong guess here is a card that silently shows no movement at all.
+    for (const card of statCards) {
+      const keys = requirePeniremitDataset(card.datasetId).keys
+      expect({ card: card.title, delta: card.mapping.delta, declared: keys.includes(String(card.mapping.delta)) })
+        .toEqual({ card: card.title, delta: card.mapping.delta, declared: true })
+    }
+  })
+
+  test('it is never the same Measure as the figure', () => {
+    // A change equal to its own value is the mapping having gone in a circle.
+    for (const card of statCards) expect(card.mapping.delta).not.toBe(card.mapping.value)
+  })
+
+  test('and `changePercent` is not used, because nobody has said what it means', () => {
+    /*
+     * `2.01` is either two per cent or two hundred and one, depending on a
+     * convention nobody has stated. A card confidently showing the wrong one is
+     * worse than one showing the absolute change, so the absolute is what is
+     * mapped until the question comes back.
+     */
+    for (const card of statCards) expect(String(card.mapping.delta)).not.toContain('ChangePercent')
+    for (const card of statCards) expect(card.mapping.delta).not.toBe('changePercent')
+  })
+})
