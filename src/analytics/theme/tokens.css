@@ -96,6 +96,13 @@
   --a-shadow: 0 1px 2px rgb(0 0 0 / 6%), 0 1px 3px rgb(0 0 0 / 4%);
   --a-shadow-raised: 0 4px 12px rgb(0 0 0 / 8%);
 
+  /*
+   * Behind an overlay. Dimming rather than obscuring: the board underneath
+   * stays legible enough to show you have not navigated away, which is what
+   * distinguishes a drawer from a new screen.
+   */
+  --a-scrim: rgb(0 0 0 / 40%);
+
   /* --- rhythm ------------------------------------------------------------ */
   --a-space-1: 4px;
   --a-space-2: 8px;
@@ -178,6 +185,8 @@
 
     --a-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 1px 3px rgb(0 0 0 / 30%);
     --a-shadow-raised: 0 4px 12px rgb(0 0 0 / 45%);
+    /* Heavier, because a dim layer over a dark surface barely reads. */
+    --a-scrim: rgb(0 0 0 / 60%);
   }
 }
 
@@ -234,6 +243,8 @@
 
   --a-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 1px 3px rgb(0 0 0 / 30%);
   --a-shadow-raised: 0 4px 12px rgb(0 0 0 / 45%);
+  /* Heavier, because a dim layer over a dark surface barely reads. */
+  --a-scrim: rgb(0 0 0 / 60%);
 }
 
 .analytics-root {

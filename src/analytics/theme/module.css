@@ -666,6 +666,9 @@
 .a-controls {
   display: flex;
   flex-wrap: wrap;
+  /* A flex child's default `min-width: auto` is what lets a long control push
+     past its parent rather than wrapping inside it. */
+  min-width: 0;
   gap: var(--a-space-3) var(--a-space-5);
   padding: var(--a-space-3) var(--a-space-4);
   margin-bottom: var(--a-space-4);
@@ -678,6 +681,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .a-controls__field {
@@ -691,6 +695,19 @@
   display: inline-flex;
   align-items: center;
   gap: var(--a-space-2);
+  /*
+   * Two date fields and the word between them are one unit at any width the
+   * row can give them, and two lines when it cannot. Without this the second
+   * field ran off the card on a phone — visible only as a date with its year
+   * missing, which reads as a rendering fault rather than as something to
+   * scroll to.
+   */
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.a-controls__range > * {
+  min-width: 0;
 }
 
 /*

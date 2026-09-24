@@ -1,3 +1,37 @@
+
+/** Below this the sidebar stops being a column and becomes an overlay. */
+const DRAWER_BELOW = 720
+
+/**
+ * Whether the viewport is under `width`, watched rather than read once.
+ *
+ * A reader rotating a tablet or splitting a window should get the other layout
+ * without reloading, and `matchMedia` reports the change where a one-off
+ * measurement cannot.
+ */
+function useNarrow(width: number): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(`(max-width: ${String(width)}px)`).matches,
+  )
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const query = window.matchMedia(`(max-width: ${String(width)}px)`)
+    const onChange = (event: MediaQueryListEvent) => { setNarrow(event.matches) }
+    setNarrow(query.matches)
+    query.addEventListener('change', onChange)
+    return () => { query.removeEventListener('change', onChange) }
+  }, [width])
+
+  return narrow
+}
+
+const MenuIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+    <path d="M3 5h12M3 9h12M3 13h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+)
+
 /**
  * The module's frame.
  *
@@ -7,7 +41,7 @@
  * navigate callback, which a host wires to whatever it uses.
  */
 
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Sidebar } from './Sidebar'
 import { NAV_ITEMS, type ScreenId } from './nav'
 import { DashboardsScreen } from '../screens/DashboardsScreen'
@@ -50,24 +84,64 @@ export function ModuleShell({
   boardStore?: BoardStorePort
 }) {
   const [collapsed, setCollapsed] = useState(false)
+  /*
+   * Narrow is a different layout, not a narrower one.
+   *
+   * The sidebar is a column of the shell grid, and at 375px it took 233 of
+   * them — leaving 126px of content, which fits a chart the way a envelope
+   * fits a door. Collapsing it to the icon rail is not enough either: a rail
+   * still costs 56px of a phone and navigation is not what someone opened a
+   * dashboard to look at.
+   *
+   * So below `DRAWER_BELOW` it leaves the grid entirely and becomes an
+   * overlay, opened from the topbar. State rather than CSS alone because the
+   * scrim, the open button and `aria-expanded` all have to agree with it.
+   */
+  const drawer = useNarrow(DRAWER_BELOW)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const current = NAV_ITEMS.find((item) => item.id === screen)
+
+  // Navigating is the end of a drawer's job; leaving it open over the thing it
+  // just navigated to is the standard way this goes wrong.
+  const navigate = (id: ScreenId) => {
+    setDrawerOpen(false)
+    onNavigate(id)
+  }
 
   return (
     <AnalyticsDataProvider {...data}>
     <BoardsProvider store={boardStore}>
     <ComposeIntentProvider>
-    <div className="a-shell">
+    <div className="a-shell" data-drawer={drawer ? (drawerOpen ? 'open' : 'shut') : undefined}>
       <Sidebar
         current={screen}
-        collapsed={collapsed}
-        onNavigate={onNavigate}
+        collapsed={drawer ? false : collapsed}
+        onNavigate={navigate}
         onToggleCollapsed={() => setCollapsed((value) => !value)}
         theme={theme}
         onToggleTheme={onToggleTheme}
+        // The rail toggle is meaningless in a drawer — it is already all or
+        // nothing — and a close is what a reader wants there instead.
+        onClose={drawer ? () => { setDrawerOpen(false) } : undefined}
       />
+
+      {drawer && drawerOpen && (
+        <div className="a-shell__scrim" onClick={() => { setDrawerOpen(false) }} />
+      )}
 
       <div className="a-main">
         <header className="a-topbar">
+          {drawer && (
+            <button
+              type="button"
+              className="a-icon-button a-topbar__menu"
+              aria-label="Open navigation"
+              aria-expanded={drawerOpen}
+              onClick={() => { setDrawerOpen(true) }}
+            >
+              <MenuIcon />
+            </button>
+          )}
           <div>
             <h1 className="a-topbar__title">{current?.label ?? 'Analytics'}</h1>
             <p className="a-topbar__caption">{CAPTIONS[screen]}</p>
