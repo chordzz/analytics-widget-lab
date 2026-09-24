@@ -141,3 +141,32 @@ describe('accessibility', () => {
     }
   })
 })
+
+/*
+ * A tile you cannot identify is a tile you cannot act on.
+ *
+ * `bare` drops the header because a stat tile carries its own label inside
+ * `StatTile` and a header would repeat it. Every state other than `ready`
+ * renders a placeholder instead, and the label goes with it — so four empty
+ * tiles in a column said "No data for this selection" and nothing else, with no
+ * way to tell which Widget was which or which Dataset to go and look at.
+ */
+describe('a bare card keeps its title when it has no number', () => {
+  const card = (state: WidgetState) =>
+    renderToStaticMarkup(
+      <WidgetCard title="Total registered users" state={state} bare>
+        <div>1,420</div>
+      </WidgetCard>,
+    )
+
+  test('the header is dropped only while the tile shows its own value', () => {
+    expect(card('ready')).not.toContain('Total registered users')
+  })
+
+  test.each(['empty', 'failed', 'denied', 'withdrawn', 'loading'] as const)(
+    'and is present for %s',
+    (state) => {
+      expect(card(state)).toContain('Total registered users')
+    },
+  )
+})

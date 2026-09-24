@@ -79,7 +79,17 @@ export interface WidgetCardProps {
    * the card. On a card with a header it simply joins the others.
    */
   inlineControl?: ReactNode
-  /** Drops the header. For a stat tile whose value is its own headline. */
+  /**
+   * Drops the header. For a stat tile whose value is its own headline.
+   *
+   * **Only while it has one.** A tile carries its own label inside `StatTile`,
+   * so a header would repeat it — but every state other than `ready` renders a
+   * placeholder instead, and the label goes with it. Four empty tiles in a
+   * column then say "No data for this selection" and nothing else, and there is
+   * no way to tell which Widget is which, or which Dataset to go and look at.
+   *
+   * So the header comes back whenever the tile is not showing its own number.
+   */
   bare?: boolean
   /**
    * Text-led rather than plot-led — keeps the roomier inset. A chart wants the
@@ -134,7 +144,7 @@ export const WidgetCard = forwardRef<
         .join(' ')}
       {...rest}
     >
-      {!bare ? (
+      {!(bare && state === 'ready') ? (
         <header className="a-card__head">
           <div className="a-card__titles">
             <h3 className="a-card__title">{title}</h3>
