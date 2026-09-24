@@ -73,6 +73,43 @@ export function formatTimeLabel(value: unknown): string {
     return date.toLocaleDateString(undefined, { month: 'short', year: '2-digit', timeZone: 'UTC' })
   }
 
+  /*
+   * A date-time, which the API accepts and publishes as UTC.
+   *
+   * This fell through to the branch below and returned the string, so a series
+   * keyed on timestamps drew `2026-08-07T00:00:00Z` under every point. No
+   * Peniremit endpoint returns one today, which is the only reason nobody has
+   * seen it.
+   *
+   * Two kinds of value arrive this way and they want opposite treatment.
+   *
+   * **UTC midnight is a day**, not a moment — it is how a daily series names
+   * its buckets. Formatted in UTC like the branches above, because converting
+   * it would slide every label a day backwards for every reader west of
+   * Greenwich: a point the publisher calls 7 August would be drawn under
+   * 6 August in Lagos-minus-anything.
+   *
+   * **Anything else is an instant**, and the whole point of publishing it as
+   * UTC is that each reader converts it to their own. Shown with its time,
+   * since an hourly series would otherwise draw the same label twenty-four
+   * times over.
+   *
+   * The first version tested local midnight, which is almost never UTC
+   * midnight — so every daily label carried a spurious `1:00 AM`.
+   */
+  const instant = new Date(value)
+  if (!Number.isNaN(instant.getTime()) && /\d{2}:\d{2}/.test(value)) {
+    const marksADay = instant.getUTCHours() === 0 && instant.getUTCMinutes() === 0
+    return marksADay
+      ? instant.toLocaleDateString(undefined, { day: 'numeric', month: 'short', timeZone: 'UTC' })
+      : instant.toLocaleDateString(undefined, {
+          day: 'numeric',
+          month: 'short',
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+  }
+
   return value
 }
 

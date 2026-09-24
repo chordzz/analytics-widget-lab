@@ -17,34 +17,53 @@
 const DEFAULT_DAYS = 30
 
 /**
- * **The one place a calendar day is decided, and the open question with it.**
+ * Today, where the reader is.
  *
- * Every date this module produces is `YYYY-MM-DD`, which the API documents as
- * *"a date-only value includes the whole day"* — so no timezone is attached to
- * what we send, and a Viewer picking dates by hand raises no question at all.
- * The question is only ever *which day is today*, and it is asked exactly here.
+ * This carried a long argument about which timezone should decide a day, and
+ * the argument was the wrong shape. It only existed because we sent date-only
+ * values: `2026-09-24` names no instant, so the Source System picks a zone and
+ * whichever one it picks is somebody's yesterday.
  *
- * Computed in one fixed frame rather than in each Viewer's. Locally, a reader
- * in Lagos and one in Los Angeles disagree about today for roughly a third of
- * the day, so two people would open the same board and see different figures —
- * which is the thing that costs a dashboard its credibility, and is worse than
- * being a day out in a way everyone shares.
- *
- * UTC is the placeholder frame, not the settled answer. What should decide it
- * is how the Source System buckets a day: if Peniremit closes theirs at
- * midnight WAT and we ask for UTC days, every figure shifts by an hour at the
- * boundary. That question is with them — see `Analytics_BE_Requests.md` — and
- * this function is the single line that changes when it comes back.
+ * `dayStart` and `dayEnd` send instants instead, which the API takes and which
+ * nobody has to agree about. So a day is simply the reader's own day, and this
+ * is a local date rather than a convention.
  */
 export function today(now: Date = new Date()): string {
-  return now.toISOString().slice(0, 10)
+  return `${String(now.getFullYear())}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
-/** `n` days before `date`, as `YYYY-MM-DD`. */
+const pad = (n: number) => String(n).padStart(2, '0')
+
+/** `n` days before `date`, as `YYYY-MM-DD`, in the reader's own calendar. */
 function daysBefore(date: string, n: number): string {
-  const shifted = new Date(`${date}T00:00:00Z`)
-  shifted.setUTCDate(shifted.getUTCDate() - n)
-  return shifted.toISOString().slice(0, 10)
+  const [year, month, day] = date.split('-').map(Number)
+  const shifted = new Date(year, month - 1, day - n)
+  return today(shifted)
+}
+
+/**
+ * The first instant of a local day, as UTC.
+ *
+ * A Viewer picks 24 September; what they mean is their 24th, which began at
+ * local midnight. Sent as the instant that was, so the Source System filters on
+ * a moment rather than interpreting a bare date in a zone of its choosing.
+ */
+export const dayStart = (day: string): string => {
+  const [year, month, date] = day.split('-').map(Number)
+  return new Date(year, month - 1, date, 0, 0, 0, 0).toISOString()
+}
+
+/**
+ * The last instant of a local day, as UTC.
+ *
+ * Both ends of a declared range are inclusive — the API says a date-only `to`
+ * "includes the whole day" — so an instant `to` has to be the end of that day
+ * rather than its start. Sending local midnight for both would ask for a window
+ * of zero width and return nothing, which reads as a Dataset with no data.
+ */
+export const dayEnd = (day: string): string => {
+  const [year, month, date] = day.split('-').map(Number)
+  return new Date(year, month - 1, date, 23, 59, 59, 999).toISOString()
 }
 
 /**

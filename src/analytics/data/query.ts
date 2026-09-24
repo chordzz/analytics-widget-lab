@@ -31,6 +31,7 @@ import {
   type QueryContribution,
 } from '../../composition/correspondence'
 import { requiredParameters, timeRangeParameters } from '../../domain/dataset'
+import { dayEnd, dayStart } from '../../domain/default-period'
 import type { Aggregation, Dataset, FilterParameter } from '../../domain/dataset'
 import type { DatasetQuery, MeasureSelection } from '../../domain/query'
 import type { WidgetSpec } from '../widgets/Widget'
@@ -271,8 +272,21 @@ function rangeFor(
   if (!range) return {}
   const names = timeRangeParameters(dataset)
   return {
-    ...(range.from && names.from ? { [names.from]: range.from } : {}),
-    ...(range.to && names.to ? { [names.to]: range.to } : {}),
+    /*
+     * Sent as instants, not as the days the Viewer picked.
+     *
+     * A date-only `2026-09-24` names no moment, so the Source System decides
+     * which zone's 24th it means — and whichever it decides is somebody's 23rd.
+     * The API takes "ISO 8601 date or date-time (UTC)", so the ambiguity is one
+     * we were choosing rather than one we were stuck with.
+     *
+     * `from` is the first instant of that local day and `to` the last, because
+     * both ends of a declared range are inclusive. Sending midnight for both
+     * would ask for a window of zero width and come back empty, which reads as
+     * a Dataset with no data rather than as a bad question.
+     */
+    ...(range.from && names.from ? { [names.from]: dayStart(range.from) } : {}),
+    ...(range.to && names.to ? { [names.to]: dayEnd(range.to) } : {}),
   }
 }
 

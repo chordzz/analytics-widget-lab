@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { defaultPeriod, today } from './default-period'
+import { dayEnd, dayStart, defaultPeriod, today } from './default-period'
 
 const at = (iso: string) => new Date(iso)
 
@@ -65,5 +65,47 @@ describe('the default range', () => {
     expect(period.from).toBeTruthy()
     expect(period.to).toBeTruthy()
     expect(period.from < period.to).toBe(true)
+  })
+})
+
+describe('a day as instants', () => {
+  test('starts at local midnight and ends at the last millisecond', () => {
+    /*
+     * Both ends of a declared range are inclusive — the API says a date-only
+     * `to` "includes the whole day" — so an instant `to` has to be the end of
+     * that day. Midnight at both ends is a window of zero width, which comes
+     * back empty and reads as a Dataset with no data rather than a bad question.
+     */
+    expect(dayStart('2026-09-24') < dayEnd('2026-09-24')).toBe(true)
+    expect(dayEnd('2026-09-24')).toContain('23:59:59')
+  })
+
+  test('they are UTC, whatever zone the reader is in', () => {
+    // The wire format. What varies by reader is which instant a day *is*, not
+    // how it is written.
+    expect(dayStart('2026-09-24')).toMatch(/Z$/)
+    expect(dayEnd('2026-09-24')).toMatch(/Z$/)
+  })
+
+  test('one day ends exactly where the next begins', () => {
+    /*
+     * The property that makes consecutive ranges safe: no gap to lose a record
+     * in, no overlap to count one twice. A millisecond apart, since both ends
+     * are inclusive.
+     */
+    const gap = Date.parse(dayStart('2026-09-25')) - Date.parse(dayEnd('2026-09-24'))
+    expect(gap).toBe(1)
+  })
+
+  test('a day the clocks change is still one day', () => {
+    /*
+     * Not a concern in Lagos, which has no daylight saving, and very much one
+     * for a reader who does. 29 March 2026 is 23 hours long in London — a
+     * naive "midnight plus 24 hours" would end the range an hour into the 30th.
+     */
+    const start = Date.parse(dayStart('2026-03-29'))
+    const end = Date.parse(dayEnd('2026-03-29'))
+    const hours = (end - start + 1) / 3_600_000
+    expect([23, 24, 25]).toContain(hours)
   })
 })
