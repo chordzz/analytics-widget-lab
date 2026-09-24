@@ -30,14 +30,28 @@ describe('what gets substituted', () => {
     })
   })
 
-  test('and nothing that merely looks like one', () => {
+  test('the delta travels with the figure it qualifies', () => {
     /*
-     * `usdDelta` is not a unit of `ngn`. Rewriting it would put a dollar
-     * movement under a naira figure — two numbers that disagree, with no sign
-     * that either had been touched.
+     * This asserted the opposite, and the comment defending it had the argument
+     * backwards: it said rewriting `usdDelta` would put a dollar movement under
+     * a naira figure, when *leaving* it is what does that. The old model held
+     * `unitOptions` as a list of interchangeable Field keys, which cannot swap
+     * two mapped Measures to two different targets — so a limitation got
+     * written up as a decision.
+     *
+     * Codes rather than keys, and the delta moves with its figure.
      */
     expect(swap({ value: 'usd', delta: 'usdDelta' }, ['usd', 'ngn'], 'ngn')).toMatchObject({
-      delta: 'usdDelta',
+      value: 'ngn',
+      delta: 'ngnDelta',
+    })
+  })
+
+  test('but a delta that is not a currency is left alone', () => {
+    // `changePercent` is a fraction in any currency.
+    expect(swap({ value: 'usd', delta: 'changePercent' }, ['usd', 'ngn'], 'ngn')).toMatchObject({
+      value: 'ngn',
+      delta: 'changePercent',
     })
   })
 })

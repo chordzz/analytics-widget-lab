@@ -30,6 +30,7 @@ import type {
   FilterParameter,
   FilterValueType,
   Measure,
+  ValueFormat,
 } from '../domain/dataset'
 
 const FILTER_VALUE_TYPES: readonly FilterValueType[] = [
@@ -272,6 +273,51 @@ export function datasetFrom(api: ApiDataset): Dataset {
   }
 }
 
+
+/**
+ * How a Measure's values read, inferred from its name.
+ *
+ * **A stopgap, and marked as one.** The published `Field` carries `type` and
+ * `role` and nothing about presentation, so every Measure arrived as a plain
+ * number: a fee of 30.56 drew as `30.56` with no currency, and a change of
+ * 0.0201 as `0.0201` rather than `2.01%`.
+ *
+ * Inferring meaning from a name is the thing we asked the backend not to do,
+ * and this is deliberately not that. A `semantic` decides which charts a
+ * Dataset is *offered* — getting it wrong hides a capability or invents one. A
+ * format decides how a number is *drawn*: wrong, it shows a bare figure where a
+ * symbol belonged, which is visible, harmless and reversible. The two are not
+ * the same risk and should not get the same caution.
+ *
+ * It reads only suffixes that are already a currency code or a stated unit, so
+ * a Field named `amount` or `total` gets nothing rather than a guess at what
+ * currency it might be.
+ *
+ * The real fix is the declaration carrying it — recorded for the backend in
+ * `Analytics_BE_Requests.md`. This goes when that arrives.
+ */
+function formatFor(key: string, type: string | undefined): ValueFormat | undefined {
+  if (type !== 'number') return undefined
+
+  // `changePercent`, `successRate`, `dauMauRatio` — a fraction, drawn as one.
+  if (/(percent|rate|ratio)$/i.test(key)) return 'percent'
+
+  /*
+   * A currency code, as the whole key or a camelCase segment: `usd`,
+   * `grossFeeRevenueUsd`, `usdDelta`, `grossFeeRevenueUsdDelta`. A movement in
+   * dollars is still dollars, and drawing it bare beside a formatted figure is
+   * the confusing half.
+   *
+   * Two patterns rather than one case-insensitive match. `/i` would make the
+   * boundary classes match either case and turn `usd` into a substring search,
+   * so `thousands` would read as a currency.
+   */
+  if (/^(usd|ngn|eur|gbp)([A-Z]|$)/.test(key)) return 'currency'
+  if (/[a-z](Usd|Ngn|Eur|Gbp)([A-Z]|$)/.test(key)) return 'currency'
+
+  return undefined
+}
+
 function fieldFrom(api: ApiField, timeField: string | null): Field {
   const base = {
     key: api.key,
@@ -297,6 +343,7 @@ function fieldFrom(api: ApiField, timeField: string | null): Field {
   }
 
   if (api.role === 'measure') {
+    const format = formatFor(api.key, api.type)
     return {
       ...base,
       role: 'measure',
@@ -306,6 +353,7 @@ function fieldFrom(api: ApiField, timeField: string | null): Field {
       // first, which dropped precisely the ones that unlock Composition and the
       // point map while the Dimension semantics worked fine.
       ...withSemantic(api, 'measure'),
+      ...(format ? { format } : {}),
     } satisfies Measure
   }
 
