@@ -71,6 +71,20 @@ const OPTIONS_KEY = 'smc.options'
  * collected at composition time silently discarded by the round trip.
  */
 const BINDINGS_KEY = 'smc.parameterBindings'
+/**
+ * Which currencies a Widget may be read in.
+ *
+ * `presentation_options` is opaque to Analytics, which is the right home for
+ * it: this changes which column is *drawn* from a response already in hand, so
+ * it is a rendering setting rather than anything the API needs to understand.
+ *
+ * It was set on the board definitions and on the Widgets the create script
+ * builds, and then dropped here — so every toggle survived exactly as long as
+ * the page stayed open and vanished the moment a board round-tripped through
+ * the API. The Widget drew, the currency switcher did not exist, and nothing
+ * said why.
+ */
+const UNITS_KEY = 'smc.unitOptions'
 
 // --- outbound ---------------------------------------------------------------
 
@@ -131,6 +145,7 @@ function widgetInputFrom(widget: PlacedWidget, widgetId: WidgetIdResolver): ApiW
       ...(widget.parameterBindings === undefined
         ? {}
         : { [BINDINGS_KEY]: widget.parameterBindings }),
+      ...(widget.unitOptions === undefined ? {} : { [UNITS_KEY]: widget.unitOptions }),
     },
     /*
      * The declared home for a binding, and where it should have been going.
@@ -276,6 +291,14 @@ function specFrom(id: string, widget: ApiWidget): WidgetSpec {
      * validates. The private key is the fallback for Widgets stored before we
      * started writing the declared one.
      */
+    /*
+     * Strings only. `presentation_options` is opaque, so anything may arrive,
+     * and a non-string here would reach `inCode` as a currency code and rewrite
+     * a Field key to nonsense.
+     */
+    unitOptions: Array.isArray(options[UNITS_KEY])
+      ? (options[UNITS_KEY] as unknown[]).filter((entry): entry is string => typeof entry === 'string')
+      : undefined,
     parameterBindings: bindingsFrom(widget.default_filters) ??
       (options[BINDINGS_KEY] as Record<string, string | number> | undefined),
   }

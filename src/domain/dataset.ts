@@ -88,7 +88,27 @@ export const isCoordinate = (field: { semantic?: FieldSemantic }): boolean =>
  * re-declare that per Widget is how two Widgets over one Field end up disagreeing
  * about whether it is money. The publisher is the only party that knows.
  */
-export type ValueFormat = 'number' | 'currency' | 'percent' | 'compact' | 'duration' | 'text'
+/**
+ * How a value reads. D12.
+ *
+ * `currency` alone means money in no stated currency, which renders as dollars
+ * because something has to. `currency:ngn` says which — and a Dataset
+ * publishing the same figure in two of them has to be able to say, or a naira
+ * total draws with a dollar sign the moment a Viewer switches.
+ *
+ * Carried in the format rather than beside it so every caller that already
+ * passes a format passes the currency with it. Threading a second argument
+ * through the chart primitives would have been a dozen signatures, each of them
+ * able to forget.
+ */
+export type ValueFormat =
+  | 'number'
+  | 'currency'
+  | `currency:${string}`
+  | 'percent'
+  | 'compact'
+  | 'duration'
+  | 'text'
 
 interface FieldBase {
   key: string

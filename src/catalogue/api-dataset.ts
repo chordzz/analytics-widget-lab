@@ -20,6 +20,7 @@
  *     are not nested. See `CLASSIFICATION` below.
  */
 
+import { codeOf } from '../domain/units'
 import type {
   Aggregation,
   DataClassification,
@@ -312,8 +313,10 @@ function formatFor(key: string, type: string | undefined): ValueFormat | undefin
    * boundary classes match either case and turn `usd` into a substring search,
    * so `thousands` would read as a currency.
    */
-  if (/^(usd|ngn|eur|gbp)([A-Z]|$)/.test(key)) return 'currency'
-  if (/[a-z](Usd|Ngn|Eur|Gbp)([A-Z]|$)/.test(key)) return 'currency'
+  const code = codeOf(key)
+  // Named, not just "money": a naira figure drawn as `$1.4b` is a wrong number
+  // wearing the right shape, and switching currency is one click away.
+  if (code) return `currency:${code}`
 
   return undefined
 }
