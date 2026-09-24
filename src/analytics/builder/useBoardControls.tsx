@@ -37,11 +37,30 @@ export function useBoardControls(board: Board | undefined) {
    * clearing a Control returns it to the default instead of to nothing.
    */
   const values = useMemo<ControlValues>(() => {
-    const ranges = (board?.controls ?? []).filter((entry) => entry.controlType === 'date-range')
-    if (ranges.length === 0) return chosen
+    const controls = board?.controls ?? []
+    if (controls.length === 0) return chosen
 
     const filled: ControlValues = { ...chosen }
-    for (const control of ranges) if (filled[control.id] == null) filled[control.id] = defaultPeriod()
+    for (const control of controls) {
+      if (filled[control.id] != null) continue
+
+      /*
+       * Three layers, narrowest last: the Author's stated window, then the
+       * render-time default where they stated none, then whatever the Viewer
+       * has chosen — which is `chosen` above and why this only fills gaps.
+       *
+       * The Author's default is preferred over ours because it is a statement
+       * about the board: a revenue board built around a quarter should open on
+       * that quarter for everyone who visits. Ours is the fallback for a board
+       * whose Author expressed no preference, and it stays relative so it does
+       * not go stale.
+       */
+      if (control.defaultValue != null) {
+        filled[control.id] = control.defaultValue
+        continue
+      }
+      if (control.controlType === 'date-range') filled[control.id] = defaultPeriod()
+    }
     return filled
   }, [board, chosen])
 

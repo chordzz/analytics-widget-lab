@@ -88,11 +88,16 @@ describe('the keys IAM actually sends', () => {
 })
 
 describe('changing who can see a board', () => {
+  /*
+   * Authored by the Viewer, because the panel is now the Author's alone — see
+   * the block below. These tests are about the *permission* gate on the scope
+   * control, which still applies once you are past the authorship one.
+   */
   const board = {
     id: 'b1',
     name: 'Finance daily',
     description: '',
-    authorId: 'someone-else',
+    authorId: 'local',
     scope: { kind: 'organization-wide' } as const,
     shareGrants: [],
     status: 'published' as const,
@@ -144,5 +149,49 @@ describe('changing who can see a board', () => {
     // Sharing changes who can see a board rather than what it says, so it is
     // its own route and its own key.
     expect(panelWith({ 'holdings.analytics::dashboard.update': true })).toContain('disabled')
+  })
+})
+
+/*
+ * Who may see a board is the Author's to decide and nobody else's to read.
+ *
+ * The scope control was gated on `dashboard.share` and the panel around it on
+ * nothing, so anyone reaching the builder for a board saw who it is shared with
+ * and who it could be. `CreateScreen` has no authorship guard of its own, so
+ * that was reachable rather than theoretical.
+ */
+describe('the visibility panel belongs to the Author', () => {
+  const boardBy = (authorId: string) => ({
+    id: 'b1',
+    name: 'Finance daily',
+    description: '',
+    authorId,
+    scope: { kind: 'organization-wide' } as const,
+    shareGrants: [],
+    status: 'published' as const,
+    updated: '2026-09-15',
+    widgets: {},
+    placements: [],
+    controls: [],
+    sections: [],
+  })
+
+  const panelFor = (authorId: string) =>
+    renderToStaticMarkup(
+      <AnalyticsDataProvider permissions={{ 'dashboard.share': true }}>
+        <BoardsProvider>
+          <SharePanel board={boardBy(authorId)} />
+        </BoardsProvider>
+      </AnalyticsDataProvider>,
+    )
+
+  test('the Author sees it', () => {
+    expect(panelFor('local')).toContain('Who can see this')
+  })
+
+  test('and nobody else does, however their permissions read', () => {
+    // Holding `dashboard.share` is what lets you share *your* boards. It is not
+    // a licence to read the recipient list of someone else's.
+    expect(panelFor('someone-else')).toBe('')
   })
 })

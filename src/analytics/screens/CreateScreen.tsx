@@ -221,6 +221,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
         values={controls.values}
         onChange={controls.setValues}
         onRemove={(controlId) => boards.removeControl(editing.id, controlId)}
+        onSetDefault={(controlId, value) => { boards.setControlDefault(editing.id, controlId, value) }}
       />
 
       <GridBoard

@@ -68,6 +68,21 @@ export interface Control {
    * fixed options — its values come from the bound Field's data.
    */
   options?: { value: string; label: string }[]
+  /**
+   * What the board opens on, set by whoever composed it.
+   *
+   * A Control's *current* value is session state — a Viewer narrowing a board
+   * is reading it, not editing it — and this is the other thing: the Author
+   * saying which window their board is about. A revenue board built around a
+   * quarter should open on that quarter for everyone who visits, not on
+   * whatever the last thirty days happen to be.
+   *
+   * Three layers, narrowest last: the render-time default, then this, then
+   * whatever the Viewer has chosen. Absent means the Author expressed no
+   * preference, which is different from choosing today's default — the
+   * default may change, and a board that stated its own window keeps it.
+   */
+  defaultValue?: ControlValue
 }
 
 /** A date-range Control's value. Bounds are inclusive and may be open-ended. */

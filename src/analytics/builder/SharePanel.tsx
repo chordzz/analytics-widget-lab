@@ -57,7 +57,7 @@ function describeVisibility(board: Board, grantCount: number): string {
 
 export function SharePanel({ board }: { board: Board }) {
   const boards = useBoards()
-  const { authorization } = useAnalyticsData()
+  const { authorization, viewer } = useAnalyticsData()
   const [people, setPeople] = useState<ViewerIdentity[]>([])
   const [groups, setGroups] = useState<OrgScopeRef[]>([])
 
@@ -99,6 +99,24 @@ export function SharePanel({ board }: { board: Board }) {
   // always sees their own board.
   const grantable = people.filter((person) => person.id !== board.authorId)
   const mayShare = useMay('dashboard.share')
+
+  /*
+   * Who may see the board is the Author's to decide, and nobody else's to read.
+   *
+   * The scope control was gated on `dashboard.share` and the panel around it on
+   * nothing at all, so anyone reaching the builder for a board saw who it is
+   * shared with and who it could be. `CreateScreen` has no authorship guard of
+   * its own — it checks `dashboard.publish` and nothing more — so that was
+   * reachable rather than theoretical.
+   *
+   * Checked here rather than at the call site, because this component owns the
+   * decision and a second caller would otherwise have to remember it.
+   *
+   * Administrators lose it too, with the same known cost recorded in
+   * `DashboardsScreen`: nothing in the model says who one is. Restoring it
+   * needs a signal that does not exist yet rather than a looser rule here.
+   */
+  if (board.authorId !== viewer.id) return null
   const granted = new Set(board.shareGrants.map((grant) => grant.recipientId))
 
   return (
