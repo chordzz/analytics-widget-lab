@@ -58,10 +58,15 @@ describe('which parameters a range governs', () => {
     // Nothing to send, so nothing to clear — the Control reaches it and the
     // endpoint answers with its full default.
     const noParameters = datasetFrom({
-      ...({ id: 'x', name: 'X', source_system_id: 's', fields: summary.fields.map((f) => ({
-        key: f.key, label: f.label, type: 'number', role: 'measure', aggregations: ['sum'],
-        filterable: false, orderable: true })), filter_parameters: [] } as never),
-    })
+      id: 'x',
+      name: 'X',
+      source_system_id: 's',
+      fields: [
+        { key: 'value', label: 'Value', type: 'number', role: 'measure',
+          aggregations: ['sum'], filterable: false, orderable: true },
+      ],
+      filter_parameters: [],
+    } as Parameters<typeof datasetFrom>[0])
     expect(governedParameters(noParameters, ranged('2026-09-01', '2026-09-30'))).toEqual([])
   })
 })

@@ -125,20 +125,53 @@ export const WidgetCard = forwardRef<
         .join(' ')}
       {...rest}
     >
-      {!bare && (
+      {!bare ? (
         <header className="a-card__head">
           <div className="a-card__titles">
             <h3 className="a-card__title">{title}</h3>
             {subtitle && <p className="a-card__subtitle">{subtitle}</p>}
           </div>
           <div className="a-card__head-end">
+            {/*
+              The Viewer's controls sit in the header rather than in a row of
+              their own beneath it. That row cost a full line and a rule on
+              every card carrying a filter — on a two-row Widget, a third of its
+              height spent on chrome above the picture.
+            */}
+            {controls}
             {badge}
             {actions && actions.length > 0 && <ActionsMenu actions={actions} />}
           </div>
         </header>
+      ) : (
+        (badge ?? (actions && actions.length > 0)) && (
+          /*
+           * A bare card has no header, and until now that also meant no
+           * actions: a stat card could not be edited, duplicated or removed
+           * from the board it was on. Twenty-two of Peniremit's fifty-five
+           * Widgets are stat cards, so the commonest Widget in the product was
+           * the one you could not change.
+           *
+           * The header is still the wrong answer — a tile draws its own label,
+           * and a second one above it would say the same thing twice. So the
+           * actions sit in the corner instead, over a tile that has room for
+           * them by construction: its content is centred, and the corner is
+           * where a reader already looks for a menu because that is where every
+           * other card keeps one.
+           */
+          <div className="a-card__corner">
+            {badge}
+            {actions && actions.length > 0 && <ActionsMenu actions={actions} />}
+          </div>
+        )
       )}
 
-      {controls && <div className="a-card__controls">{controls}</div>}
+      {/*
+        A bare card keeps them below: a tile centres its own content, and a
+        control floated into the corner beside the menu would crowd the one
+        place a reader looks for the figure.
+      */}
+      {bare && controls && <div className="a-card__controls">{controls}</div>}
 
       <div className="a-card__body">
         {state === 'ready' && children}

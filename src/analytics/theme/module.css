@@ -82,6 +82,9 @@
   justify-content: space-between;
   gap: var(--a-space-3);
   padding: var(--a-space-3) var(--a-space-3) var(--a-space-1);
+  /* Controls wrap under the title on a narrow card rather than squeezing it to
+     an ellipsis — the title is what names the figure. */
+  flex-wrap: wrap;
 }
 
 .a-card__titles {
@@ -113,6 +116,21 @@
   align-items: center;
   gap: var(--a-space-2);
   flex-shrink: 0;
+  /* The titles keep the line where both fit; the controls take it where they
+     do not. `auto` on both would split it evenly and ellipsise a title that
+     had room. */
+  margin-left: auto;
+}
+
+/* In the header the filters are a row of chips, not a form: no labels above,
+   no wrapping to a second line inside an already-wrapping header. */
+.a-card__head-end .a-filters {
+  flex-wrap: nowrap;
+  gap: var(--a-space-2);
+}
+
+.a-card__head-end .a-filters__label {
+  display: none;
 }
 
 /* Tight on purpose. A chart's own axis labels already sit inside its box, so
@@ -1202,4 +1220,28 @@
   font-size: 10px;
   color: var(--a-text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A bare card's actions.
+ *
+ * Absolutely placed rather than in a header, because a tile draws its own label
+ * and a header above it would say the same thing twice. Above the body in
+ * stacking order so it stays reachable over a sparkline, and out of the flow so
+ * the tile's own vertical centring is unaffected — a menu that shifted the
+ * figure down by a row would be worse than no menu.
+ */
+.a-card__corner {
+  position: absolute;
+  top: var(--a-space-2);
+  right: var(--a-space-2);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: var(--a-space-1);
+}
+
+/* The corner is positioned against the card, which needs to say so. */
+.a-card--bare {
+  position: relative;
 }

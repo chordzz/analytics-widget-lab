@@ -18,6 +18,7 @@
 
 import { useId } from 'react'
 import { DateField } from '../shell/DateField'
+import { SelectField } from '../shell/SelectField'
 import { fieldOf } from '../data/types'
 import type { FilterParameter } from '../../domain/dataset'
 import type { Dataset } from '../data/types'

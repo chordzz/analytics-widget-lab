@@ -317,12 +317,12 @@ describe('a range reaches what can take a range', () => {
     exposesPersonalData: false,
     grain: [],
     fields: [
-      { key: 'value', label: 'Value', role: 'measure', aggregations: ['sum'] },
-      { key: 'delta', label: 'Delta', role: 'measure', aggregations: ['sum'] },
+      { key: 'value', label: 'Value', role: 'measure', aggregations: ['sum'], filterable: false, sortable: true },
+      { key: 'delta', label: 'Delta', role: 'measure', aggregations: ['sum'], filterable: false, sortable: true },
     ],
     filterParameters: [
-      { name: 'from', type: 'date', required: true },
-      { name: 'to', type: 'date', required: true },
+      { name: 'from', label: 'From', valueType: 'date', required: true },
+      { name: 'to', label: 'To', valueType: 'date', required: true },
     ],
   }
 
