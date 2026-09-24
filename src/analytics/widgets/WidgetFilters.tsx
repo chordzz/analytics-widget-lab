@@ -17,6 +17,7 @@
  */
 
 import { useId } from 'react'
+import { DateField } from '../shell/DateField'
 import { fieldOf } from '../data/types'
 import type { FilterParameter } from '../../domain/dataset'
 import type { Dataset } from '../data/types'
@@ -167,10 +168,18 @@ function ParameterControl({
             </option>
           ))}
         </select>
+      ) : parameter.valueType === 'date' ? (
+        /*
+         * The same field the board's Control uses, so a date looks like a date
+         * wherever it is asked for. It reads and writes `YYYY-MM-DD` exactly as
+         * `input[type=date]` did — the format is what the endpoint takes, and a
+         * picker that emitted a locale string would fail every query silently.
+         */
+        <DateField label={parameter.label} value={current} onChange={onChange} />
       ) : (
         <input
           id={id}
-          type={parameter.valueType === 'date' ? 'date' : parameter.valueType === 'number' ? 'number' : 'text'}
+          type={parameter.valueType === 'number' ? 'number' : 'text'}
           className="a-filters__select"
           value={current}
           onChange={(event) => onChange(event.target.value)}

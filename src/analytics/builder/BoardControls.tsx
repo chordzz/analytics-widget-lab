@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useId, useMemo, useState } from 'react'
+import { DateField } from '../shell/DateField'
 import { resolveControlReach } from '../../composition/correspondence'
 import { controlSubjectFor } from '../data/query'
 import { useDatasets } from '../data/AnalyticsData'
@@ -206,21 +207,9 @@ function DateRange({
 
   return (
     <span className="a-controls__range" role="group" aria-labelledby={labelledBy}>
-      <input
-        type="date"
-        className="a-filters__select"
-        aria-label="From"
-        value={from}
-        onChange={(event) => setFrom(event.target.value)}
-      />
+      <DateField label="From" value={from} onChange={setFrom} placeholder="Start" />
       <span className="a-muted">to</span>
-      <input
-        type="date"
-        className="a-filters__select"
-        aria-label="To"
-        value={to}
-        onChange={(event) => setTo(event.target.value)}
-      />
+      <DateField label="To" value={to} onChange={setTo} placeholder="End" />
       {(from || to) && (
         <button
           type="button"
