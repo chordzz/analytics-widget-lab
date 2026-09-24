@@ -34,7 +34,7 @@ import { requiredParameters, timeRangeParameters } from '../../domain/dataset'
 import { dayEnd, dayStart } from '../../domain/default-period'
 import type { Aggregation, Dataset, FilterParameter } from '../../domain/dataset'
 import type { DatasetQuery, MeasureSelection } from '../../domain/query'
-import type { WidgetSpec } from '../widgets/Widget'
+import type { WidgetMapping, WidgetSpec } from '../widgets/Widget'
 import { rowsFor } from './datasets'
 import { fieldOf, timeFields } from './types'
 import type { Row } from './types'
@@ -164,6 +164,14 @@ export interface ViewerChoices {
   /** Keyed by Field key. */
   filters?: Record<string, string | number>
   sort?: { field: string; direction: 'ascending' | 'descending' }
+  /**
+   * The unit a Viewer picked, as a Field key from the Widget's `unitOptions`.
+   *
+   * Session state like the rest: reading a chart in naira is reading the
+   * Author's dashboard, not editing it, and persisting it would change what
+   * everyone else sees because one person looked.
+   */
+  unit?: string
 }
 
 /**
@@ -338,6 +346,46 @@ export const rangeSignature = (contribution: QueryContribution | undefined): str
   contribution?.timeRange
     ? `${contribution.timeRange.field}:${contribution.timeRange.from ?? ''}:${contribution.timeRange.to ?? ''}`
     : null
+
+
+/**
+ * A mapping with the Viewer's unit substituted for whichever was mapped.
+ *
+ * Substitution rather than assignment, because the unit appears in different
+ * slots depending on the Widget — `value` on a stat card, `series` on a trend,
+ * both on a donut — and a rule per slot would miss the next one. Any mapped key
+ * that is *some* unit becomes *the chosen* unit, and everything else is left
+ * alone: a `usdDelta` beside a `usd` is not a unit of it and must not be
+ * rewritten to `ngn`.
+ */
+export function inUnit(mapping: WidgetMapping, spec: WidgetSpec, choices?: ViewerChoices): WidgetMapping {
+  const units = spec.unitOptions
+  const chosen = choices?.unit
+  if (!units || !chosen || !units.includes(chosen)) return mapping
+
+  /*
+   * A Widget already drawing two units is showing them side by side, not
+   * choosing between them — `series: ['usd', 'ngn']` is a chart of both.
+   * Substituting there collapsed it to `['ngn', 'ngn']`: the same line twice,
+   * one hidden exactly beneath the other, with a legend naming it twice and
+   * nothing on screen saying a currency had gone missing.
+   *
+   * `currencyUnits` already declines to offer a toggle on those cards. This is
+   * the second guard, because the first lives in board definitions and this
+   * runs for every Widget from anywhere.
+   */
+  const mapped = [mapping.value, ...(mapping.series ?? [])].filter(
+    (key): key is string => typeof key === 'string',
+  )
+  if (new Set(mapped.filter((key) => units.includes(key))).size > 1) return mapping
+
+  const swap = (key: string) => (units.includes(key) ? chosen : key)
+  return {
+    ...mapping,
+    ...(mapping.value ? { value: swap(mapping.value) } : {}),
+    ...(mapping.series ? { series: mapping.series.map(swap) } : {}),
+  }
+}
 
 /**
  * The query a widget's spec amounts to.

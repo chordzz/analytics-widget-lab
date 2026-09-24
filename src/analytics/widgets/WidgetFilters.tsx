@@ -237,3 +237,54 @@ function SortSelect({
     </label>
   )
 }
+
+/**
+ * The unit a Viewer is reading in — USD or NGN, on the cards that publish both.
+ *
+ * A segmented control rather than a select, because there are two options and
+ * both fit: a dropdown to choose between two things costs a click to show what
+ * a pair of buttons already says. It sits in the card header beside the other
+ * controls.
+ *
+ * Nothing is re-queried when it changes. Both Measures came back on the same
+ * row, so this substitutes one column for another in what is already drawn —
+ * which is the whole reason it is not a filter.
+ */
+export function UnitToggle({
+  units,
+  dataset,
+  value,
+  onChange,
+}: {
+  units: readonly string[]
+  dataset: Dataset
+  value: string | undefined
+  onChange: (next: string) => void
+}) {
+  // Only units the Dataset actually declares. An Author naming a Field that is
+  // not there would otherwise draw a button that selects nothing.
+  const options = units
+    .map((key) => ({ key, field: fieldOf(dataset, key) }))
+    .filter((entry): entry is { key: string; field: NonNullable<typeof entry.field> } =>
+      entry.field !== undefined,
+    )
+
+  if (options.length < 2) return null
+  const current = value && units.includes(value) ? value : options[0].key
+
+  return (
+    <div className="a-units" role="group" aria-label="Units">
+      {options.map(({ key, field }) => (
+        <button
+          key={key}
+          type="button"
+          className={`a-units__option${key === current ? ' a-units__option--on' : ''}`}
+          aria-pressed={key === current}
+          onClick={() => { onChange(key) }}
+        >
+          {field.label}
+        </button>
+      ))}
+    </div>
+  )
+}

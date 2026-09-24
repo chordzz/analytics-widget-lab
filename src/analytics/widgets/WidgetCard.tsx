@@ -71,6 +71,14 @@ export interface WidgetCardProps {
    * the wrong number before noticing.
    */
   controls?: ReactNode
+  /**
+   * A control small enough to sit in the corner of a bare card.
+   *
+   * Separate from `controls` because a tile has nowhere else to put one: its
+   * content is centred and a row beneath the figure would push the figure off
+   * the card. On a card with a header it simply joins the others.
+   */
+  inlineControl?: ReactNode
   /** Drops the header. For a stat tile whose value is its own headline. */
   bare?: boolean
   /**
@@ -99,6 +107,7 @@ export const WidgetCard = forwardRef<
     partial,
     footer,
     controls,
+    inlineControl,
     bare = false,
     textLed = false,
     selected = false,
@@ -139,12 +148,13 @@ export const WidgetCard = forwardRef<
               height spent on chrome above the picture.
             */}
             {controls}
+            {inlineControl}
             {badge}
             {actions && actions.length > 0 && <ActionsMenu actions={actions} />}
           </div>
         </header>
       ) : (
-        (badge ?? (actions && actions.length > 0)) && (
+        (badge ?? inlineControl ?? (actions && actions.length > 0)) && (
           /*
            * A bare card has no header, and until now that also meant no
            * actions: a stat card could not be edited, duplicated or removed
@@ -160,6 +170,7 @@ export const WidgetCard = forwardRef<
            * other card keeps one.
            */
           <div className="a-card__corner">
+            {inlineControl}
             {badge}
             {actions && actions.length > 0 && <ActionsMenu actions={actions} />}
           </div>

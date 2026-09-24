@@ -139,6 +139,7 @@ export function boardFrom(definition: BoardDefinition): Board {
            * single month should not have it silently replaced.
            */
           parameterBindings: { ...DEFAULT_RANGE, ...card.parameters },
+          ...(card.unitOptions ? { unitOptions: card.unitOptions } : {}),
           /*
            * Nothing, deliberately.
            *

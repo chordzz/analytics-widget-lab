@@ -18,6 +18,33 @@
 
 import { peniremitDataset } from './peniremit-catalogue'
 
+/** The two currencies, where a Dataset publishes a figure in both. */
+export const CURRENCIES = ['usd', 'ngn']
+
+/**
+ * Whether this card draws a figure that comes in both currencies.
+ *
+ * Derived from the declaration rather than listed by hand, for the same reason
+ * the donuts are: seventeen cards qualify today, a hand-kept list would be
+ * seventeen edits and an eighteenth Dataset would be missed, and a card whose
+ * Dataset stops publishing `ngn` would keep offering a button that selects
+ * nothing.
+ */
+const currencyUnits = (datasetId: string, mapping: Record<string, string | string[]>) => {
+  const keys = requirePeniremitDataset(datasetId).keys
+  if (!CURRENCIES.every((unit) => keys.includes(unit))) return undefined
+  const mapped = Object.values(mapping).flat().map(String)
+  const used = new Set(mapped.filter((key) => CURRENCIES.includes(key)))
+
+  /*
+   * Exactly one. A card mapping both — `series: ['usd', 'ngn']` on the transfer
+   * volume trend — is drawing the two side by side and has nothing to toggle
+   * between; offering one there would ask a reader to pick between two lines
+   * they can already see.
+   */
+  return used.size === 1 ? CURRENCIES : undefined
+}
+
 export interface BoardCard {
   /** The card's title in the guide, so the two can be read side by side. */
   card: string
@@ -38,6 +65,13 @@ export interface BoardCard {
   parameters?: Record<string, string>
   /** Columns on a 12-column board. A layout decision, so it is stated. */
   w: number
+  /**
+   * Measures that are the same figure in different units.
+   *
+   * Applied by `withUnits` rather than written per card, so a card gets the
+   * toggle by being the right shape instead of by someone remembering.
+   */
+  unitOptions?: string[]
   /**
    * Rows, only where the type's own height is wrong for this card.
    *
@@ -289,7 +323,24 @@ export const ENGAGEMENT: BoardDefinition = {
   ],
 }
 
-export const PENIREMIT_BOARDS: BoardDefinition[] = [GROWTH, TRANSACTION, REVENUE, ENGAGEMENT]
+/**
+ * The boards, with a currency toggle on every card that can carry one.
+ *
+ * Applied here rather than at each card so no definition has to remember it,
+ * and so adding a card gets the toggle by being the right shape rather than by
+ * someone noticing.
+ */
+const withUnits = (board: BoardDefinition): BoardDefinition => ({
+  ...board,
+  cards: board.cards.map((card) => {
+    const units = currencyUnits(card.datasetId, card.mapping)
+    return units ? { ...card, unitOptions: units } : card
+  }),
+})
+
+export const PENIREMIT_BOARDS: BoardDefinition[] = [GROWTH, TRANSACTION, REVENUE, ENGAGEMENT].map(
+  withUnits,
+)
 
 /** Every Dataset a board binds, so a missing one is caught as a set. */
 export const datasetsUsedBy = (board: BoardDefinition): string[] =>

@@ -12,8 +12,8 @@ import { widgetType } from './catalog'
 import { thresholdFrom } from './threshold'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useDataset, useWidgetRows } from '../data/AnalyticsData'
-import { WidgetFilters } from './WidgetFilters'
-import { governedParameters, rangeSignature, singleValueOf, withoutGoverned } from '../data/query'
+import { UnitToggle, WidgetFilters } from './WidgetFilters'
+import { governedParameters, inUnit, rangeSignature, singleValueOf, withoutGoverned } from '../data/query'
 import type { ViewerChoices } from '../data/query'
 import type { QueryContribution } from '../../composition/correspondence'
 import type { PartialResult } from '../../retrieval/port'
@@ -106,6 +106,24 @@ export interface WidgetSpec {
   /** FR-VZ-06 — Fields a Viewer may reorder by. Same constraint, via `sortable`. */
   exposedSorts?: string[]
   /**
+   * Measures that are the same figure in different units, offered to a Viewer.
+   *
+   * Peniremit publishes `usd` and `ngn` on the same row, so switching between
+   * them changes which Measure is *drawn* and nothing about what was fetched —
+   * no re-query, no parameter, no round trip.
+   *
+   * Which is why this is not a Filter and not a `presentation-toggle`. A filter
+   * narrows rows; a presentation toggle changes how a figure is rendered
+   * (absolute against percentage); this substitutes one column for another.
+   * Conflating it with either would have meant a control that re-queried for
+   * data already on screen.
+   *
+   * The Author says which Measures are units of each other because nothing in
+   * the declaration can: `usd` and `ngn` are two Measures like any other pair,
+   * and only a publisher or an Author knows they answer the same question.
+   */
+  unitOptions?: string[]
+  /**
    * Values the Author fixed for the Dataset's Filter Parameters — D24.
    *
    * A third kind of narrowing, and distinct from both the others. An exposed
@@ -164,6 +182,10 @@ export interface WidgetViewProps extends WidgetProps {
   errorMessage?: string
   /** The exposed filters, already resolved. Pure: this component owns no state. */
   controls?: ReactNode
+  /** A control small enough for the corner of a bare card. */
+  inlineControl?: ReactNode
+  /** The Viewer's choices, so the body can draw in the unit they picked. */
+  choices?: ViewerChoices
 }
 
 /**
@@ -186,6 +208,8 @@ export function WidgetView({
   errorMessage,
   partial,
   controls,
+  inlineControl,
+  choices,
 }: WidgetViewProps) {
   const type = widgetType(spec.typeId)
 
@@ -234,9 +258,10 @@ export function WidgetView({
       bare={bare}
       textLed={textLed}
       controls={controls}
+      inlineControl={inlineControl}
       style={height ? { height } : undefined}
     >
-      {state === 'ready' && dataset ? renderBody(spec, type.id, rows, dataset) : null}
+      {state === 'ready' && dataset ? renderBody(spec, type.id, rows, dataset, choices) : null}
     </WidgetCard>
   )
 }
@@ -340,7 +365,25 @@ export function Widget({
 
   const retrieved = useWidgetRows(spec, dataset, choices, contribution)
 
-  const controls =
+  /*
+   * Two controls, and they are different kinds of thing sitting side by side.
+   *
+   * The filters narrow what is *asked for*; the unit toggle changes which
+   * column is *drawn* from what already came back. Rendered together because a
+   * Viewer does not care which is which — both are "things I can change about
+   * this card" — and kept apart in the model because only one costs a request.
+   */
+  const unitToggle =
+    dataset && spec.unitOptions && spec.unitOptions.length > 1 ? (
+      <UnitToggle
+        units={spec.unitOptions}
+        dataset={dataset}
+        value={choices.unit}
+        onChange={(unit) => { setChoices((current) => ({ ...current, unit })) }}
+      />
+    ) : undefined
+
+  const filters =
     dataset && (spec.exposedFilters?.length || spec.exposedSorts?.length) ? (
       <WidgetFilters
         dataset={dataset}
@@ -354,6 +397,8 @@ export function Widget({
       />
     ) : undefined
 
+  const controls = filters
+
   if (override) {
     return (
       <WidgetView
@@ -363,6 +408,8 @@ export function Widget({
         state={override}
         partial={partialOverride}
         controls={controls}
+        inlineControl={unitToggle}
+        choices={choices}
         actions={actions}
         selected={selected}
         onSelect={onSelect}
@@ -408,6 +455,8 @@ export function Widget({
         (retrieved.status === 'failed' ? retrieved.message : undefined)
       }
       controls={controls}
+      inlineControl={unitToggle}
+      choices={choices}
       actions={actions}
       selected={selected}
       onSelect={onSelect}
@@ -421,8 +470,12 @@ function renderBody(
   typeId: string,
   rows: readonly Row[],
   dataset: Dataset,
+  choices?: ViewerChoices,
 ) {
-  const { mapping, options = {} } = spec
+  const { options = {} } = spec
+  // Substituted here rather than at every use, so a Widget added later cannot
+  // forget to honour the unit somebody picked.
+  const mapping = inUnit(spec.mapping, spec, choices)
 
   const seriesSpecs = (mapping.series ?? []).map((key) => ({
     key,
