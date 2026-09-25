@@ -144,7 +144,7 @@ export const WidgetCard = forwardRef<
         .join(' ')}
       {...rest}
     >
-      {!(bare && state === 'ready') ? (
+      {!bare ? (
         <header className="a-card__head">
           <div className="a-card__titles">
             <h3 className="a-card__title">{title}</h3>
@@ -164,27 +164,38 @@ export const WidgetCard = forwardRef<
           </div>
         </header>
       ) : (
-        (badge ?? inlineControl ?? (actions && actions.length > 0)) && (
-          /*
-           * A bare card has no header, and until now that also meant no
-           * actions: a stat card could not be edited, duplicated or removed
-           * from the board it was on. Twenty-two of Peniremit's fifty-five
-           * Widgets are stat cards, so the commonest Widget in the product was
-           * the one you could not change.
+        <>
+          {/*
+           * A bare card puts its controls in the corner, in every state.
            *
-           * The header is still the wrong answer — a tile draws its own label,
-           * and a second one above it would say the same thing twice. So the
-           * actions sit in the corner instead, over a tile that has room for
-           * them by construction: its content is centred, and the corner is
-           * where a reader already looks for a menu because that is where every
-           * other card keeps one.
-           */
-          <div className="a-card__corner">
-            {inlineControl}
-            {badge}
-            {actions && actions.length > 0 && <ActionsMenu actions={actions} />}
-          </div>
-        )
+           * They used to move: a tile rendered a full header bar while it was
+           * loading and a corner cluster once it had a figure, so the currency
+           * switcher jumped from one side of the card to the other the moment
+           * the data arrived — on every board, on every reload, twenty-two
+           * times over.
+           *
+           * The corner is the stable home. A tile draws its own label, so a
+           * header would say the same thing twice once the figure is there;
+           * until then the title goes above the placeholder, which is the only
+           * thing that needs to change between the two states.
+           */}
+          {(badge ?? inlineControl ?? (actions && actions.length > 0)) && (
+            <div className="a-card__corner">
+              {inlineControl}
+              {badge}
+              {actions && actions.length > 0 && <ActionsMenu actions={actions} />}
+            </div>
+          )}
+
+          {/*
+           * A tile with no figure is a tile you cannot identify: four of them
+           * in a column read "No data for this selection" and nothing else,
+           * with no way to tell which Widget is which or which Dataset to go
+           * and look at. `StatTile` carries the label once it draws, so this is
+           * only for the states where it does not.
+           */}
+          {state !== 'ready' && <h3 className="a-card__title a-card__title--bare">{title}</h3>}
+        </>
       )}
 
       {/*

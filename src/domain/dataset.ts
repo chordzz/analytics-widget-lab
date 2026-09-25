@@ -88,7 +88,41 @@ export const isCoordinate = (field: { semantic?: FieldSemantic }): boolean =>
  * re-declare that per Widget is how two Widgets over one Field end up disagreeing
  * about whether it is money. The publisher is the only party that knows.
  */
-export type ValueFormat = 'number' | 'currency' | 'percent' | 'compact' | 'duration' | 'text'
+/**
+ * How a value reads. D12.
+ *
+ * `currency` alone means money in no stated currency, which renders as dollars
+ * because something has to. `currency:ngn` says which — and a Dataset
+ * publishing the same figure in two of them has to be able to say, or a naira
+ * total draws with a dollar sign the moment a Viewer switches.
+ *
+ * Carried in the format rather than beside it so every caller that already
+ * passes a format passes the currency with it. Threading a second argument
+ * through the chart primitives would have been a dozen signatures, each of them
+ * able to forget.
+ */
+export type ValueFormat =
+  | 'number'
+  | 'currency'
+  | `currency:${string}`
+  /** A fraction. `0.0201` draws as `2.01%`. */
+  | 'percent'
+  /**
+   * Already a percentage. `66.67` draws as `66.67%`.
+   *
+   * Two conventions exist and nothing in the declaration says which a Field
+   * uses — the two are indistinguishable from a single value, since `0.5` is
+   * either half a percent or a half. Peniremit publishes points: their own
+   * sample gives `value: 1420, delta: 28, changePercent: 2.01`, and 28/1392 is
+   * 2.01%, so the figure is the percentage rather than the fraction.
+   *
+   * Read as a fraction it drew `6,667%` where the answer was `66.67%` — a wrong
+   * number, confidently, which is the worst shape a formatting bug takes.
+   */
+  | 'percent-points'
+  | 'compact'
+  | 'duration'
+  | 'text'
 
 interface FieldBase {
   key: string

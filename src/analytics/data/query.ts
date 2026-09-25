@@ -35,6 +35,7 @@ import { dayEnd, dayStart } from '../../domain/default-period'
 import type { Aggregation, Dataset, FilterParameter } from '../../domain/dataset'
 import type { DatasetQuery, MeasureSelection } from '../../domain/query'
 import type { WidgetMapping, WidgetSpec } from '../widgets/Widget'
+import { codeOf, inCode } from '../../domain/units'
 import { rowsFor } from './datasets'
 import { fieldOf, timeFields } from './types'
 import type { Row } from './types'
@@ -349,14 +350,17 @@ export const rangeSignature = (contribution: QueryContribution | undefined): str
 
 
 /**
- * A mapping with the Viewer's unit substituted for whichever was mapped.
+ * A mapping drawn in the currency the Viewer picked.
  *
- * Substitution rather than assignment, because the unit appears in different
- * slots depending on the Widget — `value` on a stat card, `series` on a trend,
- * both on a donut — and a rule per slot would miss the next one. Any mapped key
- * that is *some* unit becomes *the chosen* unit, and everything else is left
- * alone: a `usdDelta` beside a `usd` is not a unit of it and must not be
- * rewritten to `ngn`.
+ * `unitOptions` holds *codes* — `['usd', 'ngn']` — not Field keys, and that is
+ * the second shape this took. A flat list of keys works while a Widget maps one
+ * Measure and breaks the moment it maps two: a stat card showing a figure and
+ * its delta needs `grossFeeRevenueUsd` and `grossFeeRevenueUsdDelta` swapped to
+ * two *different* targets, which one list of interchangeable keys cannot say.
+ *
+ * Codes say it in one rule: rewrite the code wherever a mapped key encodes one.
+ * A movement in dollars then travels with the figure it qualifies, rather than
+ * leaving a naira total above a dollar change.
  */
 export function inUnit(mapping: WidgetMapping, spec: WidgetSpec, choices?: ViewerChoices): WidgetMapping {
   const units = spec.unitOptions
@@ -364,26 +368,24 @@ export function inUnit(mapping: WidgetMapping, spec: WidgetSpec, choices?: Viewe
   if (!units || !chosen || !units.includes(chosen)) return mapping
 
   /*
-   * A Widget already drawing two units is showing them side by side, not
+   * A Widget already drawing two currencies is showing them side by side, not
    * choosing between them — `series: ['usd', 'ngn']` is a chart of both.
-   * Substituting there collapsed it to `['ngn', 'ngn']`: the same line twice,
-   * one hidden exactly beneath the other, with a legend naming it twice and
-   * nothing on screen saying a currency had gone missing.
-   *
-   * `currencyUnits` already declines to offer a toggle on those cards. This is
-   * the second guard, because the first lives in board definitions and this
-   * runs for every Widget from anywhere.
+   * Rewriting there collapsed it to the same line twice, one exactly beneath
+   * the other, with the legend naming it twice and nothing saying a currency
+   * had gone.
    */
   const mapped = [mapping.value, ...(mapping.series ?? [])].filter(
     (key): key is string => typeof key === 'string',
   )
-  if (new Set(mapped.filter((key) => units.includes(key))).size > 1) return mapping
+  if (new Set(mapped.map(codeOf).filter(Boolean)).size > 1) return mapping
 
-  const swap = (key: string) => (units.includes(key) ? chosen : key)
+  const swap = (key: string) => inCode(key, chosen) ?? key
   return {
     ...mapping,
     ...(mapping.value ? { value: swap(mapping.value) } : {}),
     ...(mapping.series ? { series: mapping.series.map(swap) } : {}),
+    // The delta travels with its figure, or the card shows two currencies.
+    ...(mapping.delta ? { delta: swap(mapping.delta) } : {}),
   }
 }
 

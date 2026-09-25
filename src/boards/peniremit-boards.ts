@@ -17,32 +17,45 @@
  */
 
 import { peniremitDataset } from './peniremit-catalogue'
-
-/** The two currencies, where a Dataset publishes a figure in both. */
-export const CURRENCIES = ['usd', 'ngn']
+import { CURRENCY_CODES, codeOf, inCode } from '../domain/units'
 
 /**
- * Whether this card draws a figure that comes in both currencies.
+ * The currency codes this card could be drawn in, or none.
  *
- * Derived from the declaration rather than listed by hand, for the same reason
- * the donuts are: seventeen cards qualify today, a hand-kept list would be
- * seventeen edits and an eighteenth Dataset would be missed, and a card whose
- * Dataset stops publishing `ngn` would keep offering a button that selects
- * nothing.
+ * Derived from the declaration rather than listed per card: a hand-kept list
+ * would be an edit each time, and a Dataset that stopped publishing its second
+ * currency would keep offering a button that selects nothing.
+ *
+ * Every mapped Measure that encodes a code must have its counterpart declared,
+ * because a toggle that moves the figure and leaves its delta behind shows a
+ * naira total above a dollar change. And every one of them must encode the
+ * *same* code — a card mapping two is drawing both side by side and has
+ * nothing to toggle between.
  */
 const currencyUnits = (datasetId: string, mapping: Record<string, string | string[]>) => {
   const keys = requirePeniremitDataset(datasetId).keys
-  if (!CURRENCIES.every((unit) => keys.includes(unit))) return undefined
   const mapped = Object.values(mapping).flat().map(String)
-  const used = new Set(mapped.filter((key) => CURRENCIES.includes(key)))
+
+  const coded = mapped.map((key) => ({ key, code: codeOf(key) })).filter((entry) => entry.code)
+  if (coded.length === 0) return undefined
+  if (new Set(coded.map((entry) => entry.code)).size > 1) return undefined
+
+  const from = coded[0].code!
+  const others = CURRENCY_CODES.filter((code) => code !== from)
 
   /*
-   * Exactly one. A card mapping both — `series: ['usd', 'ngn']` on the transfer
-   * volume trend — is drawing the two side by side and has nothing to toggle
-   * between; offering one there would ask a reader to pick between two lines
-   * they can already see.
+   * A code is only offered where the Dataset publishes every mapped Measure in
+   * it. Half a swap is worse than none: the figure would move and its delta
+   * would not.
    */
-  return used.size === 1 ? CURRENCIES : undefined
+  const available = others.filter((to) =>
+    coded.every((entry) => {
+      const swapped = inCode(entry.key, to)
+      return swapped !== undefined && keys.includes(swapped)
+    }),
+  )
+
+  return available.length > 0 ? [from, ...available] : undefined
 }
 
 export interface BoardCard {

@@ -27,7 +27,14 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
   const mayPublish = useMay('dashboard.publish')
   const { viewer } = useAnalyticsData()
   const { editing } = boards
-  const controls = useBoardControls(editing)
+  /*
+   * The builder is composing by definition, so a period set here is the board's
+   * — saved like the drag, the rename and the Control itself. Nothing on this
+   * screen is a Viewer's passing choice.
+   */
+  const controls = useBoardControls(editing, {
+    persist: (controlId, value) => { boards.setControlDefault(editing?.id ?? '', controlId, value) },
+  })
 
   const intent = useComposeIntent()
 
@@ -255,7 +262,6 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
         values={controls.values}
         onChange={controls.setValues}
         onRemove={(controlId) => boards.removeControl(editing.id, controlId)}
-        onSetDefault={(controlId, value) => { boards.setControlDefault(editing.id, controlId, value) }}
       />
 
       <GridBoard

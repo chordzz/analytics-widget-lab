@@ -302,3 +302,73 @@ describe('a binding is stored where the API declares it', () => {
     expect(board.widgets.w1.parameterBindings).toEqual({ status: 'failed' })
   })
 })
+
+/*
+ * Which currencies a Widget may be read in.
+ *
+ * Set on the board definitions and on the Widgets the create script builds, and
+ * then dropped on the way to the API — so every currency toggle survived
+ * exactly as long as the page stayed open and vanished the moment a board
+ * round-tripped. The Widget drew, the switcher did not exist, and nothing said
+ * why.
+ */
+describe('a Widget keeps the currencies it may be read in', () => {
+  const withUnits = (unitOptions?: string[]): Board => ({
+    ...board,
+    widgets: {
+      w1: {
+        id: 'w1',
+        typeId: 'stat-card',
+        datasetId: 'peniremit.revenue-summary',
+        mapping: { value: 'grossFeeRevenueUsd' },
+        ...(unitOptions ? { unitOptions } : {}),
+      },
+    },
+    placements: [{ widgetId: 'w1', x: 0, y: 0, w: 3, h: 4 }],
+  })
+
+  test('they travel in `presentation_options`, which Analytics treats as opaque', () => {
+    // A rendering setting: it changes which column is drawn from a response
+    // already in hand, so the API has nothing to understand about it.
+    const [widget] = dashboardInputFrom(withUnits(['usd', 'ngn'])).widgets
+    expect(widget.presentation_options?.['smc.unitOptions']).toEqual(['usd', 'ngn'])
+  })
+
+  test('and come back', () => {
+    const sent = dashboardInputFrom(withUnits(['usd', 'ngn']))
+    const back = boardFrom(
+      { id: 'b1', name: 'B', widgets: sent.widgets.map((w) => ({ ...w, id: 'srv-1' })) },
+      'local',
+    )
+    expect(back.widgets['srv-1'].unitOptions).toEqual(['usd', 'ngn'])
+  })
+
+  test('a Widget with none sends none', () => {
+    const [widget] = dashboardInputFrom(withUnits()).widgets
+    expect(widget.presentation_options?.['smc.unitOptions']).toBeUndefined()
+  })
+
+  test('and anything that is not a currency code is dropped rather than read', () => {
+    /*
+     * `presentation_options` is opaque, so anything may arrive. A non-string
+     * would reach `inCode` as a currency code and rewrite a Field key to
+     * nonsense — a Widget drawing a column that does not exist.
+     */
+    const back = boardFrom(
+      {
+        id: 'b1',
+        name: 'B',
+        widgets: [
+          {
+            id: 'w1',
+            dataset_id: 'd',
+            visualization_type: 'stat-card',
+            presentation_options: { 'smc.unitOptions': ['usd', 7, null, 'ngn'] },
+          },
+        ],
+      },
+      'local',
+    )
+    expect(back.widgets.w1.unitOptions).toEqual(['usd', 'ngn'])
+  })
+})
