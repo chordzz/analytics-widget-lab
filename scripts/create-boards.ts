@@ -31,6 +31,7 @@ import { dateRangeControl } from '../src/domain/composition'
 import { DASHBOARD_COLUMNS } from '../src/domain/composition'
 import { rowsForPx } from '../src/analytics/builder/grid'
 import { heightForType } from '../src/analytics/widgets/layout'
+import { requireBaseUrl } from './api-base'
 
 /**
  * The window every Widget opens on.
@@ -48,8 +49,15 @@ import { heightForType } from '../src/analytics/widgets/layout'
  */
 const DEFAULT_RANGE = { from: '2026-03-01', to: '2026-10-01' }
 
-const BASE =
-  argAfter('--base') ?? process.env.ANALYTICS_BASE_URL ?? 'https://api.dev.analytics.penilabs.com'
+/**
+ * Resolved on first use, not at import.
+ *
+ * `create-boards.test.ts` imports this module for `boardFrom`, and a missing
+ * base URL must not end that test run — the tests do no network work and have
+ * no target to be missing. Everything that reads this sits under `main()`.
+ */
+let resolvedBase: string | undefined
+const base = (): string => (resolvedBase ??= requireBaseUrl(argAfter('--base')))
 const TOKEN = (process.env.ANALYTICS_TOKEN ?? '').trim().replace(/^Bearer\s+/i, '').replace(/^['"`]|['"`]$/g, '')
 const WRITE = process.argv.includes('--create')
 
@@ -80,7 +88,7 @@ function argAfter(flag: string): string | undefined {
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, {
+  const response = await fetch(`${base()}${path}`, {
     ...init,
     headers: {
       authorization: `Bearer ${TOKEN}`,
@@ -233,7 +241,7 @@ async function main(): Promise<void> {
     process.exit(2)
   }
 
-  console.log(`${WRITE ? 'Creating' : 'Dry run'} against ${BASE}\n`)
+  console.log(`${WRITE ? 'Creating' : 'Dry run'} against ${base()}\n`)
 
   const existing = await call<{ dashboards?: ApiDashboard[] } | ApiDashboard[]>('/v1/dashboards')
   const boards = Array.isArray(existing) ? existing : (existing.dashboards ?? [])

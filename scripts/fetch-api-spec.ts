@@ -19,7 +19,9 @@
  * of is a snapshot nobody refreshes.
  */
 
-const SOURCE = 'https://api.dev.analytics.penilabs.com/documentation/openapi.json'
+import { requireBaseUrl } from './api-base'
+
+const SOURCE = `${requireBaseUrl(Bun.argv[2] === '--base' ? Bun.argv[3] : undefined)}/documentation/openapi.json`
 const OUT = new URL('../docs/upstream/analytics-api.json', import.meta.url).pathname
 
 interface Operation {
