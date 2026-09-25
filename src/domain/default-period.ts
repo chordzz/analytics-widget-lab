@@ -78,3 +78,37 @@ export function defaultPeriod(now?: Date): { from: string; to: string } {
   const end = today(now)
   return { from: daysBefore(end, DEFAULT_DAYS), to: end }
 }
+
+/**
+ * A bound that means "whenever this is read", rather than a fixed day.
+ *
+ * An Author fixing a board to "1 July until today" means it to *stay* until
+ * today. Storing the date they clicked freezes it: a Viewer in November sees a
+ * window ending in September, with nothing on screen saying the board stopped
+ * being current. The word is stored and the date worked out afresh each time.
+ */
+export const TODAY = 'today'
+
+/** Whether a stored bound is a word rather than a date. */
+export const isRelative = (bound: string | undefined): boolean => bound === TODAY
+
+/**
+ * A stored bound as an actual date, or `undefined` where there is none.
+ *
+ * **Everything that reads a stored window goes through here.** A token reaching
+ * a Filter Parameter would be sent as the literal string `today`, which the
+ * endpoint refuses — so the resolution cannot be a step each caller remembers.
+ */
+export const resolveBound = (bound: string | undefined, now?: Date): string | undefined =>
+  bound === undefined ? undefined : isRelative(bound) ? today(now) : bound
+
+/** A stored range with both ends resolved. */
+export function resolveRange(
+  range: { from?: string; to?: string } | undefined,
+  now?: Date,
+): { from?: string; to?: string } | undefined {
+  if (!range) return range
+  const from = resolveBound(range.from, now)
+  const to = resolveBound(range.to, now)
+  return from === range.from && to === range.to ? range : { ...range, from, to }
+}

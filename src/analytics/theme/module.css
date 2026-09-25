@@ -1349,3 +1349,37 @@
   border-bottom-color: var(--a-accent);
 }
 
+
+/*
+ * "Today" in the picker's foot, beside Clear.
+ *
+ * Pressed rather than filled when it is the live choice: the popover already
+ * carries a selected day, and a second filled thing in it reads as two
+ * selections.
+ */
+.a-datefield__today {
+  padding: 4px 8px;
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-sm);
+  background: transparent;
+  color: var(--a-text-secondary);
+  font: inherit;
+  font-size: var(--a-text-xs);
+  cursor: pointer;
+}
+
+.a-datefield__today:hover {
+  border-color: var(--a-border-strong);
+  color: var(--a-text);
+}
+
+.a-datefield__today:focus-visible {
+  outline: 2px solid var(--a-focus-ring);
+  outline-offset: 1px;
+}
+
+.a-datefield__today--on {
+  border-color: var(--a-accent);
+  color: var(--a-accent);
+  font-weight: 600;
+}

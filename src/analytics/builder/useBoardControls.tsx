@@ -13,11 +13,11 @@
  */
 
 import { useCallback, useMemo, useState } from 'react'
-import { defaultPeriod } from '../../domain/default-period'
+import { defaultPeriod, resolveRange } from '../../domain/default-period'
 import { contributionFor } from '../../composition/correspondence'
 import { controlSubjectFor } from '../data/query'
 import { useDatasets } from '../data/AnalyticsData'
-import type { ControlValue, ControlValues } from '../../domain/composition'
+import type { ControlValue, ControlValues, DateRangeValue } from '../../domain/composition'
 import type { QueryContribution } from '../../composition/correspondence'
 import type { Board, PlacedWidget } from './boards'
 import type { Dataset } from '../data/types'
@@ -75,6 +75,32 @@ export function useBoardControls(
       }
       if (control.controlType === 'date-range') filled[control.id] = defaultPeriod()
     }
+
+    /*
+     * Resolved last, over everything, and only here.
+     *
+     * A stored bound may be a word — `to: 'today'` on a board its Author meant
+     * to stay current — and so may one a Viewer has just picked, because the
+     * picker emits the word rather than the day. Resolving in the
+     * `defaultValue` branch alone covered the first and missed the second: the
+     * choice landed in `chosen`, took the early return above, and the field
+     * showed its placeholder where a date belonged.
+     *
+     * Everything downstream reads `values`: the fields that draw it, the
+     * contribution each Widget is given, the Filter Parameters that go
+     * upstream. One resolution at the end of the memo is what makes a token
+     * unable to reach an endpoint as the literal string `today`, which it would
+     * refuse.
+     *
+     * `control.defaultValue` keeps the word, which is how the picker knows to
+     * show Today as chosen rather than as a date somebody happened to pick.
+     */
+    for (const control of controls) {
+      if (control.controlType !== 'date-range') continue
+      const range = filled[control.id] as DateRangeValue | null | undefined
+      if (range) filled[control.id] = resolveRange(range) ?? range
+    }
+
     return filled
   }, [board, chosen])
 

@@ -25,6 +25,7 @@
  */
 
 import { useEffect, useId, useMemo, useState } from 'react'
+import { TODAY, isRelative } from '../../domain/default-period'
 import { DateField } from '../shell/DateField'
 import { resolveControlReach } from '../../composition/correspondence'
 import { controlSubjectFor } from '../data/query'
@@ -106,7 +107,12 @@ function ControlField({
         </span>
 
         {control.controlType === 'date-range' ? (
-          <DateRange value={value as DateRangeValue | undefined} onChange={onChange} labelledBy={`${id}-label`} />
+          <DateRange
+            value={value as DateRangeValue | undefined}
+            stored={control.defaultValue as DateRangeValue | undefined}
+            onChange={onChange}
+            labelledBy={`${id}-label`}
+          />
         ) : (
           <span className="a-muted">Not yet available</span>
         )}
@@ -187,10 +193,20 @@ const trimStop = (text: string) => text.replace(/\.\s*$/, '')
 
 function DateRange({
   value,
+  stored,
   onChange,
   labelledBy,
 }: {
+  /** What the board is showing, with any relative bound already resolved. */
   value: DateRangeValue | undefined
+  /**
+   * What the Author saved, relative bounds and all.
+   *
+   * Kept apart from `value` because the two answer different questions: the
+   * field draws the resolved date, and only the stored form says whether
+   * "today" was chosen or a date that happens to be today was.
+   */
+  stored: DateRangeValue | undefined
   onChange: (next: DateRangeValue | null) => void
   labelledBy: string
 }) {
@@ -252,6 +268,16 @@ function DateRange({
           setTo(next)
           announce(from, next)
         }}
+        /*
+         * Only the end of a range is offered as "today". A window whose *start*
+         * moves is a rolling window, which is a different thing an Author might
+         * want and a different set of choices — "the last thirty days", "this
+         * quarter" — rather than one word. Until those exist, offering it on
+         * `from` would let someone build a board that always shows a single day
+         * and looks like it was meant to.
+         */
+        onRelative={() => { announce(from, TODAY) }}
+        relative={isRelative(stored?.to)}
         placeholder="End"
       />
       {(from || to) && (
