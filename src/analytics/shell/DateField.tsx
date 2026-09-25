@@ -23,6 +23,13 @@ export interface DateFieldProps {
   /** `YYYY-MM-DD`, or empty for no date. */
   value: string
   onChange: (next: string) => void
+  /**
+   * Offered as "Today" — a bound that stays today rather than freezing on the
+   * day it was chosen. Omit where a field takes only fixed dates.
+   */
+  onRelative?: () => void
+  /** Whether the current value *is* that relative bound rather than a date. */
+  relative?: boolean
   /** Announced to a screen reader, since the trigger shows a date rather than a name. */
   label: string
   /** Shown when there is no value. */
@@ -93,7 +100,15 @@ function weekStart(): number {
   }
 }
 
-export function DateField({ value, onChange, label, placeholder = 'Any date', className }: DateFieldProps) {
+export function DateField({
+  value,
+  onChange,
+  onRelative,
+  relative = false,
+  label,
+  placeholder = 'Any date',
+  className,
+}: DateFieldProps) {
   const [open, setOpen] = useState(false)
   const selected = parse(value)
   const today = new Date()
@@ -218,6 +233,30 @@ export function DateField({ value, onChange, label, placeholder = 'Any date', cl
               )}
             </div>
 
+            {onRelative && (
+              /*
+               * Stores the word, shows the date.
+               *
+               * An Author fixing a board to "1 July until today" means it to
+               * stay until today. Storing the day they clicked freezes it, and
+               * a Viewer in November sees a window that ended in September with
+               * nothing saying the board stopped being current.
+               *
+               * The field still reads `25 Sept 2026`, because that is what the
+               * board is showing — the word is what is kept, not what is drawn.
+               * Marked as chosen so the two are told apart: a date somebody
+               * picked that happens to be today looks identical otherwise, and
+               * means something different tomorrow.
+               */
+              <button
+                type="button"
+                className={`a-datefield__today${relative ? ' a-datefield__today--on' : ''}`}
+                aria-pressed={relative}
+                onClick={() => { onRelative(); setOpen(false) }}
+              >
+                Today
+              </button>
+            )}
             {value && (
               <button
                 type="button"

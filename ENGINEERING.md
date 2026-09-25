@@ -72,12 +72,24 @@ fails the build if that changes. See §5.
 
 ```bash
 bun install
+cp .env.example .env # required — see below
 bun dev              # http://localhost:5173  → the workbench
                      # http://localhost:5173/#/analytics → the product module
 bun test             # 525 tests, 23 files
 bun run typecheck    # tsc -b
 bun run docs         # regenerate docs/ from the code that implements it
 ```
+
+**There is no default API base URL.** `VITE_ANALYTICS_API_BASE_URL` must be set
+— in `.env` locally, in the deployment environment when hosted — and `vite.config.ts`
+refuses to start or build without it. The scripts read the same value (or
+`ANALYTICS_BASE_URL`, or `--base`) and exit 2 when it is missing.
+
+This is deliberate rather than strict. A default is a build that points at a
+plausible deployment when its configuration is missing, and it fails as working
+software: the app loads, signs in, and reads the wrong environment's data with
+nothing in the UI to say so. A build that cannot name its API should not exist,
+so the check is at build time and the runtime throw is only a backstop.
 
 **Build needs Node 20.19+ or 22.12+.** Vite 8 declares that in `engines`, and the
 machine this was developed on defaults to Node v16, where `bun run build` dies on

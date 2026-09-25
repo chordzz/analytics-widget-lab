@@ -31,7 +31,7 @@ import {
   type QueryContribution,
 } from '../../composition/correspondence'
 import { requiredParameters, timeRangeParameters } from '../../domain/dataset'
-import { dayEnd, dayStart } from '../../domain/default-period'
+import { dayEnd, dayStart, resolveBound } from '../../domain/default-period'
 import type { Aggregation, Dataset, FilterParameter } from '../../domain/dataset'
 import type { DatasetQuery, MeasureSelection } from '../../domain/query'
 import type { WidgetMapping, WidgetSpec } from '../widgets/Widget'
@@ -280,6 +280,24 @@ function rangeFor(
 ): Record<string, string> {
   if (!range) return {}
   const names = timeRangeParameters(dataset)
+
+  /*
+   * Resolved again here, and deliberately.
+   *
+   * `useBoardControls` turns a stored `today` into a date before anything
+   * downstream sees it, so this should never find a word. It is here because
+   * the failure it prevents is silent and specific: a token reaching
+   * `dayStart` produces an invalid instant, the endpoint refuses it, and every
+   * Widget on the board fails on every load for a board that looked right when
+   * it was saved.
+   *
+   * This is the last point before a value leaves for the network, which is
+   * where a guard of this kind belongs rather than as a second opinion further
+   * back.
+   */
+  const from = resolveBound(range.from)
+  const to = resolveBound(range.to)
+
   return {
     /*
      * Sent as instants, not as the days the Viewer picked.
@@ -294,8 +312,8 @@ function rangeFor(
      * would ask for a window of zero width and come back empty, which reads as
      * a Dataset with no data rather than as a bad question.
      */
-    ...(range.from && names.from ? { [names.from]: dayStart(range.from) } : {}),
-    ...(range.to && names.to ? { [names.to]: dayEnd(range.to) } : {}),
+    ...(from && names.from ? { [names.from]: dayStart(from) } : {}),
+    ...(to && names.to ? { [names.to]: dayEnd(to) } : {}),
   }
 }
 

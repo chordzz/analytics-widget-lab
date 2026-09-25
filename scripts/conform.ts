@@ -30,9 +30,9 @@
  *
  * Exit code is the number of checks that did not pass, so CI can use it.
  */
+import { requireBaseUrl } from './api-base'
 
-const BASE =
-  argAfter('--base') ?? process.env.ANALYTICS_BASE_URL ?? 'https://api.dev.analytics.penilabs.com'
+const BASE = requireBaseUrl(argAfter('--base'))
 
 /**
  * The token, cleaned of the ways a copy out of a browser console arrives wrong.

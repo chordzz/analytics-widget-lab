@@ -13,11 +13,11 @@
  */
 
 import { useCallback, useMemo, useState } from 'react'
-import { defaultPeriod } from '../../domain/default-period'
+import { defaultPeriod, resolveRange } from '../../domain/default-period'
 import { contributionFor } from '../../composition/correspondence'
 import { controlSubjectFor } from '../data/query'
 import { useDatasets } from '../data/AnalyticsData'
-import type { ControlValue, ControlValues } from '../../domain/composition'
+import type { ControlValue, ControlValues, DateRangeValue } from '../../domain/composition'
 import type { QueryContribution } from '../../composition/correspondence'
 import type { Board, PlacedWidget } from './boards'
 import type { Dataset } from '../data/types'
@@ -75,6 +75,32 @@ export function useBoardControls(
       }
       if (control.controlType === 'date-range') filled[control.id] = defaultPeriod()
     }
+
+    /*
+     * Resolved last, over everything, and only here.
+     *
+     * A stored bound may be a word — `to: 'today'` on a board its Author meant
+     * to stay current — and so may one a Viewer has just picked, because the
+     * picker emits the word rather than the day. Resolving in the
+     * `defaultValue` branch alone covered the first and missed the second: the
+     * choice landed in `chosen`, took the early return above, and the field
+     * showed its placeholder where a date belonged.
+     *
+     * Everything downstream reads `values`: the fields that draw it, the
+     * contribution each Widget is given, the Filter Parameters that go
+     * upstream. One resolution at the end of the memo is what makes a token
+     * unable to reach an endpoint as the literal string `today`, which it would
+     * refuse.
+     *
+     * `control.defaultValue` keeps the word, which is how the picker knows to
+     * show Today as chosen rather than as a date somebody happened to pick.
+     */
+    for (const control of controls) {
+      if (control.controlType !== 'date-range') continue
+      const range = filled[control.id] as DateRangeValue | null | undefined
+      if (range) filled[control.id] = resolveRange(range) ?? range
+    }
+
     return filled
   }, [board, chosen])
 
@@ -93,7 +119,31 @@ export function useBoardControls(
       for (const control of board.controls) {
         const value = next[control.id] ?? null
         const stored = control.defaultValue ?? null
-        if (JSON.stringify(value) !== JSON.stringify(stored)) authoring.persist(control.id, value)
+        if (JSON.stringify(value) === JSON.stringify(stored)) continue
+
+        /*
+         * Never the window we supplied ourselves.
+         *
+         * A Control with nothing stored is shown the rolling default so its
+         * fields are not blank, and that fill is a display decision — it is
+         * not the Author saying the board opens on the last thirty days. If it
+         * comes back here it is our own value returning, and storing it would
+         * pin the board to whichever day somebody looked at it.
+         *
+         * The date field no longer announces itself on appearing, which is the
+         * real fix. This is the second lock: a Control added later, or a field
+         * that emits for its own reasons, cannot reintroduce the same bug by
+         * a different route.
+         */
+        if (
+          stored === null &&
+          control.controlType === 'date-range' &&
+          JSON.stringify(value) === JSON.stringify(defaultPeriod())
+        ) {
+          continue
+        }
+
+        authoring.persist(control.id, value)
       }
     },
     [authoring, board],

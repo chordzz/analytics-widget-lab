@@ -4,6 +4,11 @@
  *   ANALYTICS_TOKEN=... bun run scripts/create-boards.ts            # dry run
  *   ANALYTICS_TOKEN=... bun run scripts/create-boards.ts --create   # writes
  *
+ * A board that already exists is left alone. `PATCH` replaces every Widget,
+ * positions included, so updating one discards however it has been arranged
+ * since — and those positions live only on the server. `--replace-existing`
+ * overrides that, and means exactly what it says.
+ *
  * **Dry by default.** This is the only script here that writes, and what it
  * writes is visible to everyone who can open Analytics. A flag is cheap; four
  * duplicate Dashboards on a shared deployment are not.
@@ -26,6 +31,7 @@ import { dateRangeControl } from '../src/domain/composition'
 import { DASHBOARD_COLUMNS } from '../src/domain/composition'
 import { rowsForPx } from '../src/analytics/builder/grid'
 import { heightForType } from '../src/analytics/widgets/layout'
+import { requireBaseUrl } from './api-base'
 
 /**
  * The window every Widget opens on.
@@ -43,10 +49,38 @@ import { heightForType } from '../src/analytics/widgets/layout'
  */
 const DEFAULT_RANGE = { from: '2026-03-01', to: '2026-10-01' }
 
-const BASE =
-  argAfter('--base') ?? process.env.ANALYTICS_BASE_URL ?? 'https://api.dev.analytics.penilabs.com'
+/**
+ * Resolved on first use, not at import.
+ *
+ * `create-boards.test.ts` imports this module for `boardFrom`, and a missing
+ * base URL must not end that test run — the tests do no network work and have
+ * no target to be missing. Everything that reads this sits under `main()`.
+ */
+let resolvedBase: string | undefined
+const base = (): string => (resolvedBase ??= requireBaseUrl(argAfter('--base')))
 const TOKEN = (process.env.ANALYTICS_TOKEN ?? '').trim().replace(/^Bearer\s+/i, '').replace(/^['"`]|['"`]$/g, '')
 const WRITE = process.argv.includes('--create')
+
+/**
+ * Overwrite a Dashboard that already exists.
+ *
+ * Off by default, and that default is the whole point. `PATCH` *"replaces the
+ * name, description, Widgets, and Composition Elements"* — the whole widget
+ * list, every `x`, `y`, `w` and `h` among it. So an update does not merge a
+ * definition into a board; it reinstates the definition and discards whatever
+ * the board had become.
+ *
+ * Peniremit's four boards have been arranged by hand since they were created.
+ * Re-running this to pick up a definition change would have flattened that
+ * back to the computed flow, silently, with no way back — the positions live
+ * only on the server.
+ *
+ * Merging would be the generous fix and it is the wrong one: matching a stored
+ * Widget to a defined one needs a key, and title, Dataset and order each break
+ * the moment a card is added or removed. A guard nobody can get wrong beats a
+ * merge that is subtly wrong.
+ */
+const REPLACE = process.argv.includes('--replace-existing')
 
 function argAfter(flag: string): string | undefined {
   const index = process.argv.indexOf(flag)
@@ -54,7 +88,7 @@ function argAfter(flag: string): string | undefined {
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, {
+  const response = await fetch(`${base()}${path}`, {
     ...init,
     headers: {
       authorization: `Bearer ${TOKEN}`,
@@ -207,11 +241,13 @@ async function main(): Promise<void> {
     process.exit(2)
   }
 
-  console.log(`${WRITE ? 'Creating' : 'Dry run'} against ${BASE}\n`)
+  console.log(`${WRITE ? 'Creating' : 'Dry run'} against ${base()}\n`)
 
   const existing = await call<{ dashboards?: ApiDashboard[] } | ApiDashboard[]>('/v1/dashboards')
   const boards = Array.isArray(existing) ? existing : (existing.dashboards ?? [])
   const byName = new Map(boards.map((board) => [board.name, board]))
+
+  let skipped = 0
 
   for (const definition of PENIREMIT_BOARDS) {
     /*
@@ -231,11 +267,20 @@ async function main(): Promise<void> {
       clientId.startsWith('local:') ? undefined : clientId,
     )
     const already = byName.get(definition.name)
-    const verb = already ? 'update' : 'create'
+    const action = !already ? 'create' : REPLACE ? 'replace' : 'skip'
+
+    if (already && action === 'skip') {
+      skipped += 1
+      console.log(
+        `  skip    ${definition.name.padEnd(12)} exists as ${already.id}` +
+          ' — its layout is the board\'s, not this file\'s',
+      )
+      continue
+    }
 
     if (!WRITE) {
       console.log(
-        `  would ${verb.padEnd(6)} ${definition.name.padEnd(12)} ` +
+        `  would ${action.padEnd(7)} ${definition.name.padEnd(12)} ` +
           `${String(payload.widgets.length).padStart(2)} widgets` +
           `${already ? ` → ${already.id}` : ''}`,
       )
@@ -253,11 +298,20 @@ async function main(): Promise<void> {
             body: JSON.stringify(payload),
           })
       console.log(
-        `  ${verb}d ${definition.name.padEnd(12)} ${String(payload.widgets.length).padStart(2)} widgets → ${saved.id}`,
+        `  ${action}d ${definition.name.padEnd(12)} ${String(payload.widgets.length).padStart(2)} widgets → ${saved.id}`,
       )
     } catch (error) {
       console.error(`  FAILED ${definition.name.padEnd(12)} ${String(error)}`)
     }
+  }
+
+  if (skipped > 0 && !REPLACE) {
+    console.log(
+      `\n${String(skipped)} board${skipped === 1 ? '' : 's'} left alone. A board that exists has been` +
+        '\narranged since it was made, and updating replaces every widget position' +
+        '\nwith the one this file computes.' +
+        '\n\nPass --replace-existing only if you mean to discard those arrangements.',
+    )
   }
 
   if (!WRITE) {

@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local environment. The API base URL and any token live here and are never
+# committed; .env.example is the template and carries no secrets.
+.env
+.env.*
+!.env.example

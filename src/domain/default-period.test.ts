@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { dayEnd, dayStart, defaultPeriod, today } from './default-period'
+import { TODAY, dayEnd, dayStart, defaultPeriod, isRelative, resolveRange, today } from './default-period'
 
 const at = (iso: string) => new Date(iso)
 
@@ -107,5 +107,55 @@ describe('a day as instants', () => {
     const end = Date.parse(dayEnd('2026-03-29'))
     const hours = (end - start + 1) / 3_600_000
     expect([23, 24, 25]).toContain(hours)
+  })
+})
+
+/*
+ * A bound that means "whenever this is read".
+ *
+ * An Author fixing a board to "1 July until today" means it to *stay* until
+ * today. Storing the day they clicked freezes it: a Viewer in November sees a
+ * window that ended in September, with nothing on screen saying the board
+ * stopped being current.
+ */
+describe('a relative bound', () => {
+  const stored = { from: '2026-07-01', to: TODAY }
+
+  test('means a different day on a different day', () => {
+    expect(resolveRange(stored, at('2026-09-25T09:00:00Z'))?.to).toBe('2026-09-25')
+    expect(resolveRange(stored, at('2026-09-26T09:00:00Z'))?.to).toBe('2026-09-26')
+    expect(resolveRange(stored, at('2026-11-14T09:00:00Z'))?.to).toBe('2026-11-14')
+  })
+
+  test('while a fixed end stays where it was put', () => {
+    const fixed = { from: '2026-07-01', to: '2026-09-30' }
+    expect(resolveRange(fixed, at('2026-11-14T09:00:00Z'))).toEqual(fixed)
+  })
+
+  test('and the other end is untouched', () => {
+    // Only the end of a range is relative today. A window whose start moves is
+    // a rolling window, which is a different thing and a different set of
+    // choices — "the last thirty days", "this quarter" — rather than one word.
+    expect(resolveRange(stored, at('2026-11-14T09:00:00Z'))?.from).toBe('2026-07-01')
+  })
+
+  test('a range with nothing relative is returned as it came', () => {
+    /*
+     * Identity, deliberately. This runs inside the memo that feeds every
+     * Widget's contribution, and a fresh object each time would re-key every
+     * query on the board.
+     */
+    const fixed = { from: '2026-07-01', to: '2026-09-30' }
+    expect(resolveRange(fixed, at('2026-11-14T09:00:00Z'))).toBe(fixed)
+  })
+
+  test('is told apart from a date that happens to be today', () => {
+    /*
+     * They look identical on screen and mean different things tomorrow, which
+     * is why the picker marks one and not the other.
+     */
+    expect(isRelative(TODAY)).toBe(true)
+    expect(isRelative(today(at('2026-09-25T09:00:00Z')))).toBe(false)
+    expect(isRelative(undefined)).toBe(false)
   })
 })
