@@ -197,19 +197,63 @@ function DateRange({
   const [from, setFrom] = useState(value?.from ?? '')
   const [to, setTo] = useState(value?.to ?? '')
 
-  // Both ends are optional and open-ended: "everything since March" is a range a
-  // person asks for, and requiring the other end would make them invent one.
+  /*
+   * Shows what it is given, including a window that arrives after it does.
+   *
+   * The two ends were read once, when this first appeared, and never again. A
+   * board whose stored period resolved a moment later kept whatever the field
+   * had mounted with — so the control and the widgets below it disagreed, and
+   * the control was the one lying.
+   *
+   * Setting the same value React already holds is a no-op, so the round trip
+   * from a Viewer's own typing costs nothing and cannot fight them.
+   */
   useEffect(() => {
-    const next = from || to ? { from: from || undefined, to: to || undefined } : null
-    onChange(next)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [from, to])
+    setFrom(value?.from ?? '')
+    setTo(value?.to ?? '')
+  }, [value?.from, value?.to])
+
+  /*
+   * Announced when somebody changes it, and at no other time.
+   *
+   * This was an effect on `[from, to]`, which React runs on the first render
+   * as well — so simply *appearing* looked exactly like being set. On a screen
+   * that treats a change as the Author composing, that saved the rolling
+   * default onto the board as its fixed window: opening Board settings pinned
+   * the period to whatever day you opened it, and bumped `updated` for a visit.
+   *
+   * Emitting from the handlers instead makes the distinction structural. There
+   * is no first render to guard against, because nothing fires unless a hand
+   * moved.
+   *
+   * Both ends stay optional: "everything since March" is a range a person asks
+   * for, and requiring the other end would make them invent one.
+   */
+  const announce = (nextFrom: string, nextTo: string) => {
+    onChange(nextFrom || nextTo ? { from: nextFrom || undefined, to: nextTo || undefined } : null)
+  }
 
   return (
     <span className="a-controls__range" role="group" aria-labelledby={labelledBy}>
-      <DateField label="From" value={from} onChange={setFrom} placeholder="Start" />
+      <DateField
+        label="From"
+        value={from}
+        onChange={(next) => {
+          setFrom(next)
+          announce(next, to)
+        }}
+        placeholder="Start"
+      />
       <span className="a-muted">to</span>
-      <DateField label="To" value={to} onChange={setTo} placeholder="End" />
+      <DateField
+        label="To"
+        value={to}
+        onChange={(next) => {
+          setTo(next)
+          announce(from, next)
+        }}
+        placeholder="End"
+      />
       {(from || to) && (
         <button
           type="button"
@@ -217,6 +261,7 @@ function DateRange({
           onClick={() => {
             setFrom('')
             setTo('')
+            announce('', '')
           }}
         >
           Clear

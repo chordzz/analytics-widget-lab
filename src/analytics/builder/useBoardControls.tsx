@@ -93,7 +93,31 @@ export function useBoardControls(
       for (const control of board.controls) {
         const value = next[control.id] ?? null
         const stored = control.defaultValue ?? null
-        if (JSON.stringify(value) !== JSON.stringify(stored)) authoring.persist(control.id, value)
+        if (JSON.stringify(value) === JSON.stringify(stored)) continue
+
+        /*
+         * Never the window we supplied ourselves.
+         *
+         * A Control with nothing stored is shown the rolling default so its
+         * fields are not blank, and that fill is a display decision — it is
+         * not the Author saying the board opens on the last thirty days. If it
+         * comes back here it is our own value returning, and storing it would
+         * pin the board to whichever day somebody looked at it.
+         *
+         * The date field no longer announces itself on appearing, which is the
+         * real fix. This is the second lock: a Control added later, or a field
+         * that emits for its own reasons, cannot reintroduce the same bug by
+         * a different route.
+         */
+        if (
+          stored === null &&
+          control.controlType === 'date-range' &&
+          JSON.stringify(value) === JSON.stringify(defaultPeriod())
+        ) {
+          continue
+        }
+
+        authoring.persist(control.id, value)
       }
     },
     [authoring, board],
