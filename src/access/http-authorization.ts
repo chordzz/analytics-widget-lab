@@ -44,7 +44,21 @@ import type { ApiClient } from '../api/client'
 import type { DashboardScope, ShareGrant } from '../domain/dashboard'
 import type { ViewerIdentity } from '../retrieval/port'
 
-/** One entry of `GET /v1/dashboards/share-targets`. */
+/**
+ * `GET /v1/dashboards/share-targets` — two lists, not one.
+ *
+ * The response separates them itself rather than leaving a flat array to be
+ * split on `target_type`, so these are read as given. Written the other way
+ * first, from the candidate schema rather than the response schema, and it
+ * silently returned nobody: `Array.isArray` on an object is false, and every
+ * search came back empty with nothing to say so.
+ */
+interface ApiShareTargets {
+  users?: ApiShareCandidate[]
+  departments?: ApiShareCandidate[]
+}
+
+/** One entry of either list. */
 interface ApiShareCandidate {
   target_type: 'user' | 'department'
   target_ref: string
@@ -157,15 +171,14 @@ export function httpAuthorization(api: ApiClient): AuthorizationPort {
         : `/v1/dashboards/share-targets?q=${encodeURIComponent(term)}`
 
       try {
-        const body = await api.request<ApiShareCandidate[] | undefined>(path)
-        const candidates = (Array.isArray(body) ? body : []).filter(isCandidate)
+        const body = await api.request<ApiShareTargets | undefined>(path)
 
         return {
-          individuals: candidates
-            .filter((entry) => entry.target_type === 'user')
+          individuals: (body?.users ?? [])
+            .filter(isCandidate)
             .map((entry) => ({ id: entry.target_ref, displayName: nameOf(entry) })),
-          groups: candidates
-            .filter((entry) => entry.target_type === 'department')
+          groups: (body?.departments ?? [])
+            .filter(isCandidate)
             .map((entry) => ({ scopeId: entry.target_ref, label: nameOf(entry) })),
         }
       } catch {

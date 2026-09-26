@@ -145,10 +145,18 @@ describe('what it will not pretend to know', () => {
 })
 
 describe('the share-targets directory', () => {
-  const candidates = [
-    { target_type: 'user', target_ref: 'u-2', name: 'Ada Chukwu', email: 'ada@example.test' },
-    { target_type: 'department', target_ref: 'dept-finance', name: 'Finance', member_count: 12 },
-  ]
+  /*
+   * Two lists, as the endpoint sends them. Written first as a flat array split
+   * on `target_type` — read off the candidate schema instead of the response
+   * schema — and the adapter returned nobody on every search, silently. The
+   * fixture agreed with the bug, so the tests passed.
+   */
+  const candidates = {
+    users: [{ target_type: 'user', target_ref: 'u-2', name: 'Ada Chukwu', email: 'ada@example.test' }],
+    departments: [
+      { target_type: 'department', target_ref: 'dept-finance', name: 'Finance', member_count: 12 },
+    ],
+  }
 
   test('users become individuals and departments become groups', async () => {
     const directory = await httpAuthorization(apiFor(() => ok(candidates))).directory('a')
@@ -186,7 +194,7 @@ describe('the share-targets directory', () => {
   })
 
   test('a candidate with no usable target is dropped', async () => {
-    const broken = [{ target_type: 'user', name: 'No ref' }, { target_ref: 'x-1' }]
+    const broken = { users: [{ target_type: 'user', name: 'No ref' }, { target_ref: 'x-1' }] }
     expect(await httpAuthorization(apiFor(() => ok(broken))).directory('n')).toEqual({
       individuals: [],
       groups: [],
@@ -194,8 +202,21 @@ describe('the share-targets directory', () => {
   })
 
   test('an unnamed candidate falls back rather than rendering blank', async () => {
-    const unnamed = [{ target_type: 'user', target_ref: 'u-9', email: 'x@example.test' }]
+    const unnamed = { users: [{ target_type: 'user', target_ref: 'u-9', email: 'x@example.test' }] }
     const directory = await httpAuthorization(apiFor(() => ok(unnamed))).directory('x')
     expect(directory.individuals[0].displayName).toBe('x@example.test')
+  })
+
+  test('a flat array is not mistaken for an answer', async () => {
+    /*
+     * The shape this adapter was first written for. It cannot be told from an
+     * empty result by anything downstream, so the value of this test is that
+     * the wrong shape stays wrong rather than quietly becoming the contract.
+     */
+    const flat = [{ target_type: 'user', target_ref: 'u-2', name: 'Ada' }]
+    expect(await httpAuthorization(apiFor(() => ok(flat))).directory('a')).toEqual({
+      individuals: [],
+      groups: [],
+    })
   })
 })

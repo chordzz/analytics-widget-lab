@@ -13,7 +13,8 @@
           "400",
           "401",
           "503"
-        ]
+        ],
+        "data": "TokenBundle"
       }
     },
     "/auth/request-otp": {
@@ -23,7 +24,8 @@
           "200",
           "400",
           "503"
-        ]
+        ],
+        "data": "{ expires_in_seconds, sent }"
       }
     },
     "/auth/verify-otp": {
@@ -34,7 +36,8 @@
           "400",
           "401",
           "503"
-        ]
+        ],
+        "data": "TokenBundle"
       }
     },
     "/health": {
@@ -42,7 +45,8 @@
         "summary": "Liveness probe",
         "responses": [
           "200"
-        ]
+        ],
+        "data": "{ environment, service }"
       }
     },
     "/health/ready": {
@@ -51,7 +55,8 @@
         "responses": [
           "200",
           "503"
-        ]
+        ],
+        "data": "ReadinessChecks"
       }
     },
     "/v1/dashboards": {
@@ -61,7 +66,8 @@
           "200",
           "401",
           "403"
-        ]
+        ],
+        "data": "DashboardSummary[]"
       },
       "post": {
         "summary": "Create a Dashboard",
@@ -70,7 +76,8 @@
           "400",
           "401",
           "403"
-        ]
+        ],
+        "data": "Dashboard"
       }
     },
     "/v1/dashboards/share-targets": {
@@ -81,7 +88,8 @@
           "401",
           "403",
           "503"
-        ]
+        ],
+        "data": "{ departments, users }"
       }
     },
     "/v1/dashboards/{dashboardId}": {
@@ -92,7 +100,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": null
       },
       "get": {
         "summary": "Get a Dashboard",
@@ -101,7 +110,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "Dashboard"
       },
       "patch": {
         "summary": "Update a Dashboard",
@@ -111,7 +121,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "Dashboard"
       }
     },
     "/v1/dashboards/{dashboardId}/pin": {
@@ -122,7 +133,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": null
       },
       "put": {
         "summary": "Pin a Dashboard",
@@ -131,7 +143,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": null
       }
     },
     "/v1/dashboards/{dashboardId}/publish": {
@@ -143,7 +156,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "Dashboard"
       }
     },
     "/v1/dashboards/{dashboardId}/share-grants": {
@@ -154,7 +168,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "ShareGrant[]"
       },
       "post": {
         "summary": "Create a Share Grant",
@@ -164,7 +179,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "ShareGrant"
       }
     },
     "/v1/dashboards/{dashboardId}/share-grants/{grantId}": {
@@ -175,7 +191,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": null
       }
     },
     "/v1/datasets": {
@@ -185,7 +202,8 @@
           "200",
           "401",
           "403"
-        ]
+        ],
+        "data": "Dataset[]"
       },
       "post": {
         "summary": "Publish a Dataset",
@@ -195,7 +213,8 @@
           "400",
           "401",
           "403"
-        ]
+        ],
+        "data": "Dataset"
       }
     },
     "/v1/datasets/{datasetId}": {
@@ -206,7 +225,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": null
       },
       "get": {
         "summary": "Get a Dataset",
@@ -215,7 +235,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "Dataset"
       }
     },
     "/v1/datasets/{datasetId}/presentation": {
@@ -226,7 +247,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "{ data_shape, dataset_id, presentation_options }"
       }
     },
     "/v1/datasets/{datasetId}/query": {
@@ -242,7 +264,8 @@
           "500",
           "503",
           "504"
-        ]
+        ],
+        "data": "object"
       }
     },
     "/v1/datasets/{datasetId}/withdraw": {
@@ -253,7 +276,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "Dataset"
       }
     },
     "/v1/demo/seed": {
@@ -265,7 +289,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "{ amended, base_url, bindings, created }"
       }
     },
     "/v1/me": {
@@ -275,7 +300,8 @@
           "200",
           "401",
           "503"
-        ]
+        ],
+        "data": "Actor"
       }
     },
     "/v1/source-systems": {
@@ -285,7 +311,8 @@
           "200",
           "401",
           "403"
-        ]
+        ],
+        "data": "SourceSystem[]"
       },
       "post": {
         "summary": "Create a Source System",
@@ -296,7 +323,8 @@
           "403",
           "409",
           "503"
-        ]
+        ],
+        "data": "SourceSystem"
       }
     },
     "/v1/source-systems/iam-products": {
@@ -307,7 +335,8 @@
           "401",
           "403",
           "503"
-        ]
+        ],
+        "data": "{ domain_key, entity, entity_id, id, name, slug }[]"
       }
     },
     "/v1/source-systems/{sourceSystemId}": {
@@ -319,7 +348,8 @@
           "403",
           "404",
           "409"
-        ]
+        ],
+        "data": null
       },
       "get": {
         "summary": "Get a Source System",
@@ -328,7 +358,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "SourceSystem"
       },
       "patch": {
         "summary": "Update a Source System",
@@ -338,7 +369,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "SourceSystem"
       }
     },
     "/v1/visualizations": {
@@ -348,7 +380,8 @@
           "200",
           "401",
           "403"
-        ]
+        ],
+        "data": "PresentationOption[]"
       }
     }
   },

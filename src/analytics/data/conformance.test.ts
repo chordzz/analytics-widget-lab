@@ -28,6 +28,15 @@ const enumOf = (name: string): string[] => {
 }
 const propsOf = (name: string): string[] => Object.keys(schemas[name]?.properties ?? {})
 
+/** What a successful call puts in `data`, as the snapshot records it. */
+const dataOf = (path: string, method = 'get'): string => {
+  const found = (spec.paths as Record<string, Record<string, { data?: string | null }>>)[path]?.[
+    method
+  ]
+  if (!found) throw new Error(`no ${method.toUpperCase()} ${path} in the snapshot — refresh it`)
+  return found.data ?? 'nothing'
+}
+
 /**
  * Every test below asserts a shape the API still has. What changes as work lands
  * is not the API but our relationship to it, so a cited entry is checked against
@@ -334,5 +343,40 @@ describe('what the backend adopted, in the shape we read it', () => {
     // The one that was actually wrong in the published schema for weeks, read
     // as `types` on our side and silently returning nothing.
     expect(propsOf('PresentationOption')).toContain('visualization_types')
+  })
+})
+
+/**
+ * The body shape each adapter reads, not just the fields inside it.
+ *
+ * This is the layer both silent failures came through, and neither was visible
+ * in a schema: `visualization_types` was read as `types`, and `share-targets`
+ * was read as a flat array when it sends two named lists. In both cases the
+ * reader found nothing, returned an empty result, and looked exactly like an
+ * endpoint with nothing to say. `Array.isArray` on an object is false, and
+ * `undefined` has no length.
+ *
+ * So the *envelope* is asserted as well as its contents. A reshaped response
+ * now fails here rather than emptying a panel.
+ */
+describe('the body is shaped the way the adapter unwraps it', () => {
+  test('share targets arrive as two named lists, not one array', () => {
+    expect(dataOf('/v1/dashboards/share-targets')).toBe('{ departments, users }')
+  })
+
+  test('share grants arrive as a bare list', () => {
+    expect(dataOf('/v1/dashboards/{dashboardId}/share-grants')).toBe('ShareGrant[]')
+  })
+
+  test('creating a grant answers with the grant, which is where its id comes from', () => {
+    expect(dataOf('/v1/dashboards/{dashboardId}/share-grants', 'post')).toBe('ShareGrant')
+  })
+
+  test('the taxonomy is a list of presentation options', () => {
+    expect(dataOf('/v1/visualizations')).toBe('PresentationOption[]')
+  })
+
+  test('the catalogue is a list of datasets', () => {
+    expect(dataOf('/v1/datasets')).toBe('Dataset[]')
   })
 })
