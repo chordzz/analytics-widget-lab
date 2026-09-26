@@ -18,6 +18,7 @@ import { describe, expect, test } from 'bun:test'
 import spec from '../../../docs/upstream/analytics-api.json'
 import { DIVERGENCES } from '../../contract-docs/divergences'
 import { WIDGET_RENDER_STATUSES } from '../../../src/retrieval/render-state'
+import { FIELD_SEMANTICS } from '../../domain/dataset'
 
 const schemas = spec.components.schemas as Record<string, { enum?: string[]; properties?: Record<string, unknown>; required?: string[] }>
 const enumOf = (name: string): string[] => {
@@ -69,6 +70,9 @@ describe('the snapshot is the version we reviewed', () => {
       '/v1/datasets/{datasetId}/presentation',
       '/v1/dashboards',
       '/v1/dashboards/{dashboardId}',
+      '/v1/dashboards/{dashboardId}/share-grants',
+      '/v1/dashboards/{dashboardId}/share-grants/{grantId}',
+      '/v1/dashboards/share-targets',
       '/v1/me',
     ]) {
       expect(Object.keys(spec.paths), `${path} has gone`).toContain(path)
@@ -260,5 +264,75 @@ describe('the register does not cite an API schema that has gone', () => {
         target,
       )
     }
+  })
+})
+
+/**
+ * The asks that shipped, pinned to the shape they shipped in.
+ *
+ * Each of these was built here against a *proposal* and adopted upstream
+ * later. That is exactly the situation in which a rename goes unnoticed: the
+ * field simply stops arriving, the optional reader returns nothing, and the
+ * feature quietly does not work — which is how `visualization_types` spent
+ * weeks being read as `types`.
+ */
+describe('what the backend adopted, in the shape we read it', () => {
+  test('FieldSemantic carries exactly the six we accept — BE-1', () => {
+    /*
+     * Compared as sets against a list the union cannot drift from. A value
+     * added upstream is a Family we could offer and do not; one removed is a
+     * Dataset we would treat as geographic that no longer is.
+     */
+    expect([...enumOf('FieldSemantic')].sort()).toEqual([...FIELD_SEMANTICS].sort())
+  })
+
+  test('a Field carries `semantic`, or nothing here can read one', () => {
+    expect(propsOf('Field')).toContain('semantic')
+  })
+
+  test('TimeRange names its two ends the way the adapter reads them — BE-8', () => {
+    /*
+     * `timeRangeFrom` takes the range only when all three are present, so a
+     * rename does not fail loudly — it silently declines every range and every
+     * board falls back to guessing `from`/`to`, which is the guessing this
+     * endpoint exists to remove.
+     */
+    expect([...propsOf('TimeRange')].sort()).toEqual(['field', 'from_parameter', 'to_parameter'])
+    expect(schemas.TimeRange?.required?.slice().sort()).toEqual([
+      'field',
+      'from_parameter',
+      'to_parameter',
+    ])
+    expect(propsOf('Dataset')).toContain('time_range')
+  })
+
+  test('RecordVolume is the four magnitudes the threshold is drawn across', () => {
+    // `recordVolumeFrom` maps thousands/millions to `many` and the other two to
+    // `few`. A fifth value would fall through as "nobody said".
+    expect([...enumOf('RecordVolume')].sort()).toEqual(
+      ['millions', 'single-row', 'tens', 'thousands'].sort(),
+    )
+    expect(propsOf('Dataset')).toContain('record_volume')
+  })
+
+  test('a Share Grant carries the id a revoke is addressed by', () => {
+    // Without `id` there is no DELETE path to build, and the store falls back
+    // to reporting that access was not withdrawn.
+    expect(propsOf('ShareGrant')).toContain('id')
+    expect(propsOf('ShareGrant')).toContain('target_type')
+    expect(propsOf('ShareGrant')).toContain('target_ref')
+  })
+
+  test('a share target hands back what a Grant needs, unbuilt', () => {
+    // The panel passes `target_type`/`target_ref` straight through. Deriving
+    // either from something else is how a tickable name grants nothing.
+    expect(propsOf('ShareCandidate')).toContain('target_type')
+    expect(propsOf('ShareCandidate')).toContain('target_ref')
+  })
+
+  test('the taxonomy still keys its types as `visualization_types`', () => {
+    // The one that was actually wrong in the published schema for weeks, read
+    // as `types` on our side and silently returning nothing.
+    expect(propsOf('PresentationOption')).toContain('visualization_types')
   })
 })
