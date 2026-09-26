@@ -67,7 +67,19 @@ export class FakeAuthorization implements AuthorizationPort {
     )
   }
 
-  async directory() {
-    return { individuals: this.options.identities, groups: this.options.scopes }
+  async directory(query?: string) {
+    // Searched rather than listed, matching the live endpoint — see
+    // `LocalAuthorization.directory` for why a fixture that listed everyone
+    // would hide a Share panel that cannot work against the API.
+    const term = query?.trim().toLowerCase() ?? ''
+    return {
+      individuals:
+        term === ''
+          ? []
+          : this.options.identities.filter((identity) =>
+              identity.displayName.toLowerCase().includes(term),
+            ),
+      groups: this.options.scopes,
+    }
   }
 }

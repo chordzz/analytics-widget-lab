@@ -60,21 +60,56 @@ export function SharePanel({ board }: { board: Board }) {
   const { authorization, viewer } = useAnalyticsData()
   const [people, setPeople] = useState<ViewerIdentity[]>([])
   const [groups, setGroups] = useState<OrgScopeRef[]>([])
+  const [query, setQuery] = useState('')
+  const [searching, setSearching] = useState(false)
 
+  /*
+   * Departments, once. They come back whatever the query is, so re-reading
+   * them on every keystroke would replace the Scope select's options with an
+   * identical list — and blank it for the moment the request is in flight.
+   */
   useEffect(() => {
     let live = true
     authorization
       .directory()
-      .then((result) => {
-        if (!live) return
-        setPeople(result.individuals)
-        setGroups(result.groups)
-      })
-      .catch(() => live && (setPeople([]), setGroups([])))
+      .then((result) => live && setGroups(result.groups))
+      .catch(() => live && setGroups([]))
     return () => {
       live = false
     }
   }, [authorization])
+
+  /*
+   * People, per search, debounced.
+   *
+   * A search rather than a list because the endpoint will not return everyone:
+   * it runs as the caller, and an unrestricted answer would be a staff
+   * directory for anyone who can open Analytics. The debounce is what keeps a
+   * typed name from being four lookups, and the guard below is what keeps a
+   * slow one from overwriting a later, faster one.
+   */
+  useEffect(() => {
+    const term = query.trim()
+    if (term === '') {
+      setPeople([])
+      setSearching(false)
+      return
+    }
+
+    let live = true
+    setSearching(true)
+    const timer = setTimeout(() => {
+      authorization
+        .directory(term)
+        .then((result) => live && (setPeople(result.individuals), setSearching(false)))
+        .catch(() => live && (setPeople([]), setSearching(false)))
+    }, 250)
+
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
+  }, [authorization, query])
 
   const scopeValue =
     board.scope.kind === 'organizational-scope' ? `scope:${board.scope.scopeId}` : board.scope.kind
@@ -95,9 +130,12 @@ export function SharePanel({ board }: { board: Board }) {
     }
   }
 
-  // Granting to yourself is a control that can only be a no-op — the Author
-  // always sees their own board.
-  const grantable = people.filter((person) => person.id !== board.authorId)
+  /*
+   * Search results worth offering: not the Author, and not anyone already
+   * named. Granting yourself is a control that can only be a no-op, and a
+   * person already granted belongs in the list below, where they can be
+   * removed — offering them twice invites ticking a box that is already ticked.
+   */
   const mayShare = useMay('dashboard.share')
 
   /*
@@ -118,6 +156,9 @@ export function SharePanel({ board }: { board: Board }) {
    */
   if (board.authorId !== viewer.id) return null
   const granted = new Set(board.shareGrants.map((grant) => grant.recipientId))
+  const candidates = people.filter(
+    (person) => person.id !== board.authorId && !granted.has(person.id),
+  )
 
   return (
     <section className="a-share">
@@ -163,36 +204,78 @@ export function SharePanel({ board }: { board: Board }) {
         </p>
       )}
 
-      {mayShare && board.scope.kind !== 'personal' && grantable.length > 0 && (
+      {mayShare && board.scope.kind !== 'personal' && (
         <div className="a-share__grants">
           <p className="a-field__help">
             Naming people <strong>narrows</strong> it to them. With nobody named, everyone in the
             scope above can see it.
           </p>
 
-          {grantable.map((person) => {
-            const grant = board.shareGrants.find((entry) => entry.recipientId === person.id)
-            return (
-              <label key={person.id} className="a-expose__item">
-                <input
-                  type="checkbox"
-                  checked={granted.has(person.id)}
-                  onChange={() =>
-                    grant
-                      ? boards.removeGrant(board.id, grant.id)
-                      : boards.addGrant(board.id, {
-                          kind: 'individual',
-                          id: person.id,
-                          label: person.displayName,
-                        })
-                  }
-                />
-                <span>{person.displayName}</span>
-              </label>
-            )
-          })}
+          {/*
+            * Named people first, and independent of the search.
+            *
+            * Removing access must never require finding the person again — a
+            * search that returns nothing would otherwise strand a Grant the
+            * Author can see the effect of and not undo.
+            */}
+          {board.shareGrants.map((grant) => (
+            <label key={grant.id} className="a-expose__item">
+              <input
+                type="checkbox"
+                checked
+                onChange={() => boards.removeGrant(board.id, grant.id)}
+              />
+              <span>{grant.recipientLabel}</span>
+            </label>
+          ))}
+
+          <label className="a-field__label" htmlFor="share-search">
+            Add someone
+          </label>
+          <input
+            id="share-search"
+            className="a-input"
+            type="search"
+            value={query}
+            placeholder="Search by name"
+            autoComplete="off"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+
+          {/*
+            * A search rather than a list of everyone, because the endpoint will
+            * not answer without a term. Saying so beats an empty box that reads
+            * as "nobody here".
+            */}
+          {query.trim() === '' && (
+            <p className="a-field__help">Type a name to find someone to share with.</p>
+          )}
+
+          {query.trim() !== '' && searching && <p className="a-field__help">Searching…</p>}
+
+          {query.trim() !== '' && !searching && candidates.length === 0 && (
+            <p className="a-field__help">Nobody matching “{query.trim()}”.</p>
+          )}
+
+          {candidates.map((person) => (
+            <label key={person.id} className="a-expose__item">
+              <input
+                type="checkbox"
+                checked={false}
+                onChange={() =>
+                  boards.addGrant(board.id, {
+                    kind: 'individual',
+                    id: person.id,
+                    label: person.displayName,
+                  })
+                }
+              />
+              <span>{person.displayName}</span>
+            </label>
+          ))}
         </div>
       )}
+
     </section>
   )
 }

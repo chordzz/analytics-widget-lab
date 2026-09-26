@@ -251,7 +251,7 @@ function SignedIn({
          * account that decided a department board by looking a real actor up in
          * a demo, and always said no.
          */
-        authorization: httpAuthorization(),
+        authorization: httpAuthorization(api),
         viewer: { id: actor.id, displayName: actor.fullName },
         /*
          * What the UI may offer, straight from `/v1/me`. Absent — IAM's lookup

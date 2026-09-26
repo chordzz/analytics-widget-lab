@@ -37,10 +37,42 @@
  */
 
 import type { AuthorizationPort, OrgScopeRef } from './port'
+import type { ApiClient } from '../api/client'
 import type { DashboardScope, ShareGrant } from '../domain/dashboard'
 import type { ViewerIdentity } from '../retrieval/port'
 
-export function httpAuthorization(): AuthorizationPort {
+/** One entry of `GET /v1/dashboards/share-targets`. */
+interface ApiShareCandidate {
+  target_type: 'user' | 'department'
+  target_ref: string
+  name?: string
+  email?: string
+  job_title?: string
+  department_id?: string
+  member_count?: number
+  photo_url?: string
+}
+
+/**
+ * Shape-checked, because a candidate without a target is unusable.
+ *
+ * `target_ref` becomes `recipientId` and travels into a Share Grant. An entry
+ * missing it would render a tickable name that grants access to nothing, which
+ * reads to the Author exactly like one that worked.
+ */
+function isCandidate(entry: ApiShareCandidate | undefined): entry is ApiShareCandidate {
+  return (
+    typeof entry?.target_ref === 'string' &&
+    entry.target_ref !== '' &&
+    (entry.target_type === 'user' || entry.target_type === 'department')
+  )
+}
+
+/** `name` is optional in the schema; the reference is the only other handle. */
+const nameOf = (entry: ApiShareCandidate): string =>
+  entry.name?.trim() || entry.email?.trim() || entry.target_ref
+
+export function httpAuthorization(api: ApiClient): AuthorizationPort {
   return {
     /**
      * FR-DP-12 and FR-DA-09, both already answered upstream.
@@ -98,19 +130,43 @@ export function httpAuthorization(): AuthorizationPort {
     },
 
     /**
-     * Empty, and this is a real gap rather than a deferral.
+     * `GET /v1/dashboards/share-targets`, which closes the gap that made Share
+     * Grants sendable but not composable.
      *
-     * The Grant authoring surface needs to name *other people*, and the API
-     * publishes nothing that can: no directory, no user search, and `/v1/me`
-     * describes only the caller — whose own `email` and `full_name` come back
-     * blank. So an Author cannot pick a recipient, and the Share panel renders
-     * no candidates.
+     * Each candidate arrives carrying the `target_type` and `target_ref` a
+     * Grant names it by, so nothing here builds that pairing — `target_ref` is
+     * what goes into `recipientId`, unchanged.
      *
-     * Share Grants can therefore be sent but not composed. Raised with the
-     * backend team; until there is a source, an empty list is the truth.
+     * **People need a query and departments do not**, which is the endpoint's
+     * rule rather than ours: it runs as the caller, and an empty search that
+     * returned everyone would be a staff list for anyone who can open
+     * Analytics. So a blank query asks for the departments alone.
+     *
+     * A failure answers empty. The Share panel then offers no candidates, which
+     * is what it did before this endpoint existed — worse than the truth, but
+     * the alternative is an Author unable to open the panel at all.
      */
-    async directory(): Promise<{ individuals: ViewerIdentity[]; groups: OrgScopeRef[] }> {
-      return { individuals: [], groups: [] }
+    async directory(query?: string): Promise<{ individuals: ViewerIdentity[]; groups: OrgScopeRef[] }> {
+      const term = query?.trim() ?? ''
+      const path = term === ''
+        ? '/v1/dashboards/share-targets'
+        : `/v1/dashboards/share-targets?q=${encodeURIComponent(term)}`
+
+      try {
+        const body = await api.request<ApiShareCandidate[] | undefined>(path)
+        const candidates = (Array.isArray(body) ? body : []).filter(isCandidate)
+
+        return {
+          individuals: candidates
+            .filter((entry) => entry.target_type === 'user')
+            .map((entry) => ({ id: entry.target_ref, displayName: nameOf(entry) })),
+          groups: candidates
+            .filter((entry) => entry.target_type === 'department')
+            .map((entry) => ({ scopeId: entry.target_ref, label: nameOf(entry) })),
+        }
+      } catch {
+        return { individuals: [], groups: [] }
+      }
     },
   }
 }

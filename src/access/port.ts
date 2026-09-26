@@ -68,8 +68,19 @@ export interface AuthorizationPort {
    */
   mayAdministerCatalogue(viewer: ViewerIdentity): Promise<boolean>
 
-  /** Candidate recipients, for the Grant authoring surface. */
-  directory(): Promise<{ individuals: ViewerIdentity[]; groups: OrgScopeRef[] }>
+  /**
+   * Candidate recipients, for the Grant authoring surface.
+   *
+   * `query` is not an optimisation. The upstream lookup runs as the caller and
+   * refuses to list people without a search term — *"returning everyone on an
+   * empty search would turn the endpoint into a staff list for anyone who can
+   * open Analytics"*. So an empty query yields no individuals by design, and a
+   * surface built on this has to be a search rather than a list of everyone.
+   *
+   * Groups come back either way: a small, non-sensitive set the Share panel
+   * needs in order to render its Scope control at all.
+   */
+  directory(query?: string): Promise<{ individuals: ViewerIdentity[]; groups: OrgScopeRef[] }>
 }
 
 /**
