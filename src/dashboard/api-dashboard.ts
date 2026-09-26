@@ -192,6 +192,43 @@ export function grantInputFrom(grant: ShareGrant): {
   }
 }
 
+/**
+ * A Share Grant as `GET`/`POST .../share-grants` returns it.
+ *
+ * `deleted` is in the schema because a revocation is *"a status update, never a
+ * row removal, so the revocation stays on the record"*. The listing is
+ * documented as live grants only, so filtering on it should never remove
+ * anything — which is the reason to do it rather than not to.
+ */
+export interface ApiShareGrant {
+  id: string
+  target_type: 'user' | 'department'
+  target_ref: string
+  deleted?: boolean
+}
+
+/** `grantKey` again, from the API's shape — the two must agree to match up. */
+export const apiGrantKey = (grant: ApiShareGrant): string =>
+  `${grant.target_type}:${grant.target_ref}`
+
+/**
+ * The API's Grant as ours.
+ *
+ * `recipientLabel` falls back to the reference because a Grant carries no name:
+ * `target_ref` is an actor or department id and the endpoint that could resolve
+ * it needs a search term. Where a label matters — the Share panel's list — it
+ * comes from the directory entry the row was drawn from, matched on
+ * `recipientId`, so the fallback shows only where nothing better exists.
+ */
+export function grantFrom(grant: ApiShareGrant): ShareGrant {
+  return {
+    id: grant.id,
+    recipientKind: grant.target_type === 'user' ? 'individual' : 'group',
+    recipientId: grant.target_ref,
+    recipientLabel: grant.target_ref,
+  }
+}
+
 /** Identifies a Grant by what it targets, which is all the API lets us compare. */
 export const grantKey = (grant: ShareGrant): string =>
   `${grant.recipientKind === 'individual' ? 'user' : 'department'}:${grant.recipientId}`
