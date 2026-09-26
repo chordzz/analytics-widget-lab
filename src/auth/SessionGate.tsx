@@ -295,8 +295,14 @@ function SignedIn({
  * Someone still has access to a board the Author thinks they removed.
  *
  * Worded as what is true rather than as what failed. "Could not revoke" reads
- * like a transient error worth retrying; the Author needs to know the state of
- * the world, which is that this person can still open the board.
+ * like a transient error to wait out; the Author needs to know the state of the
+ * world, which is that this person can still open the board.
+ *
+ * That the revoke *will* be tried again is real now — `DELETE` exists and a
+ * failed one keeps its place in the queue — but it belongs in the tooltip
+ * rather than the line. A note that leads with "retrying" invites waiting, and
+ * the retry rides on the next save rather than a timer, so there may be
+ * nothing to wait for.
  */
 export function UnrevokedNote({
   entries,
@@ -313,7 +319,7 @@ export function UnrevokedNote({
       type="button"
       className="a-unsaved a-unsaved--warning"
       onClick={onDismiss}
-      title="Revoking a share is not yet supported by the Analytics API. Dismiss"
+      title="Access was not withdrawn. It will be tried again the next time this board saves. Dismiss"
     >
       {first.who} still sees &ldquo;{first.board}&rdquo;
       {more > 0 && ` and ${String(more)} more`}

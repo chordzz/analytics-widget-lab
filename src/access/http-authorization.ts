@@ -15,9 +15,12 @@
  * something we were told we could show — and it would be wrong from a worse
  * position, because the client holds none of the inputs. `/v1/me` returns an
  * empty `permissions` map and an empty `department_id`; there is no organizational
- * scope list and no directory. `LocalAuthorization` answered these questions
- * from a fixture array of three people, and running that against a real account
- * meant asking a demo whether a real person is in a real department.
+ * scope list. (`share-targets` has since supplied a directory, which
+ * `directory()` below reads — but it answers who a board may be shared *with*,
+ * not which scopes a viewer belongs to.) `LocalAuthorization` answered these
+ * questions from a fixture array of three people, and running that against a
+ * real account meant asking a demo whether a real person is in a real
+ * department.
  *
  * **What this replaces, and the bug it removes.** Until this existed,
  * `AnalyticsDataProvider` fell back to `LocalAuthorization` whenever a host did
@@ -100,8 +103,9 @@ export function httpAuthorization(api: ApiClient): AuthorizationPort {
     /**
      * The grant's own target, echoed back.
      *
-     * Not a resolution: there is no directory endpoint, so nothing here can
-     * expand a department into its members or confirm an actor id exists. What
+     * Not a resolution, and `share-targets` does not make it one: that endpoint
+     * searches candidates by name, so nothing here can expand a department into
+     * its members or confirm an actor id exists. What
      * it avoids is the alternative. Returning an empty list means "could not be
      * resolved to any identity", which `evaluateGrant` reports to the Author as
      * the Grant having no effect — and against the API that is false. The grant

@@ -131,7 +131,10 @@ export const DIVERGENCES: Divergence[] = [
       'holding "Kenya" from a Measure holding -1.29, and the two feed different Types — a choropleth ' +
       'needs the former, a point map the latter. The FRD\'s own Geospatial clause read ' +
       "`semantic === 'geographic-location' && role !== 'measure'`, which excludes precisely the " +
-      'Fields a point map needs, so no Dataset could ever satisfy it that way.',
+      'Fields a point map needs, so no Dataset could ever satisfy it that way. ' +
+      'The API has since shipped `FieldSemantic` with exactly this split — `geographic-area`, ' +
+      '`geographic-latitude`, `geographic-longitude` — so the divergence now runs against the FRD ' +
+      'alone, and the FRD is the document that is behind.',
   },
   {
     id: 'D3',

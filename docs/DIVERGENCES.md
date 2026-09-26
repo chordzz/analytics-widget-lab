@@ -83,7 +83,7 @@ Five built Visualization Types cannot be mapped at all with four roles: a point 
 **Findings:** Finding 1, Finding 15  
 **Where:** `domain/dataset.ts`  
 
-Finding 1 recommends a single `geographic-location` descriptor. It cannot tell a Dimension holding "Kenya" from a Measure holding -1.29, and the two feed different Types — a choropleth needs the former, a point map the latter. The FRD's own Geospatial clause read `semantic === 'geographic-location' && role !== 'measure'`, which excludes precisely the Fields a point map needs, so no Dataset could ever satisfy it that way.
+Finding 1 recommends a single `geographic-location` descriptor. It cannot tell a Dimension holding "Kenya" from a Measure holding -1.29, and the two feed different Types — a choropleth needs the former, a point map the latter. The FRD's own Geospatial clause read `semantic === 'geographic-location' && role !== 'measure'`, which excludes precisely the Fields a point map needs, so no Dataset could ever satisfy it that way. The API has since shipped `FieldSemantic` with exactly this split — `geographic-area`, `geographic-latitude`, `geographic-longitude` — so the divergence now runs against the FRD alone, and the FRD is the document that is behind.
 
 ### D3 — Mapping slots are declared per Visualization Type as well as per Family.
 

@@ -3,8 +3,11 @@
  *
  * Small, and worth its own test for one reason: it says something about who can
  * see a board, and the wording is the whole of its value. A message that reads
- * as a transient error invites the Author to wait for a retry that will never
- * come — the API has no route to revoke a Grant, so nothing is pending.
+ * as a transient error invites the Author to wait, and what they need first is
+ * the state of the world — this person can still open the board.
+ *
+ * A retry is genuine now that `DELETE` exists, but it rides on the next save
+ * rather than a timer. So it stays in the tooltip and out of the line.
  */
 
 import { describe, expect, test } from 'bun:test'
@@ -32,9 +35,9 @@ describe('it states what is true, not what failed', () => {
 
   test('it does not read as a retry', () => {
     /*
-     * "Could not revoke" and "retrying" both suggest something is in flight.
-     * Nothing is: there is no DELETE route, so the Author has to act elsewhere
-     * rather than wait.
+     * "Could not revoke" and "retrying" both suggest something is in flight,
+     * and nothing is until the board saves again. The line has to leave the
+     * Author knowing who can see the board, not watching for a spinner.
      */
     const said = words(render([{ board: 'Finance daily', who: 'Ada' }])).toLowerCase()
     for (const misleading of ['retrying', 'failed', 'could not', 'try again']) {
