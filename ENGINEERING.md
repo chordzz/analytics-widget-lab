@@ -75,7 +75,7 @@ bun install
 cp .env.example .env # required — see below
 bun dev              # http://localhost:5173  → the workbench
                      # http://localhost:5173/#/analytics → the product module
-bun test             # 1576 tests, 86 files
+bun test             # 1582 tests, 87 files
 bun run typecheck    # tsc -b
 bun run docs         # regenerate docs/ from the code that implements it
 ```
@@ -90,6 +90,13 @@ plausible deployment when its configuration is missing, and it fails as working
 software: the app loads, signs in, and reads the wrong environment's data with
 nothing in the UI to say so. A build that cannot name its API should not exist,
 so the check is at build time and the runtime throw is only a backstop.
+
+**`bun run lint` needs the same Node.** Under the machine default (v16) the
+`oxlint` shim is an extensionless `#!/usr/bin/env node` script that Node cannot
+ESM-load, so it exits 1 having linted nothing. The crash says
+`ERR_UNKNOWN_FILE_EXTENSION` and contains no line matching `error:` — so a
+pipeline that counts those reports a clean run from a linter that never
+started. Check the exit code, not a grep.
 
 **Build needs Node 20.19+ or 22.12+.** Vite 8 declares that in `engines`, and the
 machine this was developed on defaults to Node v16, where `bun run build` dies on
