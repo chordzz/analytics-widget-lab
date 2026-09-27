@@ -157,7 +157,8 @@ describe('changing who can see a board', () => {
  *
  * The scope control was gated on `dashboard.share` and the panel around it on
  * nothing, so anyone reaching the builder for a board saw who it is shared with
- * and who it could be. `CreateScreen` has no authorship guard of its own, so
+ * and who it could be. `CreateScreen` gained an authorship guard of its own since — see
+ * `CreateScreen.render.test.tsx` — but that was added after this, so
  * that was reachable rather than theoretical.
  */
 describe('the visibility panel belongs to the Author', () => {

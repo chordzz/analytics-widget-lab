@@ -75,7 +75,7 @@ bun install
 cp .env.example .env # required — see below
 bun dev              # http://localhost:5173  → the workbench
                      # http://localhost:5173/#/analytics → the product module
-bun test             # 1557 tests, 83 files
+bun test             # 1563 tests, 84 files
 bun run typecheck    # tsc -b
 bun run docs         # regenerate docs/ from the code that implements it
 ```
