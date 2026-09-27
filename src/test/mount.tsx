@@ -29,6 +29,8 @@ export interface Mounted {
   click: (label: string) => Promise<void>
   /** Types into a controlled input, the way React needs to hear about it. */
   type: (selector: string, value: string) => Promise<void>
+  /** The same, for an element a caller already found. */
+  typeInto: (field: Element, value: string) => Promise<void>
   /** Press a button by its visible text or `aria-label`. */
   press: (name: string) => Promise<void>
   /** Every button's accessible name, for asserting one is *not* offered. */
@@ -77,6 +79,25 @@ export async function mount(node: ReactNode): Promise<Mounted> {
   await flush()
 
   const labels = () => [...container.querySelectorAll('label')]
+
+  /*
+   * React tracks a controlled input's value on the node and skips the change
+   * when it looks unchanged, so assigning `.value` directly is silently
+   * ignored. Going through the prototype's setter updates the node without
+   * that bookkeeping, and the dispatched event is then the first React hears
+   * of it — which is what a keystroke looks like.
+   */
+  const setValue = async (field: Element, value: string) => {
+    const setter = Object.getOwnPropertyDescriptor(
+      globalThis.HTMLInputElement.prototype,
+      'value',
+    )?.set
+    await act(async () => {
+      setter?.call(field, value)
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flush()
+  }
 
   return {
     container,
@@ -142,6 +163,10 @@ export async function mount(node: ReactNode): Promise<Mounted> {
       await flush()
     },
 
+    typeInto: async (field: Element, value: string) => {
+      await setValue(field, value)
+    },
+
     type: async (selector: string, value: string) => {
       const field = container.querySelector(selector)
       if (!field) throw new Error(`no element matching ${selector}`)
@@ -152,15 +177,7 @@ export async function mount(node: ReactNode): Promise<Mounted> {
        * node without that bookkeeping, and the dispatched event is then the
        * first React hears of it — which is what a keystroke looks like.
        */
-      const setter = Object.getOwnPropertyDescriptor(
-        globalThis.HTMLInputElement.prototype,
-        'value',
-      )?.set
-      await act(async () => {
-        setter?.call(field, value)
-        field.dispatchEvent(new Event('input', { bubbles: true }))
-      })
-      await flush()
+      await setValue(field, value)
     },
     flush,
     settle: async (ms = 300) => {
