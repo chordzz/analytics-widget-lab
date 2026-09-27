@@ -57,15 +57,6 @@ interface BoardsContextValue {
   dispatch: (action: BoardsAction) => void
   /** Every board in the store, whether or not this Viewer may see it. */
   boards: Board[]
-  /**
-   * FR-DA-02 — FR-DA-07. What this Viewer may actually see.
-   *
-   * Asynchronous, because authorization is a port and a Grant may name a group
-   * that has to be resolved. Until it answers this is empty rather than
-   * everything: showing boards first and hiding them a moment later is a
-   * disclosure, however brief.
-   */
-  visible: Board[]
   drafts: Board[]
   published: Board[]
   editing: Board | undefined
@@ -198,10 +189,21 @@ export function BoardsProvider({
       loading,
       dispatch,
       boards: state.boards,
-      visible,
       // Drafts are the Author's own by definition (FR-CO-04), so this list is
       // already scoped by `authorId` rather than by the visibility pass.
       drafts: draftBoards(state).filter((board) => board.authorId === viewer.id),
+      /*
+       * FR-DA-02 — FR-DA-07. What this Viewer may actually see, published.
+       *
+       * The visibility pass is asynchronous, because authorization is a port
+       * and a Grant may name a group that has to be resolved. Until it answers
+       * this is empty rather than everything: showing boards first and hiding
+       * them a moment later is a disclosure, however brief.
+       *
+       * Reached only through this list. `visible` was also handed out whole on
+       * the context and nothing read it — the pass earns its place by deciding
+       * what counts as published, not by being published itself.
+       */
       published: visible.filter((board) => board.status === 'published'),
       editing: boardById(state, state.editingId),
 

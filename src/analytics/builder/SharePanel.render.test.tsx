@@ -44,7 +44,7 @@ const asObserved = (over: Partial<Directory> = {}): AuthorizationPort => ({
 /** Renders the panel against a board held by the provider, so edits are visible. */
 function Harness({ seen }: { seen: (board: Board | undefined) => void }) {
   const boards = useBoards()
-  const board = boards.visible[0] ?? boards.drafts[0]
+  const board = boards.published[0] ?? boards.drafts[0]
   seen(board)
   if (!board) return null
   return <SharePanel board={board} />
