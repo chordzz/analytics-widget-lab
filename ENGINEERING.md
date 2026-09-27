@@ -75,7 +75,7 @@ bun install
 cp .env.example .env # required — see below
 bun dev              # http://localhost:5173  → the workbench
                      # http://localhost:5173/#/analytics → the product module
-bun test             # 525 tests, 23 files
+bun test             # 1529 tests, 80 files
 bun run typecheck    # tsc -b
 bun run docs         # regenerate docs/ from the code that implements it
 ```
@@ -106,6 +106,19 @@ source ~/.nvm/nvm.sh && nvm use 22.23.0 && bun run build
 
 Either produces `dist/` at ~867 kB / 249 kB gzipped in one chunk. The 500 kB chunk
 warning is expected and unaddressed — code-splitting a demo bundle buys nothing.
+
+**Two kinds of component test, and the difference matters.** Most render with
+`renderToStaticMarkup`, which renders once to a string and never mounts — no
+effect runs, so anything a component loads asynchronously never appears. An
+assertion about such content passes or fails for reasons unrelated to the
+component, and the version that passes is the dangerous one: it stays green with
+the feature deleted.
+
+For those, mount properly with `src/test/mount.tsx`, which renders through
+`createRoot` inside `act` and can drive clicks and typing. `src/test/dom.ts` is
+preloaded for every test file and registers happy-dom — a JavaScript DOM, not a
+browser, which is why it runs on a machine that cannot launch headless browsers.
+`SharePanel.render.test.tsx` is the worked example.
 
 `bun test` and `bun run typecheck` are unaffected by the Node version; they run on
 Bun. `oxlint` cannot be launched through `npx`/`bunx` on Node 16 either — use
