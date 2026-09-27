@@ -615,7 +615,12 @@ async function main(): Promise<void> {
           '                  ' +
           (decision === 'granted'
             ? '`/v1/me` says you DO hold `dashboard.share`, so this refusal is not\n' +
-              '                  about that permission. One to raise with the Analytics team.'
+              '                  about that permission. The lookup runs *as you* against IAM, which\n' +
+              '                  publishes its own answer: the sibling route documents that IAM\n' +
+              '                  wants `iam.entity.read` at holdings scope and refuses the\n' +
+              '                  Analytics credential for it. The generic Analytics refusal reads\n' +
+              '                  "Insufficient permissions"; a different message is IAM\'s, relayed.\n' +
+              '                  Raise with whoever grants IAM directory access, not Analytics.'
             : decision === 'denied'
               ? '`/v1/me` does not list `dashboard.share` as held — a grant on your\n' +
                 '                  user, which is IAM rather than Analytics.'
