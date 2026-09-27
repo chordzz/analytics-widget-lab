@@ -32,7 +32,7 @@ import type {
   ViewerIdentity,
 } from '../../retrieval/port'
 import type { Dataset } from '../../domain/dataset'
-import type { AccessRecorderPort, AuthorizationPort, OrgScopeRef } from '../../access/port'
+import type { AccessRecorderPort, AuthorizationPort, Directory, OrgScopeRef } from '../../access/port'
 import type { DashboardScope, ShareGrant } from '../../domain/dashboard'
 import type { DatasetQuery } from '../../domain/query'
 import { datasets, datasetById, rowsFor } from './datasets'
@@ -303,7 +303,7 @@ export class LocalAuthorization implements AuthorizationPort {
     return false
   }
 
-  async directory(query?: string): Promise<{ individuals: ViewerIdentity[]; groups: OrgScopeRef[] }> {
+  async directory(query?: string): Promise<Directory> {
     /*
      * Searched, not listed — the same rule the live endpoint enforces.
      *

@@ -129,11 +129,42 @@ describe('what it will not pretend to know', () => {
     expect(await httpAuthorization(apiFor(() => ok([]))).mayAdministerCatalogue(liveViewer)).toBe(false)
   })
 
-  test('an empty directory when the lookup fails, because a guess is worse', async () => {
-    const refusing = apiFor(
-      () => new Response('{}', { status: 403, headers: { 'content-type': 'application/json' } }),
+  const refusing = () =>
+    apiFor(
+      () =>
+        new Response('{"status":false,"message":"You may not browse the directory"}', {
+          status: 403,
+          headers: { 'content-type': 'application/json' },
+        }),
     )
-    expect(await httpAuthorization(refusing).directory('ada')).toEqual({
+
+  test('a refused people search says so, instead of reporting nobody', async () => {
+    /*
+     * The live case on an account holding every `holdings.analytics::` key:
+     * the bare call answers 200 with departments, and adding `q` answers 403.
+     * Reported as an empty result it would render as "nobody matching Ada",
+     * which tells the Author their colleague does not exist.
+     */
+    expect(await httpAuthorization(refusing()).directory('ada')).toEqual({
+      individuals: [],
+      groups: [],
+      peopleRefused: true,
+    })
+  })
+
+  test('a refusal with no search term is not a refused search', async () => {
+    // Nothing was searched for, so there is no search to report as refused —
+    // what failed is the departments call, which the Scope select shows by
+    // having no options rather than by a message about people.
+    expect(await httpAuthorization(refusing()).directory()).toEqual({
+      individuals: [],
+      groups: [],
+    })
+  })
+
+  test('an empty directory when the lookup fails for any other reason', async () => {
+    const broken = apiFor(() => new Response('nope', { status: 500 }))
+    expect(await httpAuthorization(broken).directory('ada')).toEqual({
       individuals: [],
       groups: [],
     })

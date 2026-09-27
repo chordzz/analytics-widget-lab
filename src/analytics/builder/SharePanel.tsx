@@ -62,6 +62,7 @@ export function SharePanel({ board }: { board: Board }) {
   const [groups, setGroups] = useState<OrgScopeRef[]>([])
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
+  const [refused, setRefused] = useState(false)
 
   /*
    * Departments, once. They come back whatever the query is, so re-reading
@@ -92,6 +93,7 @@ export function SharePanel({ board }: { board: Board }) {
     const term = query.trim()
     if (term === '') {
       setPeople([])
+      setRefused(false)
       setSearching(false)
       return
     }
@@ -101,8 +103,14 @@ export function SharePanel({ board }: { board: Board }) {
     const timer = setTimeout(() => {
       authorization
         .directory(term)
-        .then((result) => live && (setPeople(result.individuals), setSearching(false)))
-        .catch(() => live && (setPeople([]), setSearching(false)))
+        .then(
+          (result) =>
+            live &&
+            (setPeople(result.individuals),
+            setRefused(result.peopleRefused === true),
+            setSearching(false)),
+        )
+        .catch(() => live && (setPeople([]), setRefused(false), setSearching(false)))
     }, 250)
 
     return () => {
@@ -253,7 +261,23 @@ export function SharePanel({ board }: { board: Board }) {
 
           {query.trim() !== '' && searching && <p className="a-field__help">Searching…</p>}
 
-          {query.trim() !== '' && !searching && candidates.length === 0 && (
+          {/*
+            * Refused and empty are different answers and must read differently.
+            * The people lookup runs as the Author against the directory, which
+            * grants that separately from anything Analytics holds — so a search
+            * can be refused while the departments above load fine. Drawn as
+            * "nobody matching", it would tell an Author their colleague does
+            * not exist.
+            */}
+          {query.trim() !== '' && !searching && refused && (
+            <p className="a-field__help">
+              You do not have permission to search for people, so this cannot show
+              matches. Sharing with a department above still works. Ask whoever
+              administers directory access for people search.
+            </p>
+          )}
+
+          {query.trim() !== '' && !searching && !refused && candidates.length === 0 && (
             <p className="a-field__help">Nobody matching “{query.trim()}”.</p>
           )}
 

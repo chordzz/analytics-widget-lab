@@ -39,7 +39,8 @@
  * matters, it happens at the point of access, and it is the server's.
  */
 
-import type { AuthorizationPort, OrgScopeRef } from './port'
+import { isApiError } from '../api/errors'
+import type { AuthorizationPort, Directory } from './port'
 import type { ApiClient } from '../api/client'
 import type { DashboardScope, ShareGrant } from '../domain/dashboard'
 import type { ViewerIdentity } from '../retrieval/port'
@@ -164,7 +165,7 @@ export function httpAuthorization(api: ApiClient): AuthorizationPort {
      * is what it did before this endpoint existed — worse than the truth, but
      * the alternative is an Author unable to open the panel at all.
      */
-    async directory(query?: string): Promise<{ individuals: ViewerIdentity[]; groups: OrgScopeRef[] }> {
+    async directory(query?: string): Promise<Directory> {
       const term = query?.trim() ?? ''
       const path = term === ''
         ? '/v1/dashboards/share-targets'
@@ -181,8 +182,20 @@ export function httpAuthorization(api: ApiClient): AuthorizationPort {
             .filter(isCandidate)
             .map((entry) => ({ scopeId: entry.target_ref, label: nameOf(entry) })),
         }
-      } catch {
-        return { individuals: [], groups: [] }
+      } catch (error) {
+        /*
+         * A refused search is not an empty one, and the UI must not draw it as
+         * one. Live behaviour on an account holding every
+         * `holdings.analytics::` key: the bare call answers `200` with the
+         * departments, and adding `q` answers
+         * `403 "You may not browse the directory"` — the people lookup runs as
+         * the caller against IAM, which grants directory access separately.
+         *
+         * Reported rather than swallowed so the panel can say so. Rendering
+         * "no matches" would tell an Author that a colleague does not exist.
+         */
+        const refused = isApiError(error) && error.kind === 'denied'
+        return { individuals: [], groups: [], ...(refused && term !== '' ? { peopleRefused: true } : {}) }
       }
     },
   }

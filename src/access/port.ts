@@ -31,6 +31,25 @@ export interface OrgScopeRef {
   label: string
 }
 
+/**
+ * What the directory could answer.
+ *
+ * `peopleRefused` is the distinction that matters, and it exists because the
+ * alternative is a lie the UI tells confidently: a people search refused for
+ * want of a directory grant returns nothing, and nothing rendered as "no
+ * matches" says that person does not exist. Groups are unaffected — they are
+ * served to callers whose people search is refused, which is observed live
+ * rather than hypothetical: `share-targets` answers `200` with departments and
+ * an empty `users`, and `403 "You may not browse the directory"` the moment a
+ * `q` is added.
+ */
+export interface Directory {
+  individuals: ViewerIdentity[]
+  groups: OrgScopeRef[]
+  /** The search was refused, rather than matching nobody. */
+  peopleRefused?: boolean
+}
+
 export interface AuthorizationPort {
   /**
    * FR-DP-12 (what the Catalogue may advertise) and FR-DA-09 (what retrieval
@@ -80,7 +99,7 @@ export interface AuthorizationPort {
    * Groups come back either way: a small, non-sensitive set the Share panel
    * needs in order to render its Scope control at all.
    */
-  directory(query?: string): Promise<{ individuals: ViewerIdentity[]; groups: OrgScopeRef[] }>
+  directory(query?: string): Promise<Directory>
 }
 
 /**
