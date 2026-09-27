@@ -13,28 +13,31 @@
           "400",
           "401",
           "503"
-        ]
+        ],
+        "data": "TokenBundle"
       }
     },
     "/auth/request-otp": {
       "post": {
-        "summary": "Request an email sign-in code",
+        "summary": "Request a sign-in code",
         "responses": [
           "200",
           "400",
           "503"
-        ]
+        ],
+        "data": "{ expires_in_seconds, sent }"
       }
     },
     "/auth/verify-otp": {
       "post": {
-        "summary": "Verify an email code and receive tokens",
+        "summary": "Verify a sign-in code",
         "responses": [
           "200",
           "400",
           "401",
           "503"
-        ]
+        ],
+        "data": "TokenBundle"
       }
     },
     "/health": {
@@ -42,7 +45,8 @@
         "summary": "Liveness probe",
         "responses": [
           "200"
-        ]
+        ],
+        "data": "{ environment, service }"
       }
     },
     "/health/ready": {
@@ -51,17 +55,19 @@
         "responses": [
           "200",
           "503"
-        ]
+        ],
+        "data": "ReadinessChecks"
       }
     },
     "/v1/dashboards": {
       "get": {
-        "summary": "List Dashboards the viewer may see",
+        "summary": "List Dashboards",
         "responses": [
           "200",
           "401",
           "403"
-        ]
+        ],
+        "data": "DashboardSummary[]"
       },
       "post": {
         "summary": "Create a Dashboard",
@@ -70,7 +76,20 @@
           "400",
           "401",
           "403"
-        ]
+        ],
+        "data": "Dashboard"
+      }
+    },
+    "/v1/dashboards/share-targets": {
+      "get": {
+        "summary": "List share targets",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "503"
+        ],
+        "data": "{ departments, users }"
       }
     },
     "/v1/dashboards/{dashboardId}": {
@@ -81,26 +100,29 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": null
       },
       "get": {
-        "summary": "Read a Dashboard",
+        "summary": "Get a Dashboard",
         "responses": [
           "200",
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "Dashboard"
       },
       "patch": {
-        "summary": "Edit a Dashboard",
+        "summary": "Update a Dashboard",
         "responses": [
           "200",
           "400",
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "Dashboard"
       }
     },
     "/v1/dashboards/{dashboardId}/pin": {
@@ -111,7 +133,8 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": null
       },
       "put": {
         "summary": "Pin a Dashboard",
@@ -120,87 +143,117 @@
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": null
       }
     },
     "/v1/dashboards/{dashboardId}/publish": {
       "post": {
-        "summary": "Publish a Dashboard and set its scope",
+        "summary": "Publish a Dashboard",
         "responses": [
           "200",
           "400",
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "Dashboard"
       }
     },
     "/v1/dashboards/{dashboardId}/share-grants": {
+      "get": {
+        "summary": "List Share Grants",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ],
+        "data": "ShareGrant[]"
+      },
       "post": {
-        "summary": "Grant view access to a user or department",
+        "summary": "Create a Share Grant",
         "responses": [
           "201",
           "400",
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "ShareGrant"
+      }
+    },
+    "/v1/dashboards/{dashboardId}/share-grants/{grantId}": {
+      "delete": {
+        "summary": "Revoke a Share Grant",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ],
+        "data": null
       }
     },
     "/v1/datasets": {
       "get": {
-        "summary": "Browse the Catalogue",
+        "summary": "List Datasets",
         "responses": [
           "200",
           "401",
           "403"
-        ]
+        ],
+        "data": "Dataset[]"
       },
       "post": {
-        "summary": "Publish a Dataset declaration",
+        "summary": "Publish a Dataset",
         "responses": [
           "200",
           "201",
           "400",
           "401",
           "403"
-        ]
+        ],
+        "data": "Dataset"
       }
     },
     "/v1/datasets/{datasetId}": {
       "delete": {
-        "summary": "Remove a Dataset from the Catalogue",
+        "summary": "Delete a Dataset",
         "responses": [
           "200",
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": null
       },
       "get": {
-        "summary": "Read one declaration",
+        "summary": "Get a Dataset",
         "responses": [
           "200",
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "Dataset"
       }
     },
     "/v1/datasets/{datasetId}/presentation": {
       "get": {
-        "summary": "Data Shape and the Visualization Families that may present it",
+        "summary": "Get a Dataset's presentation options",
         "responses": [
           "200",
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "{ data_shape, dataset_id, presentation_options }"
       }
     },
     "/v1/datasets/{datasetId}/query": {
       "get": {
-        "summary": "Query a Dataset through the proxy",
+        "summary": "Query a Dataset",
         "responses": [
           "200",
           "400",
@@ -211,28 +264,44 @@
           "500",
           "503",
           "504"
-        ]
+        ],
+        "data": "object"
       }
     },
     "/v1/datasets/{datasetId}/withdraw": {
       "post": {
-        "summary": "Withdraw a Dataset from service",
+        "summary": "Withdraw a Dataset",
         "responses": [
           "200",
           "401",
           "403",
           "404"
-        ]
+        ],
+        "data": "Dataset"
+      }
+    },
+    "/v1/demo/seed": {
+      "post": {
+        "summary": "Seed demo data",
+        "responses": [
+          "200",
+          "400",
+          "401",
+          "403",
+          "404"
+        ],
+        "data": "{ amended, base_url, bindings, created }"
       }
     },
     "/v1/me": {
       "get": {
-        "summary": "The authenticated caller",
+        "summary": "Get the current actor",
         "responses": [
           "200",
           "401",
           "503"
-        ]
+        ],
+        "data": "Actor"
       }
     },
     "/v1/source-systems": {
@@ -242,46 +311,77 @@
           "200",
           "401",
           "403"
-        ]
+        ],
+        "data": "SourceSystem[]"
       },
       "post": {
-        "summary": "Register a Source System",
+        "summary": "Create a Source System",
         "responses": [
           "201",
           "400",
           "401",
           "403",
+          "409",
           "503"
-        ]
+        ],
+        "data": "SourceSystem"
       }
     },
-    "/v1/source-systems/{sourceSystemId}/services": {
+    "/v1/source-systems/iam-products": {
       "get": {
-        "summary": "List a Source System's Services",
+        "summary": "List IAM products",
         "responses": [
           "200",
           "401",
-          "403"
-        ]
-      },
-      "post": {
-        "summary": "Register a Service",
+          "403",
+          "503"
+        ],
+        "data": "{ domain_key, entity, entity_id, id, name, slug }[]"
+      }
+    },
+    "/v1/source-systems/{sourceSystemId}": {
+      "delete": {
+        "summary": "Delete a Source System",
         "responses": [
-          "201",
+          "200",
+          "401",
+          "403",
+          "404",
+          "409"
+        ],
+        "data": null
+      },
+      "get": {
+        "summary": "Get a Source System",
+        "responses": [
+          "200",
+          "401",
+          "403",
+          "404"
+        ],
+        "data": "SourceSystem"
+      },
+      "patch": {
+        "summary": "Update a Source System",
+        "responses": [
+          "200",
           "400",
           "401",
-          "403"
-        ]
+          "403",
+          "404"
+        ],
+        "data": "SourceSystem"
       }
     },
     "/v1/visualizations": {
       "get": {
-        "summary": "The complete Visualization taxonomy",
+        "summary": "List Visualizations",
         "responses": [
           "200",
           "401",
           "403"
-        ]
+        ],
+        "data": "PresentationOption[]"
       }
     }
   },
@@ -449,11 +549,12 @@
         ]
       },
       "DataClassification": {
-        "description": "The sensitivity tag. May be raised on amendment but never lowered from `pii`:\ndata already went out under that label.\n",
+        "description": "The sensitivity tag: an ordered ladder, least sensitive first.\n\n| Value | Means |\n|---|---|\n| `public` | May be seen by anyone who can reach the portal. |\n| `internal` | Ordinary company data. The default. |\n| `confidential` | Restricted to those with a reason — money movement, customer records, anything commercially sensitive. |\n| `restricted` | The narrowest tier: material that would cause serious harm if disclosed. |\n\nIt answers **how protected** the data is, which is a different question from\n**is it about an identifiable person** — that one is answered by\n`exposes_personal_data`, so a Dataset can be `confidential` *and* personal.\n\nOn amendment a classification may be **raised but never lowered**, at any step\nof the ladder: the data already went out under the higher label.\n",
         "enum": [
+          "public",
           "internal",
-          "pii",
-          "financial"
+          "confidential",
+          "restricted"
         ],
         "type": "string"
       },
@@ -464,7 +565,31 @@
             "example": 2,
             "type": "integer"
           },
+          "has_additive_measure": {
+            "description": "A Measure marked `additive-total`.",
+            "type": "boolean"
+          },
+          "has_coordinate_pair": {
+            "description": "Both a latitude and a longitude.",
+            "type": "boolean"
+          },
+          "has_geographic_area": {
+            "description": "A Field marked `geographic-area`.",
+            "type": "boolean"
+          },
           "has_location_field": {
+            "type": "boolean"
+          },
+          "has_many_records": {
+            "description": "From the Dataset's `record_volume`: thousands or millions of rows. A\nhistogram over one pre-aggregated figure is not a histogram.\n",
+            "type": "boolean"
+          },
+          "has_stage_dimension": {
+            "description": "A Field marked `stage`.",
+            "type": "boolean"
+          },
+          "has_state_dimension": {
+            "description": "A Field marked `state`.",
             "type": "boolean"
           },
           "has_time_dimension": {
@@ -490,6 +615,13 @@
           },
           "created_at": {
             "format": "date-time",
+            "type": "string"
+          },
+          "created_by_actor_id": {
+            "description": "The IAM actor who published this Dataset. Attribution only — no foreign\nkey, so the row survives its author being removed from IAM.\n",
+            "type": "string"
+          },
+          "created_by_name": {
             "type": "string"
           },
           "deleted": {
@@ -526,6 +658,11 @@
             },
             "type": "array"
           },
+          "iam_product_id": {
+            "description": "The publishing product, as IAM defines it. Never reassignable: the\npermission key and the endpoint both belong to it.\n",
+            "example": "2c1085ce-3174-468d-a6d8-e155f3c2eafb",
+            "type": "string"
+          },
           "id": {
             "description": "Dotted lowercase segments. Appears in URLs and Widget bindings.",
             "example": "peniremit.settlements",
@@ -536,23 +673,21 @@
             "type": "string"
           },
           "path": {
-            "description": "Absolute path appended to the Service's base URL. No query string,\nfragment, or traversal.\n",
+            "description": "Absolute path appended to the Source System's registered base URL. No\nquery string, fragment, or traversal.\n",
             "example": "/internal/analytics/settlements",
             "type": "string"
+          },
+          "record_volume": {
+            "$ref": "#/components/schemas/RecordVolume"
           },
           "required_permission_key": {
             "description": "The IAM key that gates this Dataset's **data**, checked against the viewer\nat query time. Normally the owning product's own read permission, not an\nAnalytics key — that indirection is what stops a Widget becoming an IAM\nbypass. Immutable once published.\n",
             "example": "holdings.penilabs.peniremit::settlement.read",
             "type": "string"
           },
-          "service_id": {
-            "description": "The registered Service whose base URL the path resolves against. Must\nbelong to `source_system_id`.\n",
-            "example": "fiat-bridge",
-            "type": "string"
-          },
           "source_system_id": {
-            "description": "The publishing product. Never reassignable: the permission key and the\nendpoint both belong to it.\n",
-            "example": "peniremit",
+            "description": "The registered deployment whose base URL the path resolves against. Must\nbelong to `iam_product_id` — publishing against another product's\ndeployment is refused.\n",
+            "example": "fiat-bridge",
             "type": "string"
           },
           "status": {
@@ -564,16 +699,26 @@
             "nullable": true,
             "type": "string"
           },
+          "time_range": {
+            "$ref": "#/components/schemas/TimeRange"
+          },
           "updated_at": {
             "format": "date-time",
+            "type": "string"
+          },
+          "updated_by_actor_id": {
+            "description": "The actor who last amended it. Tracked separately because an amendment\nchanges what every bound Widget sees, long after publication.\n",
+            "type": "string"
+          },
+          "updated_by_name": {
             "type": "string"
           }
         },
         "required": [
           "id",
           "name",
+          "iam_product_id",
           "source_system_id",
-          "service_id",
           "path",
           "fields",
           "required_permission_key",
@@ -648,6 +793,9 @@
           "role": {
             "$ref": "#/components/schemas/FieldRole"
           },
+          "semantic": {
+            "$ref": "#/components/schemas/FieldSemantic"
+          },
           "type": {
             "$ref": "#/components/schemas/FieldType"
           }
@@ -667,6 +815,18 @@
         "enum": [
           "dimension",
           "measure"
+        ],
+        "type": "string"
+      },
+      "FieldSemantic": {
+        "description": "What a Field *means*, where its `type` and `role` cannot say.\n\nA type says how a value is stored and a role says whether it groups or\naggregates. Neither can say that a number is a latitude, that a category holds\na workflow state, or that a sum is meaningful — `aggregations: [sum]` permits\nthe arithmetic, it does not claim the total means anything, and summing\npercentages is permitted and meaningless.\n\n| Value | Marks | Unlocks |\n|---|---|---|\n| `geographic-area` | a named place — country, region, administrative area | the choropleth in Geospatial |\n| `geographic-latitude` / `geographic-longitude` | a coordinate pair; **both** are needed, one alone plots nothing | the point map in Geospatial |\n| `state` | a condition at a point in time — settled, pending, failed | Status |\n| `stage` | an ordered step in a process; the order is what a funnel reads | the flow half of Ranking & Flow |\n| `additive-total` | a Measure whose sum means something | Composition |\n\n**Optional.** A Dataset without semantics is still publishable — it simply is\nnot offered the Families that turn on meaning. `additive-total`,\n`geographic-latitude` and `geographic-longitude` are declared on Measures; the\nrest on Dimensions, and a mismatch is refused at publication.\n",
+        "enum": [
+          "geographic-area",
+          "geographic-latitude",
+          "geographic-longitude",
+          "state",
+          "stage",
+          "additive-total"
         ],
         "type": "string"
       },
@@ -726,7 +886,7 @@
         "description": "One Visualization Family the Data Shape satisfies.",
         "properties": {
           "family": {
-            "example": "trend-over-time",
+            "example": "trend",
             "type": "string"
           },
           "requirement": {
@@ -738,11 +898,13 @@
             "description": "True for families whose widgets render one aggregated figure (stat card,\ndelta, status badge). When true, back the Widget with an aggregate-shaped\nDataset — the Source System returns the figure over the received filters;\nAnalytics and the frontend never compute it.\n",
             "type": "boolean"
           },
-          "types": {
+          "visualization_types": {
             "description": "The concrete Visualization Types in this Family.",
             "example": [
-              "line",
-              "area"
+              "line-chart",
+              "area-chart",
+              "spline-chart",
+              "step-chart"
             ],
             "items": {
               "type": "string"
@@ -786,63 +948,51 @@
         },
         "type": "object"
       },
-      "Service": {
-        "properties": {
-          "active": {
-            "type": "boolean"
-          },
-          "base_url": {
-            "type": "string"
-          },
-          "created_at": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "deleted": {
-            "type": "boolean"
-          },
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "source_system_id": {
-            "type": "string"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "type": "string"
-          }
-        },
-        "type": "object"
-      },
-      "ServiceInput": {
-        "properties": {
-          "base_url": {
-            "description": "Absolute `http`/`https` origin with a host and no query string or\nfragment. A trailing slash is trimmed.\n",
-            "example": "https://fiat-bridge.peniremit.internal",
-            "type": "string"
-          },
-          "id": {
-            "example": "fiat-bridge",
-            "type": "string"
-          },
-          "name": {
-            "example": "Fiat Bridge",
-            "type": "string"
-          },
-          "source_system_id": {
-            "description": "Taken from the path; a value in the body is overwritten.",
-            "readOnly": true,
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "base_url"
+      "RecordVolume": {
+        "description": "Roughly how many rows this Dataset answers with. Optional.\n\nIt exists for the one question a Field-level `semantic` cannot answer, because\nit belongs to the Dataset: **is this many records?** A histogram over one\npre-aggregated figure is not a histogram, and nothing else settles it — a grain\nof `[\"day\", \"corridor\"]` may be forty rows or four million, depending on\ncardinalities nobody declares.\n\nAn order of magnitude on purpose. It decides whether a distribution is worth\noffering, not what one draws, and a publisher made to keep a count accurate\nwould stop keeping it at all.\n\n`single-row` must agree with an empty `grain`; a contradiction is refused.\nOnly **Distribution** reads it, and only `thousands` and `millions` satisfy it.\n",
+        "enum": [
+          "single-row",
+          "tens",
+          "thousands",
+          "millions"
         ],
+        "type": "string"
+      },
+      "ShareCandidate": {
+        "description": "Someone a Dashboard may be shared with. `target_type` and `target_ref` are\nexactly what a Share Grant needs, so the client passes them straight through.\n",
+        "properties": {
+          "department_id": {
+            "type": "string"
+          },
+          "email": {
+            "format": "email",
+            "type": "string"
+          },
+          "job_title": {
+            "type": "string"
+          },
+          "member_count": {
+            "description": "Departments only.",
+            "type": "integer"
+          },
+          "name": {
+            "example": "Ada Chukwu",
+            "type": "string"
+          },
+          "photo_url": {
+            "type": "string"
+          },
+          "target_ref": {
+            "type": "string"
+          },
+          "target_type": {
+            "enum": [
+              "user",
+              "department"
+            ],
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "ShareGrant": {
@@ -890,8 +1040,20 @@
           "active": {
             "type": "boolean"
           },
+          "base_url": {
+            "description": "The origin this deployment's Dataset paths resolve against.",
+            "example": "https://fiat-bridge.peniremit.internal",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
+            "type": "string"
+          },
+          "created_by_actor_id": {
+            "description": "The IAM actor who created this. Attribution only — no foreign key, so the\nrow survives its author being removed from IAM.\n",
+            "type": "string"
+          },
+          "created_by_name": {
             "type": "string"
           },
           "deleted": {
@@ -912,33 +1074,71 @@
           "updated_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "updated_by_actor_id": {
+            "description": "The actor who last changed it.",
+            "type": "string"
+          },
+          "updated_by_name": {
+            "type": "string"
           }
         },
         "type": "object"
       },
       "SourceSystemInput": {
         "properties": {
+          "base_url": {
+            "description": "Absolute `http`/`https` origin with a host and no query string or\nfragment — a query string here would inject parameters into every Dataset\nthe product serves. A trailing slash is trimmed. A bare host without the\nscheme is refused.\n",
+            "example": "https://fiat-bridge.peniremit.internal",
+            "type": "string"
+          },
           "description": {
+            "example": "Remittance",
             "type": "string"
           },
           "iam_product_id": {
-            "description": "The IAM product this projects. Mandatory: a Source System references an\nexisting IAM product rather than defining one.\n",
+            "description": "The product's own `id` from `/v1/source-systems/iam-products` — a UUID.\nNeither its `slug` (the readable name) nor its `entity_id` (the owning\nentity) is accepted; sending the slug is refused with the id to use.\n",
+            "example": "2c1085ce-3174-468d-a6d8-e155f3c2eafb",
             "type": "string"
           },
           "id": {
-            "description": "Lowercase, hyphen or underscore separated.",
-            "example": "peniremit",
+            "description": "Stable slug for this deployment, used in Dataset declarations. Lowercase,\nhyphen or underscore separated.\n",
+            "example": "fiat-bridge",
             "type": "string"
           },
           "name": {
-            "example": "Peniremit",
+            "description": "Defaults to the product's name in IAM.",
+            "example": "Fiat Bridge",
             "type": "string"
           }
         },
         "required": [
           "id",
-          "name",
-          "iam_product_id"
+          "iam_product_id",
+          "base_url"
+        ],
+        "type": "object"
+      },
+      "TimeRange": {
+        "description": "The two Filter Parameters that are the ends of a date range, and the Field they\nnarrow. Optional — and its **absence is a statement**: this endpoint takes no\nrange, rather than one whose parameter names a client should guess.\n\nGuessing is the alternative this exists to remove. A parameter named `start`\nthat means something else accepts a date without complaint and returns the\nwrong rows, under a chart nobody has reason to doubt.\n\nEvery name is checked at publication: `field` must be a declared Field, and\nboth parameters declared Filter Parameters.\n",
+        "properties": {
+          "field": {
+            "example": "day",
+            "type": "string"
+          },
+          "from_parameter": {
+            "example": "from",
+            "type": "string"
+          },
+          "to_parameter": {
+            "example": "to",
+            "type": "string"
+          }
+        },
+        "required": [
+          "field",
+          "from_parameter",
+          "to_parameter"
         ],
         "type": "object"
       },

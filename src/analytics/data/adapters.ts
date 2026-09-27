@@ -32,7 +32,7 @@ import type {
   ViewerIdentity,
 } from '../../retrieval/port'
 import type { Dataset } from '../../domain/dataset'
-import type { AccessRecorderPort, AuthorizationPort, OrgScopeRef } from '../../access/port'
+import type { AccessRecorderPort, AuthorizationPort, Directory, OrgScopeRef } from '../../access/port'
 import type { DashboardScope, ShareGrant } from '../../domain/dashboard'
 import type { DatasetQuery } from '../../domain/query'
 import { datasets, datasetById, rowsFor } from './datasets'
@@ -303,9 +303,21 @@ export class LocalAuthorization implements AuthorizationPort {
     return false
   }
 
-  async directory(): Promise<{ individuals: ViewerIdentity[]; groups: OrgScopeRef[] }> {
-    // What the sharing UI offers. Everyone but the Author themselves — granting
-    // yourself access to your own board is a control that can only be a no-op.
-    return { individuals: this.people, groups: this.groups }
+  async directory(query?: string): Promise<Directory> {
+    /*
+     * Searched, not listed — the same rule the live endpoint enforces.
+     *
+     * It refuses to return people without a term, so a fixture that handed back
+     * everyone would make the Share panel work in the lab and come up empty
+     * against the API. Groups are returned either way, as they are upstream.
+     */
+    const term = query?.trim().toLowerCase() ?? ''
+    return {
+      individuals:
+        term === ''
+          ? []
+          : this.people.filter((person) => person.displayName.toLowerCase().includes(term)),
+      groups: this.groups,
+    }
   }
 }

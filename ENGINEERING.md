@@ -75,7 +75,7 @@ bun install
 cp .env.example .env # required — see below
 bun dev              # http://localhost:5173  → the workbench
                      # http://localhost:5173/#/analytics → the product module
-bun test             # 525 tests, 23 files
+bun test             # 1582 tests, 87 files
 bun run typecheck    # tsc -b
 bun run docs         # regenerate docs/ from the code that implements it
 ```
@@ -90,6 +90,13 @@ plausible deployment when its configuration is missing, and it fails as working
 software: the app loads, signs in, and reads the wrong environment's data with
 nothing in the UI to say so. A build that cannot name its API should not exist,
 so the check is at build time and the runtime throw is only a backstop.
+
+**`bun run lint` needs the same Node.** Under the machine default (v16) the
+`oxlint` shim is an extensionless `#!/usr/bin/env node` script that Node cannot
+ESM-load, so it exits 1 having linted nothing. The crash says
+`ERR_UNKNOWN_FILE_EXTENSION` and contains no line matching `error:` — so a
+pipeline that counts those reports a clean run from a linter that never
+started. Check the exit code, not a grep.
 
 **Build needs Node 20.19+ or 22.12+.** Vite 8 declares that in `engines`, and the
 machine this was developed on defaults to Node v16, where `bun run build` dies on
@@ -106,6 +113,23 @@ source ~/.nvm/nvm.sh && nvm use 22.23.0 && bun run build
 
 Either produces `dist/` at ~867 kB / 249 kB gzipped in one chunk. The 500 kB chunk
 warning is expected and unaddressed — code-splitting a demo bundle buys nothing.
+
+**Two kinds of component test, and the difference matters.** Most render with
+`renderToStaticMarkup`, which renders once to a string and never mounts — no
+effect runs, so anything a component loads asynchronously never appears. An
+assertion about such content passes or fails for reasons unrelated to the
+component, and the version that passes is the dangerous one: it stays green with
+the feature deleted.
+
+For those, mount properly with `src/test/mount.tsx`, which renders through
+`createRoot` inside `act` and can drive clicks and typing. `src/test/dom.ts` is
+preloaded for every test file and registers happy-dom — a JavaScript DOM, not a
+browser, which is why it runs on a machine that cannot launch headless browsers.
+`SharePanel.render.test.tsx` and `BoardControls.render.test.tsx` are the
+worked examples. One caution they encode: `Intl` follows the runtime's locale,
+so a date reading `3 Aug 2026` in a browser set to en-GB reads `Aug 3, 2026`
+under the test runner. Assert on what a control *announces*, not on how it
+draws a date.
 
 `bun test` and `bun run typecheck` are unaffected by the Node version; they run on
 Bun. `oxlint` cannot be launched through `npx`/`bunx` on Node 16 either — use

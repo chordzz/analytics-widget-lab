@@ -1,4 +1,17 @@
 /**
+ * The *rule* for who is offered the edit affordances — not the screen.
+ *
+ * `mayEdit` below is a copy of the line in `DashboardsScreen`, so what these
+ * assertions prove is that the rule behaves as intended given a permission map
+ * and two ids. They cannot prove the screen still applies it: changing the
+ * gate there leaves every test here green, which was checked — dropping the
+ * authorship half, and making an unknown permission withhold, both pass here
+ * and both fail `DashboardsScreen.render.test.tsx`.
+ *
+ * Kept for what it does cover: the three-way reading of a permission map, in
+ * one place, without a DOM. The screen's own behaviour is covered by the
+ * render test beside it.
+ *
  * Who is offered the edit affordances on a Dashboard they are looking at.
  *
  * Two gates that fail differently. The permission is unknown-offers, because
