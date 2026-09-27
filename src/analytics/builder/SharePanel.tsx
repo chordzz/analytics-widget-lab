@@ -26,6 +26,7 @@ import { useAnalyticsData, useMay } from '../data/AnalyticsData'
 import { useBoards } from './useBoards'
 import type { Board, DashboardScope } from './boards'
 import type { OrgScopeRef } from '../../access/port'
+import type { ShareGrant } from '../../domain/dashboard'
 import type { ViewerIdentity } from '../../retrieval/port'
 
 const scopeLabel = (scope: DashboardScope): string => {
@@ -53,6 +54,24 @@ function describeVisibility(board: Board, grantCount: number): string {
   if (board.scope.kind === 'personal') return 'Only you'
   if (grantCount === 0) return base
   return `${grantCount === 1 ? '1 person' : `${grantCount} people`} within ${base}`
+}
+
+/**
+ * A Grant's name, resolved where we can.
+ *
+ * `GET .../share-grants` returns `target_ref` and no name, and the directory
+ * searches by name rather than resolving a reference — so a Grant read back
+ * after a reload has only an id to show. Departments are the exception: the
+ * full list is already loaded for the Scope select, so a department Grant can
+ * be named locally. People cannot be, and fall back to the reference rather
+ * than to a blank.
+ *
+ * Raised with the backend: a name on the grant listing would close this for
+ * both.
+ */
+export function labelFor(grant: ShareGrant, groups: OrgScopeRef[]): string {
+  if (grant.recipientKind !== 'group') return grant.recipientLabel
+  return groups.find((group) => group.scopeId === grant.recipientId)?.label ?? grant.recipientLabel
 }
 
 export function SharePanel({ board }: { board: Board }) {
@@ -164,6 +183,7 @@ export function SharePanel({ board }: { board: Board }) {
    */
   if (board.authorId !== viewer.id) return null
   const granted = new Set(board.shareGrants.map((grant) => grant.recipientId))
+  const grantableGroups = groups.filter((group) => !granted.has(group.scopeId))
   const candidates = people.filter(
     (person) => person.id !== board.authorId && !granted.has(person.id),
   )
@@ -233,9 +253,41 @@ export function SharePanel({ board }: { board: Board }) {
                 checked
                 onChange={() => boards.removeGrant(board.id, grant.id)}
               />
-              <span>{grant.recipientLabel}</span>
+              <span>{labelFor(grant, groups)}</span>
             </label>
           ))}
+
+          {/*
+            * Departments are grantable, not only selectable as a Scope — the
+            * two are different decisions. A Scope of Engineering means the
+            * board belongs to Engineering; a Grant to Engineering means this
+            * board, within its Scope, is narrowed to them.
+            *
+            * Offered first because it is the half that works when people
+            * search does not: the directory serves departments to callers
+            * whose `q` lookup it refuses.
+            */}
+          {grantableGroups.length > 0 && (
+            <>
+              <p className="a-field__label">Add a department</p>
+              {grantableGroups.map((group) => (
+                <label key={group.scopeId} className="a-expose__item">
+                  <input
+                    type="checkbox"
+                    checked={false}
+                    onChange={() =>
+                      boards.addGrant(board.id, {
+                        kind: 'group',
+                        id: group.scopeId,
+                        label: group.label,
+                      })
+                    }
+                  />
+                  <span>{group.label}</span>
+                </label>
+              ))}
+            </>
+          )}
 
           <label className="a-field__label" htmlFor="share-search">
             Add someone
@@ -271,8 +323,8 @@ export function SharePanel({ board }: { board: Board }) {
             */}
           {query.trim() !== '' && !searching && refused && (
             <p className="a-field__help">
-              You do not have permission to search for people, so this cannot show
-              matches. Sharing with a department above still works. Ask whoever
+              You do not have permission to search for people, so this cannot
+              show matches. Naming a department above still works. Ask whoever
               administers directory access for people search.
             </p>
           )}

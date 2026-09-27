@@ -561,3 +561,58 @@ describe('a Widget is named by the server, not by us', () => {
     expect(traffic()).toEqual(['POST /v1/dashboards'])
   })
 })
+
+/**
+ * A `PATCH` *"replaces the name, description, Widgets, and Composition
+ * Elements"* — the whole widget list, every `x`, `y`, `w` and `h` among it. So
+ * a board that merely looks changed does not get a harmless extra request; it
+ * gets its hand-made arrangement replaced by whatever the client believed the
+ * layout was.
+ *
+ * Peniremit's four boards have been arranged by hand on the server. Reading
+ * Share Grants back at load writes to `board.shareGrants`, which is exactly the
+ * kind of change that could make an untouched board diff against its baseline —
+ * so the property to hold is not "grants load correctly" but "loading them
+ * moves nothing".
+ */
+describe('reading grants back does not disturb a board', () => {
+  const withGrants = (call: Call) => {
+    if (call.path.endsWith('/share-grants')) {
+      return ok([{ id: 'g-1', target_type: 'user', target_ref: 'u-7' }])
+    }
+    return ok([remote({ creator_actor_id: 'u1', widgets: [{ id: 'w-1', x: 3, y: 4, w: 6, h: 8 }] })])
+  }
+
+  /** Load once, save exactly what came back — what `useBoards` does. */
+  const loadThenSave = async () => {
+    const harness = storeWith(withGrants)
+    const loaded = await harness.store.load([], 'u1')
+    harness.calls.length = 0
+    await harness.store.save(loaded)
+    return harness
+  }
+
+  test('an untouched board is not written back, so its layout is not replaced', async () => {
+    const harness = await loadThenSave()
+    expect(harness.traffic().filter((line) => line.startsWith('PATCH'))).toEqual([])
+  })
+
+  test('the widget geometry the server holds is never echoed back at it', async () => {
+    /*
+     * The assertion above says no PATCH went out. This one says why that
+     * matters: the board carries real positions, and a PATCH would carry them
+     * too — as whatever this client reconstructed, not as what is on the
+     * server. No request body in the save may mention a widget at all.
+     */
+    const harness = await loadThenSave()
+    expect(harness.calls.filter((call) => JSON.stringify(call.body ?? {}).includes('widget'))).toEqual([])
+  })
+
+  test('nor are its grants re-sent or revoked', async () => {
+    const harness = await loadThenSave()
+
+    // A re-POST would be harmless; a DELETE would silently withdraw somebody's
+    // access on a save that changed nothing.
+    expect(harness.traffic().filter((line) => line.includes('share-grants'))).toEqual([])
+  })
+})
