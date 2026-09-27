@@ -73,6 +73,17 @@ export interface HttpBoardStoreOptions {
    */
   onGrantNotRevoked?: (board: Board, grant: ShareGrant) => void
   /**
+   * A Grant that could not be revoked has since been.
+   *
+   * The counterpart `onGrantNotRevoked` needed once revoking became possible.
+   * A failed revoke is retried on the next save, so without this a note saying
+   * somebody still has access has no way to learn that they no longer do — it
+   * stands for the rest of the session, describing a state that stopped being
+   * true. Exactly the gap `onSaved` closed for boards, and worse here: the
+   * note is about who can read a board.
+   */
+  onGrantRevoked?: (board: Board, grant: ShareGrant) => void
+  /**
    * Where the board you had open is remembered. Defaults to `localStorage`.
    *
    * Injected so a host that would rather not persist anything can say so, and
@@ -87,6 +98,7 @@ export function httpBoardStore(
     onSaveFailed = warnSaveFailed,
     onSaved = () => {},
     onGrantNotRevoked = warnGrantNotRevoked,
+    onGrantRevoked = () => {},
     editingPointer = browserEditingPointer(),
   }: HttpBoardStoreOptions = {},
 ): BoardStorePort {
@@ -448,6 +460,9 @@ export function httpBoardStore(
         )
         sent.delete(key)
         ids.delete(key)
+        // Announced whether or not a note is standing. The caller knows which
+        // it told; this store does not need to remember.
+        if (removed) onGrantRevoked(board, removed)
       } catch (error) {
         if (isApiError(error) && error.kind === 'session-expired') throw error
         /*

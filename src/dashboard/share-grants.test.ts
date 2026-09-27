@@ -414,3 +414,78 @@ describe('who a board is shared with is read from the server', () => {
     expect(sent.filter((call) => call.path.includes('share-grants'))).toEqual([])
   })
 })
+
+/**
+ * A revoke that failed and then succeeded.
+ *
+ * The note this drives is about who can read a board, and it used to be
+ * permanent because it could not resolve itself — there was no route to
+ * revoke, so a failed revoke stayed failed. There is one now, and the failure
+ * is retried on the next save. Without an announcement on the way back, the
+ * warning outlives the access it describes: the Author is told somebody still
+ * sees the board after they have stopped seeing it.
+ */
+describe('a revoke that lands on the retry says so', () => {
+  test('the second save announces it, having failed the first', async () => {
+    let refuse = true
+    const sent: Sent[] = []
+    const fetchImpl = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = new URL(String(input)).pathname
+      const method = init?.method ?? 'GET'
+      sent.push({ method, path, body: undefined })
+
+      if (method === 'DELETE' && path.includes('/share-grants/')) {
+        return Promise.resolve(
+          refuse
+            ? new Response('no', { status: 500 })
+            : new Response(JSON.stringify({ status: true, message: 'OK', data: {} }), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+              }),
+        )
+      }
+
+      const data = path.endsWith('/share-grants')
+        ? [{ id: 'g-2', target_type: 'user', target_ref: 'u-2' }]
+        : [{ id: 'srv-1', name: 'Finance daily', creator_actor_id: 'u1', widgets: [] }]
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ status: true, message: 'OK', data }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+    }) as typeof globalThis.fetch
+
+    const api = createApiClient({
+      baseUrl: 'https://api.example.test',
+      fetch: fetchImpl,
+      onDiagnostic: () => {},
+    })
+
+    const revoked: string[] = []
+    const notRevoked: string[] = []
+    const store = httpBoardStore(api, {
+      onSaveFailed: () => {},
+      onGrantNotRevoked: (_b, grant) => notRevoked.push(grant.recipientId),
+      onGrantRevoked: (_b, grant) => revoked.push(grant.recipientId),
+    })
+
+    const loaded = await store.load([], 'u1')
+    expect(loaded.boards[0].shareGrants.map((g) => g.recipientId)).toEqual(['u-2'])
+
+    const without = {
+      ...loaded,
+      boards: loaded.boards.map((entry) => ({ ...entry, shareGrants: [] })),
+    }
+
+    await store.save(without)
+    expect({ revoked, notRevoked }).toEqual({ revoked: [], notRevoked: ['u-2'] })
+
+    refuse = false
+    await store.save(without)
+
+    // The same Grant, announced the other way — which is what clears the note.
+    expect(revoked).toEqual(['u-2'])
+  })
+})

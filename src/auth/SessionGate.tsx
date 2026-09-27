@@ -155,16 +155,28 @@ function SignedIn({
   }, [])
 
   /*
-   * Not a dismissible note like an unsaved board, because it does not resolve
-   * itself. A failed save retries; this one cannot — the API has no route to
-   * revoke a Share Grant — so the Author is told plainly that the person still
-   * has access, and it stays until they acknowledge it.
+   * Said plainly, and it stays until acknowledged or undone.
+   *
+   * It used to be permanent because it could not resolve itself: there was no
+   * route to revoke a Share Grant, so a failed revoke stayed failed. There is
+   * one now, and a failed revoke is retried on the next save — which made this
+   * note the thing it warns about, standing after the access it describes had
+   * already been withdrawn. `noteGrantRevoked` is what clears it.
    */
   const noteGrantNotRevoked = useCallback((board: Board, grant: ShareGrant) => {
     setUnrevoked((entries) =>
       entries.some((entry) => entry.board === board.name && entry.who === grant.recipientLabel)
         ? entries
         : [...entries, { board: board.name, who: grant.recipientLabel }],
+    )
+  }, [])
+
+  /** The retry landed — that person no longer sees the board. */
+  const noteGrantRevoked = useCallback((board: Board, grant: ShareGrant) => {
+    setUnrevoked((entries) =>
+      entries.filter(
+        (entry) => !(entry.board === board.name && entry.who === grant.recipientLabel),
+      ),
     )
   }, [])
 
@@ -223,11 +235,13 @@ function SignedIn({
     saveFailed: noteSaveFailed,
     saved: noteSaved,
     grantNotRevoked: noteGrantNotRevoked,
+    grantRevoked: noteGrantRevoked,
   })
   notify.current = {
     saveFailed: noteSaveFailed,
     saved: noteSaved,
     grantNotRevoked: noteGrantNotRevoked,
+    grantRevoked: noteGrantRevoked,
   }
 
   const [boardStore] = useState(() =>
@@ -236,6 +250,7 @@ function SignedIn({
       onSaveFailed: (board, error) => notify.current.saveFailed(board, error),
       onSaved: (board) => notify.current.saved(board),
       onGrantNotRevoked: (board, grant) => notify.current.grantNotRevoked(board, grant),
+      onGrantRevoked: (board, grant) => notify.current.grantRevoked(board, grant),
     }),
   )
 
