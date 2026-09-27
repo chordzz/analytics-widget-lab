@@ -75,7 +75,7 @@ bun install
 cp .env.example .env # required — see below
 bun dev              # http://localhost:5173  → the workbench
                      # http://localhost:5173/#/analytics → the product module
-bun test             # 1529 tests, 80 files
+bun test             # 1536 tests, 81 files
 bun run typecheck    # tsc -b
 bun run docs         # regenerate docs/ from the code that implements it
 ```
@@ -118,7 +118,11 @@ For those, mount properly with `src/test/mount.tsx`, which renders through
 `createRoot` inside `act` and can drive clicks and typing. `src/test/dom.ts` is
 preloaded for every test file and registers happy-dom — a JavaScript DOM, not a
 browser, which is why it runs on a machine that cannot launch headless browsers.
-`SharePanel.render.test.tsx` is the worked example.
+`SharePanel.render.test.tsx` and `BoardControls.render.test.tsx` are the
+worked examples. One caution they encode: `Intl` follows the runtime's locale,
+so a date reading `3 Aug 2026` in a browser set to en-GB reads `Aug 3, 2026`
+under the test runner. Assert on what a control *announces*, not on how it
+draws a date.
 
 `bun test` and `bun run typecheck` are unaffected by the Node version; they run on
 Bun. `oxlint` cannot be launched through `npx`/`bunx` on Node 16 either — use

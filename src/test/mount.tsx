@@ -29,6 +29,21 @@ export interface Mounted {
   click: (label: string) => Promise<void>
   /** Types into a controlled input, the way React needs to hear about it. */
   type: (selector: string, value: string) => Promise<void>
+  /** Press a button by its visible text or `aria-label`. */
+  press: (name: string) => Promise<void>
+  /** Every button's accessible name, for asserting one is *not* offered. */
+  buttons: () => string[]
+  /**
+   * Press the one button whose accessible name starts with `prefix`.
+   *
+   * For names that carry a formatted date. `Intl` follows the runtime's
+   * locale, so a field reading `3 Aug 2026` in a browser set to en-GB reads
+   * `Aug 3, 2026` under the test runner — asserting the whole string would
+   * pin the test to a locale rather than to the behaviour.
+   */
+  pressStarting: (prefix: string) => Promise<void>
+  /** Render again with new props — a value that arrived after the mount. */
+  rerender: (node: ReactNode) => Promise<void>
   flush: () => Promise<void>
   /**
    * Wait out a real timer, then flush.
@@ -80,6 +95,53 @@ export async function mount(node: ReactNode): Promise<Mounted> {
       })
       await flush()
     },
+    buttons: () =>
+      [...container.querySelectorAll('button')].map(
+        (button) => button.getAttribute('aria-label') ?? (button.textContent ?? '').trim(),
+      ),
+
+    rerender: async (next: ReactNode) => {
+      await act(async () => {
+        root?.render(next)
+      })
+      await flush()
+    },
+
+    pressStarting: async (prefix: string) => {
+      const named = [...container.querySelectorAll('button')].map(
+        (button) =>
+          [button, button.getAttribute('aria-label') ?? (button.textContent ?? '').trim()] as const,
+      )
+      const hits = named.filter(([, name]) => name.startsWith(prefix))
+      if (hits.length !== 1) {
+        throw new Error(
+          `expected one button named "${prefix}…", found ${String(hits.length)} — ` +
+            `buttons are ${JSON.stringify(named.map(([, name]) => name))}`,
+        )
+      }
+      await act(async () => {
+        hits[0][0].click()
+      })
+      await flush()
+    },
+
+    press: async (name: string) => {
+      const buttons = [...container.querySelectorAll('button')]
+      const found = buttons.find(
+        (button) =>
+          (button.textContent ?? '').trim() === name ||
+          button.getAttribute('aria-label') === name,
+      )
+      if (!found) {
+        const seen = buttons.map((b) => b.getAttribute('aria-label') ?? (b.textContent ?? '').trim())
+        throw new Error(`no button named "${name}" — buttons are ${JSON.stringify(seen)}`)
+      }
+      await act(async () => {
+        found.click()
+      })
+      await flush()
+    },
+
     type: async (selector: string, value: string) => {
       const field = container.querySelector(selector)
       if (!field) throw new Error(`no element matching ${selector}`)
