@@ -199,11 +199,20 @@ export function grantInputFrom(grant: ShareGrant): {
  * row removal, so the revocation stays on the record"*. The listing is
  * documented as live grants only, so filtering on it should never remove
  * anything — which is the reason to do it rather than not to.
+ *
+ * `target_name` and `target_email` were added after we raised that a Grant
+ * came back with no name and nothing to resolve one from — the listing now
+ * carries it directly. Both are resolved from IAM on every read rather than
+ * stored, so a rename shows up, and both are cosmetic: unreachable IAM or an
+ * unknown actor leaves them empty rather than failing the listing, and
+ * `target_ref` is still there regardless.
  */
 export interface ApiShareGrant {
   id: string
   target_type: 'user' | 'department'
   target_ref: string
+  target_name?: string
+  target_email?: string
   deleted?: boolean
 }
 
@@ -214,18 +223,18 @@ export const apiGrantKey = (grant: ApiShareGrant): string =>
 /**
  * The API's Grant as ours.
  *
- * `recipientLabel` falls back to the reference because a Grant carries no name:
- * `target_ref` is an actor or department id and the endpoint that could resolve
- * it needs a search term. Where a label matters — the Share panel's list — it
- * comes from the directory entry the row was drawn from, matched on
- * `recipientId`, so the fallback shows only where nothing better exists.
+ * `recipientLabel` prefers `target_name` now that the listing carries one. It
+ * still falls back to the reference, because the name is cosmetic rather than
+ * guaranteed — IAM unreachable, or an actor IAM no longer knows about, leaves
+ * `target_name` empty without failing the read, and an id is a better fallback
+ * than a blank row.
  */
 export function grantFrom(grant: ApiShareGrant): ShareGrant {
   return {
     id: grant.id,
     recipientKind: grant.target_type === 'user' ? 'individual' : 'group',
     recipientId: grant.target_ref,
-    recipientLabel: grant.target_ref,
+    recipientLabel: grant.target_name && grant.target_name !== '' ? grant.target_name : grant.target_ref,
   }
 }
 

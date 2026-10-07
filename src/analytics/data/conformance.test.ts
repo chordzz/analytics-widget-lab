@@ -364,8 +364,14 @@ describe('the body is shaped the way the adapter unwraps it', () => {
     expect(dataOf('/v1/dashboards/share-targets')).toBe('{ departments, users }')
   })
 
-  test('share grants arrive as a bare list', () => {
-    expect(dataOf('/v1/dashboards/{dashboardId}/share-grants')).toBe('ShareGrant[]')
+  test('share grants arrive named, not as the bare shape a POST echoes back', () => {
+    /*
+     * Was `ShareGrant[]`. The listing grew `target_name`/`target_email` after
+     * we raised that a Grant came back with no name to show — a different
+     * schema from what creating one returns, because only the listing needs a
+     * name: a POST echoes back what the Author just supplied.
+     */
+    expect(dataOf('/v1/dashboards/{dashboardId}/share-grants')).toBe('ShareGrantListing[]')
   })
 
   test('creating a grant answers with the grant, which is where its id comes from', () => {

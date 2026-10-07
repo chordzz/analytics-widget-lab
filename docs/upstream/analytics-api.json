@@ -169,7 +169,7 @@
           "403",
           "404"
         ],
-        "data": "ShareGrant[]"
+        "data": "ShareGrantListing[]"
       },
       "post": {
         "summary": "Create a Share Grant",
@@ -734,6 +734,11 @@
         ],
         "type": "string"
       },
+      "DateValue": {
+        "description": "A `date` Filter Parameter takes a date (`2026-09-24`) or an RFC 3339 instant\n(`2026-09-24T00:00:00+01:00`). Analytics forwards it **byte for byte** — never\nparsed, converted or truncated — so the Source System decides what it means.\nThe convention publishers are asked to follow: instants compared as instants,\na date-only value as the whole UTC day, and a window half-open as\n`[from, to)`.\n",
+        "example": "2026-09-24T00:00:00+01:00",
+        "type": "string"
+      },
       "Envelope": {
         "description": "The shape of every response, success or failure.",
         "properties": {
@@ -1027,6 +1032,29 @@
           }
         },
         "type": "object"
+      },
+      "ShareGrantListing": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ShareGrant"
+          },
+          {
+            "properties": {
+              "target_email": {
+                "description": "People only.",
+                "format": "email",
+                "type": "string"
+              },
+              "target_name": {
+                "description": "The person's full name, or the department's name.",
+                "example": "Ada Chukwu",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        ],
+        "description": "A Share Grant as the listing returns it: with the name of who it names, so a\n\"who can see this board\" list is readable after a reload.\n\nNames are resolved from IAM on every read rather than stored, so someone renamed\nsince being shared shows their current name. They are cosmetic: if IAM cannot\nbe reached, or no longer knows a person, `target_name` is empty and the grant is\nstill listed with its `target_ref` — the list never fails over a name.\n"
       },
       "ShareGrantTarget": {
         "enum": [

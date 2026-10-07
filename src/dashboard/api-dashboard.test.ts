@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { boardFrom, dashboardInputFrom, isLive, scopeInputFrom, type ApiDashboard } from './api-dashboard'
+import { boardFrom, dashboardInputFrom, grantFrom, isLive, scopeInputFrom, type ApiDashboard } from './api-dashboard'
 import { dateRangeControl, section } from '../domain/composition'
 import type { Board } from '../analytics/builder/boards'
 
@@ -370,5 +370,32 @@ describe('a Widget keeps the currencies it may be read in', () => {
       'local',
     )
     expect(back.widgets.w1.unitOptions).toEqual(['usd', 'ngn'])
+  })
+})
+
+/**
+ * `grantFrom` — the fix for a Grant that used to come back with no name.
+ *
+ * `target_name` was added to the listing after we raised it: a Grant carried
+ * `target_ref` and nothing to resolve a display name from, so "who can see
+ * this board" read as raw actor ids once a page reloaded. `target_name` is
+ * resolved from IAM on every read rather than stored, and is documented as
+ * cosmetic — unreachable IAM, or an actor IAM no longer knows, leaves it empty
+ * rather than failing the listing. So the id has to stay the fallback.
+ */
+describe('a Grant is named where the listing names one', () => {
+  test('target_name becomes the label', () => {
+    const grant = grantFrom({ id: 'g1', target_type: 'user', target_ref: 'u-2', target_name: 'Ada Chukwu' })
+    expect(grant.recipientLabel).toBe('Ada Chukwu')
+  })
+
+  test('an empty name falls back to the reference, not to a blank row', () => {
+    const grant = grantFrom({ id: 'g1', target_type: 'user', target_ref: 'u-2', target_name: '' })
+    expect(grant.recipientLabel).toBe('u-2')
+  })
+
+  test('no name at all falls back the same way — an older server, or a department reply with none', () => {
+    const grant = grantFrom({ id: 'g1', target_type: 'department', target_ref: 'dept-eng' })
+    expect(grant.recipientLabel).toBe('dept-eng')
   })
 })
