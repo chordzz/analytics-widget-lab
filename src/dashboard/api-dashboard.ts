@@ -192,6 +192,52 @@ export function grantInputFrom(grant: ShareGrant): {
   }
 }
 
+/**
+ * A Share Grant as `GET`/`POST .../share-grants` returns it.
+ *
+ * `deleted` is in the schema because a revocation is *"a status update, never a
+ * row removal, so the revocation stays on the record"*. The listing is
+ * documented as live grants only, so filtering on it should never remove
+ * anything — which is the reason to do it rather than not to.
+ *
+ * `target_name` and `target_email` were added after we raised that a Grant
+ * came back with no name and nothing to resolve one from — the listing now
+ * carries it directly. Both are resolved from IAM on every read rather than
+ * stored, so a rename shows up, and both are cosmetic: unreachable IAM or an
+ * unknown actor leaves them empty rather than failing the listing, and
+ * `target_ref` is still there regardless.
+ */
+export interface ApiShareGrant {
+  id: string
+  target_type: 'user' | 'department'
+  target_ref: string
+  target_name?: string
+  target_email?: string
+  deleted?: boolean
+}
+
+/** `grantKey` again, from the API's shape — the two must agree to match up. */
+export const apiGrantKey = (grant: ApiShareGrant): string =>
+  `${grant.target_type}:${grant.target_ref}`
+
+/**
+ * The API's Grant as ours.
+ *
+ * `recipientLabel` prefers `target_name` now that the listing carries one. It
+ * still falls back to the reference, because the name is cosmetic rather than
+ * guaranteed — IAM unreachable, or an actor IAM no longer knows about, leaves
+ * `target_name` empty without failing the read, and an id is a better fallback
+ * than a blank row.
+ */
+export function grantFrom(grant: ApiShareGrant): ShareGrant {
+  return {
+    id: grant.id,
+    recipientKind: grant.target_type === 'user' ? 'individual' : 'group',
+    recipientId: grant.target_ref,
+    recipientLabel: grant.target_name && grant.target_name !== '' ? grant.target_name : grant.target_ref,
+  }
+}
+
 /** Identifies a Grant by what it targets, which is all the API lets us compare. */
 export const grantKey = (grant: ShareGrant): string =>
   `${grant.recipientKind === 'individual' ? 'user' : 'department'}:${grant.recipientId}`

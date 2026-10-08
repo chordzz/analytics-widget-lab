@@ -157,7 +157,8 @@ describe('changing who can see a board', () => {
  *
  * The scope control was gated on `dashboard.share` and the panel around it on
  * nothing, so anyone reaching the builder for a board saw who it is shared with
- * and who it could be. `CreateScreen` has no authorship guard of its own, so
+ * and who it could be. `CreateScreen` gained an authorship guard of its own since — see
+ * `CreateScreen.render.test.tsx` — but that was added after this, so
  * that was reachable rather than theoretical.
  */
 describe('the visibility panel belongs to the Author', () => {
@@ -193,5 +194,68 @@ describe('the visibility panel belongs to the Author', () => {
     // Holding `dashboard.share` is what lets you share *your* boards. It is not
     // a licence to read the recipient list of someone else's.
     expect(panelFor('someone-else')).toBe('')
+  })
+})
+
+/**
+ * What the Share panel shows without a directory answer.
+ *
+ * Only the props are exercised — `renderToStaticMarkup` runs no effects, so the
+ * search itself cannot be driven from here and a test that appeared to would be
+ * passing for the wrong reason. What *is* reachable is the property that
+ * matters most: named people come from `board.shareGrants`, so removing access
+ * never depends on a lookup succeeding.
+ */
+describe('the Share panel before anyone has searched', () => {
+  const shared = (grants: { id: string; recipientKind: 'individual'; recipientId: string; recipientLabel: string }[]) =>
+    renderToStaticMarkup(
+      <AnalyticsDataProvider permissions={{ 'dashboard.share': true }}>
+        <BoardsProvider>
+          <SharePanel
+            board={{
+              id: 'b-1',
+              name: 'Finance daily',
+              description: '',
+              authorId: 'local',
+              scope: { kind: 'organizational-scope', scopeId: 'dept-finance', label: 'Finance' },
+              shareGrants: grants,
+              status: 'published' as const,
+              updated: '2026-09-15',
+              widgets: {},
+              placements: [],
+              controls: [],
+              sections: [],
+            }}
+          />
+        </BoardsProvider>
+      </AnalyticsDataProvider>,
+    )
+
+  const ada = {
+    id: 'g-1',
+    recipientKind: 'individual' as const,
+    recipientId: 'u-2',
+    recipientLabel: 'Ada Chukwu',
+  }
+
+  test('someone already named is listed, with no search run', () => {
+    /*
+     * The panel used to draw its list from the directory, so a person could be
+     * granted and then not appear — leaving a Grant visible in the summary
+     * count and unreachable. Now the named come from the board itself.
+     */
+    expect(shared([ada])).toContain('Ada Chukwu')
+  })
+
+  test('and their box is ticked, so unticking is what removes them', () => {
+    const markup = shared([ada])
+    const box = markup.slice(0, markup.indexOf('Ada Chukwu'))
+    expect(box.lastIndexOf('checked=""')).toBeGreaterThan(box.lastIndexOf('<label'))
+  })
+
+  test('the search says what to do rather than looking empty', () => {
+    // An empty list reads as "nobody here". The endpoint will not answer
+    // without a term, so the panel has to ask for one.
+    expect(shared([])).toContain('Type a name to find someone to share with')
   })
 })

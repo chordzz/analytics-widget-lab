@@ -315,6 +315,19 @@ export function useWidgetRows(
     [dataset, queryKey],
   )
 
+  /*
+   * Keyed by the question, not by everything that went into composing it.
+   *
+   * `queryKey` above stops an equal-by-value *spec* re-running the retrieval.
+   * It cannot stop an equal-by-value *query*, and those arise: the unit toggle
+   * writes to `choices`, which keys the memo, while `queryFor` ignores it —
+   * a currency is which column gets drawn, never which rows are asked for.
+   * So every toggle re-sent a byte-identical request and redrew the card from
+   * the answer it already had. Widget's own comment says only the filters
+   * should cost a request; this is what makes that true.
+   */
+  const querySignature = query === null ? null : JSON.stringify(query)
+
   useEffect(() => {
     if (!dataset || !query) return
 
@@ -329,7 +342,10 @@ export function useWidgetRows(
     return () => {
       live = false
     }
-  }, [retrieval, viewer, dataset, query])
+    // `query` is held by value through `querySignature`; an identical question
+    // must not be asked again just because the object is new.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [retrieval, viewer, dataset?.id, querySignature])
 
   return state
 }

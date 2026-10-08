@@ -30,6 +30,9 @@ import {
   type WidgetIdResolver,
   grantInputFrom,
   grantKey,
+  apiGrantKey,
+  grantFrom,
+  type ApiShareGrant,
   isLive,
   scopeInputFrom,
   type ApiDashboard,
@@ -56,18 +59,30 @@ export interface HttpBoardStoreOptions {
    */
   onSaved?: (board: Board) => void
   /**
-   * An Author removed a Share Grant and the API offers no way to honour it.
+   * An Author removed a Share Grant and we could not carry it out.
    *
-   * `POST /v1/dashboards/{id}/share-grants` is the only Grant route: there is no
-   * DELETE, and no listing either. So a Grant can be created and never revoked,
-   * and an Author who unticks a name has changed our copy and nothing else —
-   * that person still sees the board.
+   * No longer the normal path: `DELETE .../share-grants/{grantId}` exists and
+   * this store calls it. What remains are the two ways it can still fail — the
+   * request was refused, or we never learned the grant's id because the listing
+   * did not come back — and in both the Author has unticked a name and that
+   * person still sees the board.
    *
    * This must not be silent. Every other gap in this store is a save that can be
    * retried; this one is someone believing they revoked access when they did
    * not, which is a disclosure rather than an inconvenience.
    */
   onGrantNotRevoked?: (board: Board, grant: ShareGrant) => void
+  /**
+   * A Grant that could not be revoked has since been.
+   *
+   * The counterpart `onGrantNotRevoked` needed once revoking became possible.
+   * A failed revoke is retried on the next save, so without this a note saying
+   * somebody still has access has no way to learn that they no longer do — it
+   * stands for the rest of the session, describing a state that stopped being
+   * true. Exactly the gap `onSaved` closed for boards, and worse here: the
+   * note is about who can read a board.
+   */
+  onGrantRevoked?: (board: Board, grant: ShareGrant) => void
   /**
    * Where the board you had open is remembered. Defaults to `localStorage`.
    *
@@ -83,6 +98,7 @@ export function httpBoardStore(
     onSaveFailed = warnSaveFailed,
     onSaved = () => {},
     onGrantNotRevoked = warnGrantNotRevoked,
+    onGrantRevoked = () => {},
     editingPointer = browserEditingPointer(),
   }: HttpBoardStoreOptions = {},
 ): BoardStorePort {
@@ -119,16 +135,25 @@ export function httpBoardStore(
    */
   let loaded = false
   /**
-   * Grants we have successfully sent, by board and target.
+   * Grants the server holds, by board and target.
    *
-   * Held here because it cannot be read back: `Dashboard` carries no
-   * `share_grants` and there is no listing route, so the server's answer to
-   * "who is this shared with" is unavailable. This map is the whole of our
-   * knowledge, and it starts empty on every reload — which is why a re-POST
-   * after a reload is expected rather than a bug. The API is explicit that it
-   * is safe: "adding the same grant twice returns the existing one".
+   * Filled from `GET .../share-grants` at load and kept current by every send,
+   * so it is the server's answer rather than a record of what this session
+   * happened to do. It used to be the latter — there was no listing route, the
+   * map started empty on every reload, and a re-POST after one was expected
+   * rather than a bug.
    */
   const sentGrants = new Map<string, Set<string>>()
+  /**
+   * The id the server knows each Grant by, per board and target.
+   *
+   * Revoking needs it and nothing else carries it: a Grant is addressed by
+   * `grantId` in the path, while everything else in this store speaks in terms
+   * of what a Grant *targets*. Filled from the same listing and from each
+   * `POST` response, so a Grant created and removed within one session can be
+   * revoked without a reload.
+   */
+  const grantIds = new Map<string, Map<string, string>>()
 
   const remoteId = (localId: string) => assigned.get(localId) ?? localId
 
@@ -185,6 +210,16 @@ export function httpBoardStore(
         '/v1/dashboards',
       )
       const boards = listOf(body).filter(isLive).map((entry) => boardFrom(entry, authorId))
+
+      /*
+       * Who each board is shared with, asked per board because that is how the
+       * route is shaped — `GET /v1/dashboards/{id}/share-grants`, one board at
+       * a time. In parallel, and only for boards this viewer authored: the
+       * Share panel renders for nobody else, and `reconcileGrants` only ever
+       * runs against a board they can save. A workspace of other people's
+       * boards therefore costs no extra requests.
+       */
+      await Promise.all(boards.filter((board) => board.authorId === authorId).map(readGrants))
 
       baseline = new Map(boards.map((board) => [board.id, board]))
       assigned.clear()
@@ -334,12 +369,44 @@ export function httpBoardStore(
   }
 
   /**
+   * Fill in a board's Grants from the server, mutating it in place.
+   *
+   * In place because this runs while the board list is being built, before
+   * anything holds a reference — and because `shareGrants` is the one part of a
+   * Dashboard the `GET /v1/dashboards` payload does not carry.
+   *
+   * A failure is swallowed to empty rather than failing the load. The likely
+   * one is `403`, and a viewer who cannot read a board's grants should still
+   * get their boards; what it costs is the ability to revoke, which
+   * `reconcileGrants` reports rather than performs when the id is missing.
+   */
+  async function readGrants(board: Board): Promise<void> {
+    try {
+      const body = await api.request<ApiShareGrant[] | undefined>(
+        `/v1/dashboards/${encodeURIComponent(board.id)}/share-grants`,
+      )
+      const live = (Array.isArray(body) ? body : []).filter(isLiveGrant)
+
+      board.shareGrants = live.map(grantFrom)
+      sentGrants.set(board.id, new Set(live.map(apiGrantKey)))
+      grantIds.set(board.id, new Map(live.map((grant) => [apiGrantKey(grant), grant.id])))
+    } catch (error) {
+      if (isApiError(error) && error.kind === 'session-expired') throw error
+      board.shareGrants = []
+    }
+  }
+
+  /**
    * Send Grants that are new, and report the ones we cannot take back.
    *
-   * Grants are a separate route from the board itself, like publication — but
-   * unlike publication the route only goes one way. What this can do is create;
-   * what it cannot do is revoke, and the difference is reported rather than
-   * absorbed.
+   * Grants are a separate route from the board itself, like publication, and
+   * now go both ways: what is new is created, what the Author removed is
+   * revoked. Only a revoke we cannot perform is reported rather than absorbed.
+   *
+   * Worth knowing when reading the removal branch: revoking the *last* Grant
+   * does not close a board down, it widens it back to its Scope — with no
+   * Grants, everyone in Scope sees it. That is the existing rule rather than
+   * anything this introduces.
    *
    * A failure here does not advance `sentGrants`, so the next save retries it,
    * and it does not fail the board's save: the composition landed, and a Grant
@@ -348,16 +415,20 @@ export function httpBoardStore(
    */
   async function reconcileGrants(board: Board): Promise<void> {
     const sent = sentGrants.get(board.id) ?? new Set<string>()
+    const ids = grantIds.get(board.id) ?? new Map<string, string>()
     const wanted = new Map(board.shareGrants.map((grant) => [grantKey(grant), grant]))
 
     for (const [key, grant] of wanted) {
       if (sent.has(key)) continue
       try {
-        await api.request(
+        const created = await api.request<ApiShareGrant | undefined>(
           `/v1/dashboards/${encodeURIComponent(remoteId(board.id))}/share-grants`,
           { method: 'POST', body: grantInputFrom(grant) },
         )
         sent.add(key)
+        // Remembered now so a Grant added and removed in one sitting can still
+        // be revoked — the listing that would otherwise supply it runs at load.
+        if (created?.id) ids.set(key, created.id)
       } catch (error) {
         // A session ending is not a Grant problem and must keep rising.
         if (isApiError(error) && error.kind === 'session-expired') throw error
@@ -367,17 +438,44 @@ export function httpBoardStore(
 
     for (const key of [...sent]) {
       if (wanted.has(key)) continue
-      /*
-       * The Author removed it and we have nowhere to send that. Forgetting the
-       * key would make the next save re-POST a Grant they deliberately removed;
-       * keeping it is the truth — the Grant is live upstream — so it stays, and
-       * the caller is told.
-       */
       const removed = lastKnownGrant(board.id, key)
-      if (removed) onGrantNotRevoked(board, removed)
+      const grantId = ids.get(key)
+
+      /*
+       * No id means the listing never reached us — a refused or failed
+       * `GET .../share-grants` at load. Forgetting the key would make the next
+       * save re-POST a Grant the Author deliberately removed; keeping it is the
+       * truth, because the Grant is live upstream, so it stays and the caller
+       * is told that access was not withdrawn.
+       */
+      if (grantId === undefined) {
+        if (removed) onGrantNotRevoked(board, removed)
+        continue
+      }
+
+      try {
+        await api.request(
+          `/v1/dashboards/${encodeURIComponent(remoteId(board.id))}/share-grants/${encodeURIComponent(grantId)}`,
+          { method: 'DELETE' },
+        )
+        sent.delete(key)
+        ids.delete(key)
+        // Announced whether or not a note is standing. The caller knows which
+        // it told; this store does not need to remember.
+        if (removed) onGrantRevoked(board, removed)
+      } catch (error) {
+        if (isApiError(error) && error.kind === 'session-expired') throw error
+        /*
+         * The key stays in `sent`, which is correct rather than tidy: the Grant
+         * is still live, so the next save must try the DELETE again rather than
+         * treating it as gone.
+         */
+        if (removed) onGrantNotRevoked(board, removed)
+      }
     }
 
     sentGrants.set(board.id, sent)
+    grantIds.set(board.id, ids)
   }
 
   /** The Grant as it was before removal, for a message that can name someone. */
@@ -434,6 +532,24 @@ function listOf(body: ApiDashboard[] | { dashboards?: ApiDashboard[] } | undefin
   return []
 }
 
+/**
+ * A Grant we can actually act on.
+ *
+ * Shape-checked rather than cast. A Grant without `target_type` and
+ * `target_ref` cannot be matched to one the Author holds, and one without `id`
+ * cannot be revoked — so an entry missing any of them would enter `sentGrants`
+ * as a key nothing will ever want and be "removed" on the next save, issuing a
+ * DELETE for a Grant that was never read correctly in the first place.
+ */
+function isLiveGrant(grant: ApiShareGrant | undefined): grant is ApiShareGrant {
+  return (
+    typeof grant?.id === 'string' &&
+    typeof grant.target_ref === 'string' &&
+    (grant.target_type === 'user' || grant.target_type === 'department') &&
+    grant.deleted !== true
+  )
+}
+
 function warnSaveFailed(board: Board, error: unknown): void {
   console.warn(
     `[analytics] "${board.name}" did not save: ${error instanceof Error ? error.message : String(error)}`,
@@ -442,7 +558,7 @@ function warnSaveFailed(board: Board, error: unknown): void {
 
 function warnGrantNotRevoked(board: Board, grant: ShareGrant): void {
   console.warn(
-    `[analytics] "${board.name}": ${grant.recipientLabel} still has access. ` +
-      'The Analytics API has no route to revoke a Share Grant.',
+    `[analytics] "${board.name}": ${grant.recipientLabel} still has access — ` +
+      'the Share Grant could not be revoked. It will be retried on the next save.',
   )
 }

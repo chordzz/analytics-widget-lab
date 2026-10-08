@@ -64,6 +64,28 @@ export type FieldSemantic =
   | 'state' // unblocks Status via its state-Dimension route
   | 'stage' // unblocks Ranking & Flow via its ordered-stage route
 
+/**
+ * The same values as a list, so a test can compare them to the API's enum.
+ *
+ * A union cannot be enumerated at runtime, and a hand-kept copy of one drifts
+ * silently — which is the failure this exists to prevent, not to introduce. The
+ * `satisfies` keeps every entry a real semantic, and `SemanticsListed` below
+ * fails to compile if the union gains a member this list does not.
+ */
+export const FIELD_SEMANTICS = [
+  'geographic-area',
+  'geographic-latitude',
+  'geographic-longitude',
+  'additive-total',
+  'state',
+  'stage',
+] as const satisfies readonly FieldSemantic[]
+
+/** Compile-time only: `never` unless the list covers the union exactly. */
+type SemanticsListed = Exclude<FieldSemantic, (typeof FIELD_SEMANTICS)[number]>
+const _semanticsAreListed: SemanticsListed extends never ? true : never = true
+void _semanticsAreListed
+
 /** Every semantic that says a Field is geographic. */
 export const GEOGRAPHIC_SEMANTICS = [
   'geographic-area',

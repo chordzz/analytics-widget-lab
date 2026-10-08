@@ -14,6 +14,26 @@ import { canViewDashboard, evaluateGrant } from './dashboard-access'
 import { LocalAuthorization } from '../analytics/data/adapters'
 import type { AccessSubject } from './dashboard-access'
 import type { ViewerIdentity } from '../retrieval/port'
+import { createApiClient } from '../api/client'
+
+const ok = (data: unknown) =>
+  new Response(JSON.stringify({ status: true, message: 'OK', data }), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+  })
+
+/** An API client whose every call is answered by `reply`, with the path recorded. */
+function apiFor(reply: (path: string) => Response, paths: string[] = []) {
+  return createApiClient({
+    baseUrl: 'https://api.example.test',
+    onDiagnostic: () => {},
+    fetch: ((input: RequestInfo | URL) => {
+      const url = new URL(String(input))
+      paths.push(url.pathname + url.search)
+      return Promise.resolve(reply(url.pathname + url.search))
+    }) as typeof globalThis.fetch,
+  })
+}
 
 /** Built the way `SessionGate` builds it from `/v1/me`: id and a name, nothing else. */
 const liveViewer: ViewerIdentity = { id: 'da79a9a7-043d-45a3-b35d-f6c449340d4a', displayName: 'Olaife Olawore' }
@@ -32,7 +52,7 @@ describe('a board the server returned is a board the server approved', () => {
      * returns only boards whose scope and Grants admit the viewer, so this board
      * arriving *is* the decision. Re-deciding can only subtract.
      */
-    expect(await canViewDashboard(departmentBoard, liveViewer, httpAuthorization())).toBe(true)
+    expect(await canViewDashboard(departmentBoard, liveViewer, httpAuthorization(apiFor(() => ok([]))))).toBe(true)
   })
 
   test('and the fixture adapter hides it, which is the bug', async () => {
@@ -53,7 +73,7 @@ describe('a board the server returned is a board the server approved', () => {
     // both pass under either adapter — which is why the bug was invisible.
     const wide: AccessSubject = { ...departmentBoard, scope: { kind: 'organization-wide' } }
     expect(await canViewDashboard(wide, liveViewer, new LocalAuthorization())).toBe(true)
-    expect(await canViewDashboard(wide, liveViewer, httpAuthorization())).toBe(true)
+    expect(await canViewDashboard(wide, liveViewer, httpAuthorization(apiFor(() => ok([]))))).toBe(true)
   })
 })
 
@@ -62,12 +82,12 @@ describe('what the client still decides for itself', () => {
     // FR-CO-04, and it does not depend on the port: `canViewDashboard` settles
     // it before asking. Deferring must not quietly widen this.
     const draft: AccessSubject = { ...departmentBoard, status: 'draft' }
-    expect(await canViewDashboard(draft, liveViewer, httpAuthorization())).toBe(false)
+    expect(await canViewDashboard(draft, liveViewer, httpAuthorization(apiFor(() => ok([]))))).toBe(false)
   })
 
   test('the author always sees their own', async () => {
     const mine: AccessSubject = { ...departmentBoard, authorId: liveViewer.id }
-    expect(await canViewDashboard(mine, liveViewer, httpAuthorization())).toBe(true)
+    expect(await canViewDashboard(mine, liveViewer, httpAuthorization(apiFor(() => ok([]))))).toBe(true)
   })
 })
 
@@ -87,7 +107,7 @@ describe('a Grant is reported as working, because it is', () => {
      * honouring it. Overstating a Grant's reach is the safer of the two errors;
      * telling someone a live Grant does nothing is the one that costs them.
      */
-    const verdict = await evaluateGrant(grant, departmentBoard.scope, httpAuthorization())
+    const verdict = await evaluateGrant(grant, departmentBoard.scope, httpAuthorization(apiFor(() => ok([]))))
     expect(verdict.effective).toBe(true)
     expect(verdict.reason).toBeUndefined()
   })
@@ -106,20 +126,128 @@ describe('what it will not pretend to know', () => {
      * evidence. The one place this adapter fails closed, and the right place:
      * an admin surface opened on a guess is worse than a board hidden on one.
      */
-    expect(await httpAuthorization().mayAdministerCatalogue(liveViewer)).toBe(false)
+    expect(await httpAuthorization(apiFor(() => ok([]))).mayAdministerCatalogue(liveViewer)).toBe(false)
   })
 
-  test('an empty directory, because the API publishes none', async () => {
+  const refusing = () =>
+    apiFor(
+      () =>
+        new Response('{"status":false,"message":"You may not browse the directory"}', {
+          status: 403,
+          headers: { 'content-type': 'application/json' },
+        }),
+    )
+
+  test('a refused people search says so, instead of reporting nobody', async () => {
     /*
-     * A real gap, not a deferral: there is no user search and no department
-     * listing, and `/v1/me` describes only the caller — whose `email` and
-     * `full_name` both come back blank. So a Grant can be sent and cannot be
-     * composed, because the Author has nobody to pick.
+     * The live case on an account holding every `holdings.analytics::` key:
+     * the bare call answers 200 with departments, and adding `q` answers 403.
+     * Reported as an empty result it would render as "nobody matching Ada",
+     * which tells the Author their colleague does not exist.
      */
-    expect(await httpAuthorization().directory()).toEqual({ individuals: [], groups: [] })
+    expect(await httpAuthorization(refusing()).directory('ada')).toEqual({
+      individuals: [],
+      groups: [],
+      peopleRefused: true,
+    })
+  })
+
+  test('a refusal with no search term is not a refused search', async () => {
+    // Nothing was searched for, so there is no search to report as refused —
+    // what failed is the departments call, which the Scope select shows by
+    // having no options rather than by a message about people.
+    expect(await httpAuthorization(refusing()).directory()).toEqual({
+      individuals: [],
+      groups: [],
+    })
+  })
+
+  test('an empty directory when the lookup fails for any other reason', async () => {
+    const broken = apiFor(() => new Response('nope', { status: 500 }))
+    expect(await httpAuthorization(broken).directory('ada')).toEqual({
+      individuals: [],
+      groups: [],
+    })
   })
 
   test('browsing is not re-filtered, since the Catalogue arrives filtered', async () => {
-    expect(await httpAuthorization().mayConsumeDataset('peniremit.settlements', liveViewer)).toBe(true)
+    expect(await httpAuthorization(apiFor(() => ok([]))).mayConsumeDataset('peniremit.settlements', liveViewer)).toBe(true)
+  })
+})
+
+describe('the share-targets directory', () => {
+  /*
+   * Two lists, as the endpoint sends them. Written first as a flat array split
+   * on `target_type` — read off the candidate schema instead of the response
+   * schema — and the adapter returned nobody on every search, silently. The
+   * fixture agreed with the bug, so the tests passed.
+   */
+  const candidates = {
+    users: [{ target_type: 'user', target_ref: 'u-2', name: 'Ada Chukwu', email: 'ada@example.test' }],
+    departments: [
+      { target_type: 'department', target_ref: 'dept-finance', name: 'Finance', member_count: 12 },
+    ],
+  }
+
+  test('users become individuals and departments become groups', async () => {
+    const directory = await httpAuthorization(apiFor(() => ok(candidates))).directory('a')
+    expect(directory).toEqual({
+      individuals: [{ id: 'u-2', displayName: 'Ada Chukwu' }],
+      groups: [{ scopeId: 'dept-finance', label: 'Finance' }],
+    })
+  })
+
+  test('the reference travels unchanged, because a Grant names it', async () => {
+    /*
+     * `target_ref` becomes `recipientId` and goes back as `target_ref` in the
+     * Grant. Deriving an id from anything else here — an email, a department
+     * row — is how a tickable name comes to grant access to nothing.
+     */
+    const directory = await httpAuthorization(apiFor(() => ok(candidates))).directory('a')
+    expect(directory.individuals[0].id).toBe('u-2')
+  })
+
+  test('a search term is passed as q', async () => {
+    const paths: string[] = []
+    await httpAuthorization(apiFor(() => ok([]), paths)).directory('ada c')
+    expect(paths).toEqual(['/v1/dashboards/share-targets?q=ada%20c'])
+  })
+
+  test('a blank query asks without one, which returns departments only', async () => {
+    /*
+     * The endpoint refuses to list people without a term — an empty search
+     * would be a staff list for anyone who can open Analytics. Sending `q=`
+     * would be asking for that; omitting it is asking for the departments.
+     */
+    const paths: string[] = []
+    await httpAuthorization(apiFor(() => ok([]), paths)).directory('   ')
+    expect(paths).toEqual(['/v1/dashboards/share-targets'])
+  })
+
+  test('a candidate with no usable target is dropped', async () => {
+    const broken = { users: [{ target_type: 'user', name: 'No ref' }, { target_ref: 'x-1' }] }
+    expect(await httpAuthorization(apiFor(() => ok(broken))).directory('n')).toEqual({
+      individuals: [],
+      groups: [],
+    })
+  })
+
+  test('an unnamed candidate falls back rather than rendering blank', async () => {
+    const unnamed = { users: [{ target_type: 'user', target_ref: 'u-9', email: 'x@example.test' }] }
+    const directory = await httpAuthorization(apiFor(() => ok(unnamed))).directory('x')
+    expect(directory.individuals[0].displayName).toBe('x@example.test')
+  })
+
+  test('a flat array is not mistaken for an answer', async () => {
+    /*
+     * The shape this adapter was first written for. It cannot be told from an
+     * empty result by anything downstream, so the value of this test is that
+     * the wrong shape stays wrong rather than quietly becoming the contract.
+     */
+    const flat = [{ target_type: 'user', target_ref: 'u-2', name: 'Ada' }]
+    expect(await httpAuthorization(apiFor(() => ok(flat))).directory('a')).toEqual({
+      individuals: [],
+      groups: [],
+    })
   })
 })

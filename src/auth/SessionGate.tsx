@@ -155,16 +155,28 @@ function SignedIn({
   }, [])
 
   /*
-   * Not a dismissible note like an unsaved board, because it does not resolve
-   * itself. A failed save retries; this one cannot — the API has no route to
-   * revoke a Share Grant — so the Author is told plainly that the person still
-   * has access, and it stays until they acknowledge it.
+   * Said plainly, and it stays until acknowledged or undone.
+   *
+   * It used to be permanent because it could not resolve itself: there was no
+   * route to revoke a Share Grant, so a failed revoke stayed failed. There is
+   * one now, and a failed revoke is retried on the next save — which made this
+   * note the thing it warns about, standing after the access it describes had
+   * already been withdrawn. `noteGrantRevoked` is what clears it.
    */
   const noteGrantNotRevoked = useCallback((board: Board, grant: ShareGrant) => {
     setUnrevoked((entries) =>
       entries.some((entry) => entry.board === board.name && entry.who === grant.recipientLabel)
         ? entries
         : [...entries, { board: board.name, who: grant.recipientLabel }],
+    )
+  }, [])
+
+  /** The retry landed — that person no longer sees the board. */
+  const noteGrantRevoked = useCallback((board: Board, grant: ShareGrant) => {
+    setUnrevoked((entries) =>
+      entries.filter(
+        (entry) => !(entry.board === board.name && entry.who === grant.recipientLabel),
+      ),
     )
   }, [])
 
@@ -223,11 +235,13 @@ function SignedIn({
     saveFailed: noteSaveFailed,
     saved: noteSaved,
     grantNotRevoked: noteGrantNotRevoked,
+    grantRevoked: noteGrantRevoked,
   })
   notify.current = {
     saveFailed: noteSaveFailed,
     saved: noteSaved,
     grantNotRevoked: noteGrantNotRevoked,
+    grantRevoked: noteGrantRevoked,
   }
 
   const [boardStore] = useState(() =>
@@ -236,6 +250,7 @@ function SignedIn({
       onSaveFailed: (board, error) => notify.current.saveFailed(board, error),
       onSaved: (board) => notify.current.saved(board),
       onGrantNotRevoked: (board, grant) => notify.current.grantNotRevoked(board, grant),
+      onGrantRevoked: (board, grant) => notify.current.grantRevoked(board, grant),
     }),
   )
 
@@ -251,7 +266,7 @@ function SignedIn({
          * account that decided a department board by looking a real actor up in
          * a demo, and always said no.
          */
-        authorization: httpAuthorization(),
+        authorization: httpAuthorization(api),
         viewer: { id: actor.id, displayName: actor.fullName },
         /*
          * What the UI may offer, straight from `/v1/me`. Absent — IAM's lookup
@@ -295,8 +310,14 @@ function SignedIn({
  * Someone still has access to a board the Author thinks they removed.
  *
  * Worded as what is true rather than as what failed. "Could not revoke" reads
- * like a transient error worth retrying; the Author needs to know the state of
- * the world, which is that this person can still open the board.
+ * like a transient error to wait out; the Author needs to know the state of the
+ * world, which is that this person can still open the board.
+ *
+ * That the revoke *will* be tried again is real now — `DELETE` exists and a
+ * failed one keeps its place in the queue — but it belongs in the tooltip
+ * rather than the line. A note that leads with "retrying" invites waiting, and
+ * the retry rides on the next save rather than a timer, so there may be
+ * nothing to wait for.
  */
 export function UnrevokedNote({
   entries,
@@ -313,7 +334,7 @@ export function UnrevokedNote({
       type="button"
       className="a-unsaved a-unsaved--warning"
       onClick={onDismiss}
-      title="Revoking a share is not yet supported by the Analytics API. Dismiss"
+      title="Access was not withdrawn. It will be tried again the next time this board saves. Dismiss"
     >
       {first.who} still sees &ldquo;{first.board}&rdquo;
       {more > 0 && ` and ${String(more)} more`}
