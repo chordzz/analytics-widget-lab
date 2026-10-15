@@ -14,6 +14,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { SelectField } from '../shell/SelectField'
 import { useAnalyticsData, useCatalogue, useDataset } from '../data/AnalyticsData'
 import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
+import { matchingDatasets } from '../data/dataset-search'
 import { WidgetCard } from '../widgets/WidgetCard'
 import { typesFor } from '../builder/requirements'
 import { useComposeIntent } from '../builder/useComposeIntent'
@@ -26,6 +27,7 @@ import type { ScreenId } from '../shell/nav'
 export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
   const { summaries, loading, failure } = useCatalogue()
   const { accessRecordIsComplete } = useAnalyticsData()
+  const [query, setQuery] = useState('')
 
   if (loading) {
     return (
@@ -48,6 +50,8 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
   if (failure) return <CatalogueProblem failure={failure} />
   if (summaries.length === 0) return <NoDatasets />
 
+  const matches = matchingDatasets(summaries, query)
+
   return (
     <>
       <div style={{ display: 'grid', gap: 'var(--a-space-4)' }}>
@@ -56,9 +60,24 @@ export function DataScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => v
           from.
         </p>
 
-        {summaries.map((summary) => (
-          <DatasetCard key={summary.id} summary={summary} onNavigate={onNavigate} />
-        ))}
+        {summaries.length > 1 && (
+          <input
+            className="a-input"
+            value={query}
+            placeholder="Search data sources…"
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        )}
+
+        {matches.length === 0 ? (
+          <p className="a-muted" style={{ margin: 0 }}>
+            Nothing matches “{query}”.
+          </p>
+        ) : (
+          matches.map((summary) => (
+            <DatasetCard key={summary.id} summary={summary} onNavigate={onNavigate} />
+          ))
+        )}
       </div>
 
       {/*

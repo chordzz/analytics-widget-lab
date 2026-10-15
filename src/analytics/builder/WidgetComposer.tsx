@@ -25,6 +25,7 @@ import { FAMILIES, widgetType } from '../widgets/catalog'
 import { heightForType } from '../widgets/layout'
 import { useAcceptedVisualizationTypes, useDatasets } from '../data/AnalyticsData'
 import { CatalogueProblem, NoDatasets } from '../data/CatalogueState'
+import { matchingDatasets } from '../data/dataset-search'
 import { FieldMapper, fieldSummary } from './FieldMapper'
 import {
   autoMap,
@@ -172,6 +173,7 @@ export function WidgetComposer({
   )
   const [exposedSorts, setExposedSorts] = useState<string[]>(initial?.exposedSorts ?? [])
   const [query, setQuery] = useState('')
+  const [datasetQuery, setDatasetQuery] = useState('')
 
   const dataset = datasetId ? byId(datasetId) : undefined
   const type = typeId ? widgetType(typeId) : undefined
@@ -267,22 +269,37 @@ export function WidgetComposer({
               </p>
             </NoDatasets>
           ) : (
-            <div className="a-dataset-list">
-              {datasets.map((entry) => (
-                <button
-                  key={entry.id}
-                  type="button"
-                  className="a-dataset"
-                  onClick={() => chooseDataset(entry.id)}
-                >
-                  <span className="a-dataset__name">{entry.name}</span>
-                  <span className="a-dataset__meta">{fieldSummary(entry)}</span>
-                  <span className="a-dataset__meta">
-                    {typesFor(entry).length} widget types available
-                  </span>
-                </button>
-              ))}
-            </div>
+            <>
+              {datasets.length > 1 && (
+                <input
+                  className="a-input"
+                  value={datasetQuery}
+                  placeholder="Search data sources…"
+                  onChange={(event) => setDatasetQuery(event.target.value)}
+                />
+              )}
+
+              {matchingDatasets(datasets, datasetQuery).length === 0 ? (
+                <p className="a-muted a-step__hint">Nothing matches “{datasetQuery}”.</p>
+              ) : (
+                <div className="a-dataset-list">
+                  {matchingDatasets(datasets, datasetQuery).map((entry) => (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      className="a-dataset"
+                      onClick={() => chooseDataset(entry.id)}
+                    >
+                      <span className="a-dataset__name">{entry.name}</span>
+                      <span className="a-dataset__meta">{fieldSummary(entry)}</span>
+                      <span className="a-dataset__meta">
+                        {typesFor(entry).length} widget types available
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </Step>
 

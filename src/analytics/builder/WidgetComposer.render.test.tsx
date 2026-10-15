@@ -17,6 +17,9 @@ import { describe, expect, test } from 'bun:test'
 import { mount } from '../../test/mount'
 import { AnalyticsDataProvider } from '../data/AnalyticsData'
 import { WidgetComposer, type ComposerDraft } from './WidgetComposer'
+import type { CataloguePort, DatasetSummary } from '../../catalogue/port'
+import type { Dataset } from '../../domain/dataset'
+import type { TaxonomyEntry } from '../../catalogue/port'
 
 const SOURCE = 'Revenue, monthly'
 
@@ -142,6 +145,83 @@ describe('changing the source keeps what still fits', () => {
 
     // Step four is gone: there is no type, so there is nothing to label yet.
     expect(screen.text()).not.toContain('Label and size it')
+    screen.unmount()
+  })
+})
+
+describe('searching data sources', () => {
+  test('narrows the list to datasets whose name or description matches', async () => {
+    const { screen } = await open()
+    await screen.typeInto(
+      screen.container.querySelector('input.a-input') as HTMLInputElement,
+      'country',
+    )
+
+    expect(screen.text()).toContain('Sales by country')
+    expect(screen.text()).not.toContain(SOURCE)
+    screen.unmount()
+  })
+
+  test('clearing the search restores the full list', async () => {
+    const { screen } = await open()
+    const search = screen.container.querySelector('input.a-input') as HTMLInputElement
+    await screen.typeInto(search, 'country')
+    await screen.typeInto(search, '')
+
+    expect(screen.text()).toContain(SOURCE)
+    expect(screen.text()).toContain('Sales by country')
+    screen.unmount()
+  })
+
+  test('a term nothing matches says so, rather than showing an empty list', async () => {
+    const { screen } = await open()
+    await screen.typeInto(
+      screen.container.querySelector('input.a-input') as HTMLInputElement,
+      'nonexistent-source',
+    )
+
+    expect(screen.text()).toContain('Nothing matches')
+    screen.unmount()
+  })
+
+  test('a single data source is not worth searching, so no box is offered', async () => {
+    const dataset: Dataset = {
+      id: 'money',
+      name: 'Money',
+      description: 'A figure published in two currencies.',
+      sourceSystem: 'fixture',
+      classification: 'internal',
+      exposesPersonalData: false,
+      fields: [
+        { key: 'usd', label: 'USD', filterable: false, sortable: false, role: 'measure', aggregations: ['sum'] },
+      ],
+    }
+    const summary: DatasetSummary = {
+      id: dataset.id,
+      name: dataset.name,
+      description: dataset.description,
+      sourceSystem: dataset.sourceSystem,
+      classification: dataset.classification,
+      exposesPersonalData: dataset.exposesPersonalData,
+      dimensionCount: 0,
+      timeDimensionCount: 0,
+      measureCount: dataset.fields.length,
+    }
+    const catalogue: CataloguePort = {
+      browse: async () => [summary],
+      describe: async (id) => (id === dataset.id ? dataset : null),
+      visualizations: async (): Promise<TaxonomyEntry[]> => [
+        { family: 'single-value', types: ['stat-card'], requirement: 'at least one Measure' },
+      ],
+    }
+
+    const screen = await mount(
+      <AnalyticsDataProvider catalogue={catalogue}>
+        <WidgetComposer onCommit={() => {}} onCancel={() => {}} />
+      </AnalyticsDataProvider>,
+    )
+
+    expect(screen.container.querySelector('input.a-input')).toBeNull()
     screen.unmount()
   })
 })
