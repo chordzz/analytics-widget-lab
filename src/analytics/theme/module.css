@@ -7,6 +7,20 @@
  * utility framework being present.
  */
 
+/*
+ * Scoped rather than a bare `*` reset, so a host portal's own elements outside
+ * `.a-shell` are untouched. Without it a padded, bordered `width: 100%` control
+ * — `.a-input`, `.a-select` — renders wider than its container by exactly its
+ * padding and border, which stays invisible until that control sits flush
+ * against an edge with nothing to absorb the overflow.
+ */
+.a-shell,
+.a-shell *,
+.a-shell *::before,
+.a-shell *::after {
+  box-sizing: border-box;
+}
+
 /* --- widget card ---------------------------------------------------------- */
 
 /*
