@@ -60,7 +60,7 @@ export function ConfirmDelete({
             </button>
             <button
               type="button"
-              className="a-button a-button--danger"
+              className="a-button a-button--danger-solid"
               onClick={() => {
                 setOpen(false)
                 onConfirm()
