@@ -17,7 +17,7 @@
  */
 
 import { peniremitDataset } from './peniremit-catalogue'
-import { CURRENCY_CODES, codeOf, inCode } from '../domain/units'
+import { currencyUnitsFor } from '../domain/units'
 
 /**
  * The currency codes this card could be drawn in, or none.
@@ -32,31 +32,16 @@ import { CURRENCY_CODES, codeOf, inCode } from '../domain/units'
  * *same* code — a card mapping two is drawing both side by side and has
  * nothing to toggle between.
  */
-const currencyUnits = (datasetId: string, mapping: Record<string, string | string[]>) => {
-  const keys = requirePeniremitDataset(datasetId).keys
-  const mapped = Object.values(mapping).flat().map(String)
-
-  const coded = mapped.map((key) => ({ key, code: codeOf(key) })).filter((entry) => entry.code)
-  if (coded.length === 0) return undefined
-  if (new Set(coded.map((entry) => entry.code)).size > 1) return undefined
-
-  const from = coded[0].code!
-  const others = CURRENCY_CODES.filter((code) => code !== from)
-
-  /*
-   * A code is only offered where the Dataset publishes every mapped Measure in
-   * it. Half a swap is worse than none: the figure would move and its delta
-   * would not.
-   */
-  const available = others.filter((to) =>
-    coded.every((entry) => {
-      const swapped = inCode(entry.key, to)
-      return swapped !== undefined && keys.includes(swapped)
-    }),
-  )
-
-  return available.length > 0 ? [from, ...available] : undefined
-}
+/**
+ * `currencyUnitsFor` against this script's own declaration shape.
+ *
+ * The rule itself moved to `domain/units.ts` so the composer can offer the
+ * identical toggle to an Author building a Widget by hand — this script's
+ * `keys` list and a live `Dataset`'s `fields` are different shapes, and the
+ * rule does not care which one it is handed, only the resulting Field keys.
+ */
+const currencyUnits = (datasetId: string, mapping: Record<string, string | string[]>) =>
+  currencyUnitsFor(requirePeniremitDataset(datasetId).keys, Object.values(mapping).flat())
 
 export interface BoardCard {
   /** The card's title in the guide, so the two can be read side by side. */

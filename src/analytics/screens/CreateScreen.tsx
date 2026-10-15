@@ -15,9 +15,10 @@ import { SharePanel } from '../builder/SharePanel'
 import { BoardControls } from '../builder/BoardControls'
 import { useBoardControls } from '../builder/useBoardControls'
 import { WidgetComposer, type ComposerDraft } from '../builder/WidgetComposer'
-import { useAnalyticsData, useMay } from '../data/AnalyticsData'
+import { useAnalyticsData, useDatasets, useMay } from '../data/AnalyticsData'
 import { useBoards } from '../builder/useBoards'
 import { settledName } from '../builder/boards'
+import { currencyUnitsFor } from '../../domain/units'
 import { useComposeIntent } from '../builder/useComposeIntent'
 import { placedWidgets, widgetCountOf, type PlacedWidget } from '../builder/boards'
 import type { ScreenId } from '../shell/nav'
@@ -35,6 +36,13 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
   const controls = useBoardControls(editing, {
     persist: (controlId, value) => { boards.setControlDefault(editing?.id ?? '', controlId, value) },
   })
+
+  /*
+   * Hooks run unconditionally, above every early return below — `datasets` is
+   * only read once the builder has something to compose, but the call itself
+   * cannot wait for that without breaking the Rules of Hooks.
+   */
+  const { datasets } = useDatasets()
 
   const intent = useComposeIntent()
 
@@ -119,6 +127,23 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
   const isEditing = (value: typeof composing): value is PlacedWidget =>
     value !== null && value !== 'new' && 'id' in value
 
+  /*
+   * The toggle an Author gets by building the right shape, not by someone
+   * remembering to add it.
+   *
+   * Until this, `unitOptions` was only ever set by the one-off script that
+   * built Peniremit's four original boards — nothing in the live composer
+   * computed it, so a Widget built here never offered a currency swap no
+   * matter what the Dataset published. Derived at commit time rather than
+   * stored on the draft, so editing a mapping changes what is offered without
+   * a separate step to refresh it.
+   */
+  const unitOptionsFor = (datasetId: string, mapping: ComposerDraft['mapping']) => {
+    const fieldKeys = datasets.find((entry) => entry.id === datasetId)?.fields.map((field) => field.key) ?? []
+    const mappedKeys = Object.values(mapping).flat().filter((value): value is string => typeof value === 'string')
+    return currencyUnitsFor(fieldKeys, mappedKeys)
+  }
+
   const commit = (draft: ComposerDraft) => {
     if (!isEditing(composing)) {
       boards.addWidget(
@@ -131,6 +156,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           exposedFilters: draft.exposedFilters,
           exposedSorts: draft.exposedSorts,
           parameterBindings: draft.parameterBindings,
+          unitOptions: unitOptionsFor(draft.datasetId, draft.mapping),
         },
         { w: draft.span },
       )
@@ -146,6 +172,7 @@ export function CreateScreen({ onNavigate }: { onNavigate: (screen: ScreenId) =>
           exposedFilters: draft.exposedFilters,
           exposedSorts: draft.exposedSorts,
           parameterBindings: draft.parameterBindings,
+          unitOptions: unitOptionsFor(draft.datasetId, draft.mapping),
         },
         draft.span,
       )

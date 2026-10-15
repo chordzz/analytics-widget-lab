@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import { codeOf, inCode } from './units'
+import { codeOf, currencyUnitsFor, inCode } from './units'
 
 describe('finding the code in a name', () => {
   test('the whole key, as the grained Datasets spell it', () => {
@@ -56,5 +56,42 @@ describe('swapping one for another', () => {
 
   test('and a key encoding no currency yields nothing to swap', () => {
     expect(inCode('total', 'ngn')).toBeUndefined()
+  })
+})
+
+describe('which currencies a mapping may toggle between', () => {
+  /*
+   * The bug this closes: a Widget built in the live composer never set
+   * `unitOptions`, because only the one-off Peniremit script computed it —
+   * nothing in the product's own "add a widget" flow did. The fix moved the
+   * rule here so both paths share one answer.
+   */
+  test('offered when the Dataset publishes the counterpart', () => {
+    expect(currencyUnitsFor(['usd', 'ngn'], ['usd'])).toEqual(['usd', 'ngn'])
+  })
+
+  test('not offered when the Dataset does not publish it', () => {
+    // Exactly Peniremit's early boards, and exactly why the toggle produces
+    // no card rather than a wrong number.
+    expect(currencyUnitsFor(['usd'], ['usd'])).toBeUndefined()
+  })
+
+  test('not offered unless every mapped currency-bearing key has its counterpart', () => {
+    // Half a swap is worse than none: the figure would move and its delta
+    // would not.
+    expect(currencyUnitsFor(['usd', 'ngn', 'usdDelta'], ['usd', 'usdDelta'])).toBeUndefined()
+  })
+
+  test('not offered when the mapping already spans two currencies', () => {
+    // Nothing coherent to toggle: there is no single "from" to swap away from.
+    expect(currencyUnitsFor(['usd', 'ngn'], ['usd', 'ngn'])).toBeUndefined()
+  })
+
+  test('not offered when nothing mapped encodes a currency at all', () => {
+    expect(currencyUnitsFor(['usd', 'ngn'], ['category'])).toBeUndefined()
+  })
+
+  test('a Field mapped twice does not get offered twice', () => {
+    expect(currencyUnitsFor(['usd', 'ngn'], ['usd', 'usd'])).toEqual(['usd', 'ngn'])
   })
 })
