@@ -1068,7 +1068,15 @@
   max-width: 280px;
 }
 
-.a-confirm__message {
+/*
+ * `.a-confirm .a-confirm__message`, not the bare class: this popover can
+ * render inside `.a-board-head--compact`, which resets every `p` to zero
+ * margin with a selector one part longer than a single class — and a longer
+ * selector wins regardless of which rule is read second. Found by checking
+ * the actual matched rules in a browser rather than assuming the margin in
+ * this file was the one taking effect.
+ */
+.a-confirm .a-confirm__message {
   margin: 0 0 var(--a-space-4);
   font-size: var(--a-text-sm);
   line-height: 1.5;
