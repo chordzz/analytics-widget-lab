@@ -80,6 +80,14 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
   const { viewer } = useAnalyticsData()
   const isAuthor = active?.authorId === viewer.id
   const mayEdit = useMay('dashboard.update') && isAuthor
+  /**
+   * Deleting is gated the identical way editing is, and for the identical
+   * reason — `dashboard.update`'s own comment above applies unchanged: the
+   * permission is unknown-offers because the API enforces regardless, and
+   * authorship is not, because a board reaches a reader through a Share Grant
+   * or a Scope and a delete button that always refuses is not a kindness.
+   */
+  const mayDelete = useMay('dashboard.delete') && isAuthor
 
   /*
    * Two readings of the same gesture, told apart by the mode already on screen.
@@ -154,17 +162,25 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
           {widgetCountOf(active)} {widgetCountOf(active) === 1 ? 'widget' : 'widgets'} · updated{' '}
           {active.updated}
         </p>
-        {mayEdit && (
+        {(mayEdit || mayDelete) && (
           <div className="a-board-head__actions">
-            <button
-              type="button"
-              className={`a-button${editingWidgets ? ' a-button--primary' : ''}`}
-              aria-pressed={editingWidgets}
-              onClick={() => { setEditingWidgets((on) => !on) }}
-            >
-              {editingWidgets ? 'Done' : 'Edit widgets'}
-            </button>
-            {editingWidgets && (
+            {/*
+              The wrapper now admits either permission, because `mayDelete`
+              can be true on its own — so everything that is specifically an
+              editing action keeps its own `mayEdit` check rather than
+              inheriting one from a div that no longer implies it.
+            */}
+            {mayEdit && (
+              <button
+                type="button"
+                className={`a-button${editingWidgets ? ' a-button--primary' : ''}`}
+                aria-pressed={editingWidgets}
+                onClick={() => { setEditingWidgets((on) => !on) }}
+              >
+                {editingWidgets ? 'Done' : 'Edit widgets'}
+              </button>
+            )}
+            {mayEdit && editingWidgets && (
               <button type="button" className="a-button" onClick={() => { composer.open('new') }}>
                 Add widget
               </button>
@@ -174,7 +190,7 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
               arbitrary one: a second would give two controls the same reach
               over the same Widgets, and nothing says which wins.
             */}
-            {editingWidgets && active.controls.length === 0 && (
+            {mayEdit && editingWidgets && active.controls.length === 0 && (
               <button
                 type="button"
                 className="a-button"
@@ -183,16 +199,36 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
                 Add date range
               </button>
             )}
-            <button
-              type="button"
-              className="a-button"
-              onClick={() => {
-                boards.openBoard(active.id)
-                onNavigate('create')
-              }}
-            >
-              Board settings
-            </button>
+            {mayEdit && (
+              <button
+                type="button"
+                className="a-button"
+                onClick={() => {
+                  boards.openBoard(active.id)
+                  onNavigate('create')
+                }}
+              >
+                Board settings
+              </button>
+            )}
+            {/*
+              No confirmation, matching Drafts' own delete — the one other
+              place this action already exists. Worth a second look only
+              because this screen also shows published boards, which a
+              Drafts-only delete never had to weigh.
+            */}
+            {mayDelete && (
+              <button
+                type="button"
+                className="a-button a-button--danger"
+                onClick={() => {
+                  boards.deleteBoard(active.id)
+                  setActiveId(null)
+                }}
+              >
+                Delete
+              </button>
+            )}
           </div>
         )}
       </div>

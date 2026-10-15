@@ -143,3 +143,67 @@ describe('before the store has answered', () => {
     screen.unmount()
   })
 })
+
+describe('deleting a board from here', () => {
+  const DELETE_HELD = { 'dashboard.delete': true }
+  const DELETE_REFUSED = { 'dashboard.delete': false }
+
+  test('the Author is offered it when the permission is held', async () => {
+    const screen = await open(mine, DELETE_HELD)
+    expect(screen.buttons()).toContain('Delete')
+    screen.unmount()
+  })
+
+  test('and when the permission map is unknown entirely', async () => {
+    // Gated identically to `mayEdit`, for the identical reason: the API
+    // enforces on DELETE regardless, so an unknown lookup must not read as a
+    // caller who may do nothing.
+    const screen = await open(mine, undefined)
+    expect(screen.buttons()).toContain('Delete')
+    screen.unmount()
+  })
+
+  test('but not when it is explicitly refused', async () => {
+    const screen = await open(mine, DELETE_REFUSED)
+    expect(screen.buttons()).not.toContain('Delete')
+    screen.unmount()
+  })
+
+  test('granted independently of editing — one without the other, both ways', async () => {
+    /*
+     * The bug this pins: the actions wrapper used to be gated on `mayEdit`
+     * alone, so a caller holding only `dashboard.delete` saw nothing at all —
+     * not even the Delete button `mayDelete` itself correctly allowed.
+     */
+    const editOnly = await open(mine, { 'dashboard.update': true, 'dashboard.delete': false })
+    expect(editOnly.buttons()).toContain('Edit widgets')
+    expect(editOnly.buttons()).not.toContain('Delete')
+    editOnly.unmount()
+
+    const deleteOnly = await open(mine, { 'dashboard.update': false, 'dashboard.delete': true })
+    expect(deleteOnly.buttons()).toContain('Delete')
+    expect(deleteOnly.buttons()).not.toContain('Edit widgets')
+    deleteOnly.unmount()
+  })
+
+  test('a reader of somebody else’s board is never offered it, however the permission reads', async () => {
+    for (const permissions of [DELETE_HELD, DELETE_REFUSED, undefined]) {
+      const screen = await open(theirs, permissions)
+      expect(screen.buttons()).not.toContain('Delete')
+      screen.unmount()
+    }
+  })
+
+  test('pressing it removes the board and leaves another one active', async () => {
+    const second = { ...mine.boards[0], id: 'b-2', name: 'Second board' }
+    const screen = await open({ boards: [mine.boards[0], second], editingId: null }, DELETE_HELD)
+
+    expect(screen.text()).toContain('Finance daily')
+
+    await screen.press('Delete')
+
+    expect(screen.buttons()).not.toContain('Finance daily')
+    expect(screen.text()).toContain('Second board')
+    screen.unmount()
+  })
+})
