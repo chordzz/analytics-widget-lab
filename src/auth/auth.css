@@ -233,24 +233,6 @@
   background: var(--a-bg);
 }
 
-.a-session-banner {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--a-space-3);
-  flex-wrap: wrap;
-  padding: var(--a-space-3) var(--a-space-4);
-  font-family: var(--a-font);
-  font-size: var(--a-text-sm);
-  color: var(--a-text);
-  background: var(--a-surface-sunken);
-  border-bottom: 1px solid var(--a-border);
-  box-shadow: inset 3px 0 0 var(--a-status-critical);
-}
-
 .a-session-who {
   display: inline-flex;
   align-items: center;

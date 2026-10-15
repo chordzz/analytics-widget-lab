@@ -1,11 +1,10 @@
 /**
  * What the application shows for each session state.
  *
- * The `expired` case is the one with a design decision in it. Ten Widgets do
- * not each announce that the session ended — that would be ten wrong answers to
- * one question — and the board is not torn down either. One banner sits above
- * it, the stale figures stay visible and labelled, and signing back in is one
- * click. That is why `expired` is a state distinct from `signed-out`.
+ * `expired` goes straight to the sign-in screen, same as `signed-out` — a
+ * banner over stale figures looked fine on an already-loaded board, but left
+ * anything that needs a fresh request (the data catalogue, a save) showing a
+ * broken-looking error instead of the sign-in prompt it actually needed.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -26,7 +25,6 @@ import './auth.css'
 
 export function SessionGate() {
   const { state, signIn, adopt, signOut, api, generation } = useSession()
-  const [reauthenticating, setReauthenticating] = useState(false)
 
   if (state.status === 'unknown') {
     // A stored token is being checked against `/v1/me`. Deliberately quiet:
@@ -48,27 +46,19 @@ export function SessionGate() {
     return <SessionUnavailable onRetry={() => window.location.reload()} />
   }
 
-  if (state.status === 'signed-out' || reauthenticating) {
+  if (state.status === 'signed-out' || state.status === 'expired') {
     return (
       <SignInScreen
         client={signIn}
-        notice={reauthenticating ? 'Your session ended. Sign in to carry on.' : undefined}
+        notice={state.status === 'expired' ? 'Your session ended. Sign in to carry on.' : undefined}
         onSignedIn={async (tokens) => {
           await adopt(tokens)
-          setReauthenticating(false)
         }}
       />
     )
   }
 
-  return (
-    <>
-      {state.status === 'expired' && (
-        <SessionBanner actor={state.actor.fullName} onSignIn={() => setReauthenticating(true)} />
-      )}
-      <SignedIn actor={state.actor} api={api} generation={generation} onSignOut={signOut} />
-    </>
-  )
+  return <SignedIn actor={state.actor} api={api} generation={generation} onSignOut={signOut} />
 }
 
 /**
@@ -374,19 +364,6 @@ export function UnsavedNote({
         : `${what} was rejected — editing it will try again`}
       {more > 0 && entries.length > 1 && ''}
     </button>
-  )
-}
-
-function SessionBanner({ actor, onSignIn }: { actor: string; onSignIn: () => void }) {
-  return (
-    <div className="a-session-banner" role="alert">
-      <span>
-        Your session ended, {actor}. The figures below are from before it did.
-      </span>
-      <button type="button" className="a-button a-button--primary" onClick={onSignIn}>
-        Sign in again
-      </button>
-    </div>
   )
 }
 

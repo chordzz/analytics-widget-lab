@@ -1,11 +1,8 @@
 /**
  * The session, as a state machine.
  *
- * Four states, and the distinction that earns the fourth is `expired` against
- * `signed-out`. Signed out means nobody is here: show a sign-in screen and
- * nothing else. Expired means *we know who this was and their board is still on
- * the screen behind us* — which is a banner over a dashboard, not a page
- * replacing one. Collapsing the two throws away the work someone had open.
+ * `expired` is kept distinct from `signed-out` only so the sign-in screen can
+ * say "your session ended" instead of nothing — both send the Viewer there.
  *
  * `code-sent` is not here. It belongs to the sign-in screen: a code in flight
  * is a step through a form, not a state of the application, and hoisting it
@@ -47,7 +44,7 @@ export type SessionState =
   | { status: 'unknown' }
   | { status: 'signed-out' }
   | { status: 'signed-in'; actor: Actor }
-  /** Had a session; a refresh could not save it. The board is still behind this. */
+  /** Had a session; a refresh could not save it. Sent to sign in again. */
   | { status: 'expired'; actor: Actor }
   /**
    * We hold a token and cannot find out whose it is.
