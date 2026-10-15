@@ -56,6 +56,17 @@ export interface Mounted {
    * from resolving, so this waits for real.
    */
   settle: (ms?: number) => Promise<void>
+  /** Dispatch a keydown at the document — for a global listener like Escape. */
+  key: (name: string) => Promise<void>
+  /**
+   * A pointerdown on `document.body`, outside anything mounted.
+   *
+   * For `useClickAway`, which listens in the capture phase on the document —
+   * a plain DOM click inside the test's own container would never reach it,
+   * since nothing here is actually outside the viewport the way a real
+   * click elsewhere on the page would be.
+   */
+  clickOutside: () => Promise<void>
   unmount: () => void
 }
 
@@ -183,6 +194,18 @@ export async function mount(node: ReactNode): Promise<Mounted> {
     settle: async (ms = 300) => {
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, ms))
+      })
+      await flush()
+    },
+    key: async (name: string) => {
+      await act(async () => {
+        document.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true }))
+      })
+      await flush()
+    },
+    clickOutside: async () => {
+      await act(async () => {
+        document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
       })
       await flush()
     },

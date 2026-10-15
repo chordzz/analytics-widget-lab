@@ -33,6 +33,7 @@ import { useWidgetComposer } from '../builder/useWidgetComposer'
 import { placedWidgets, widgetCountOf } from '../builder/boards'
 import { useBoards } from '../builder/useBoards'
 import { useAnalyticsData, useMay } from '../data/AnalyticsData'
+import { ConfirmDelete } from '../shell/ConfirmDelete'
 import type { ScreenId } from '../shell/nav'
 
 export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId) => void }) {
@@ -211,23 +212,17 @@ export function DashboardsScreen({ onNavigate }: { onNavigate: (screen: ScreenId
                 Board settings
               </button>
             )}
-            {/*
-              No confirmation, matching Drafts' own delete — the one other
-              place this action already exists. Worth a second look only
-              because this screen also shows published boards, which a
-              Drafts-only delete never had to weigh.
-            */}
             {mayDelete && (
-              <button
-                type="button"
+              <ConfirmDelete
+                label={active.name}
                 className="a-button a-button--danger"
-                onClick={() => {
+                onConfirm={() => {
                   boards.deleteBoard(active.id)
                   setActiveId(null)
                 }}
               >
                 Delete
-              </button>
+              </ConfirmDelete>
             )}
           </div>
         )}

@@ -194,13 +194,25 @@ describe('deleting a board from here', () => {
     }
   })
 
-  test('pressing it removes the board and leaves another one active', async () => {
+  test('asks before it removes anything', async () => {
+    // The click opens a question, not a deletion — `ConfirmDelete` behind it
+    // is what this is really testing; see its own test file for the rest.
+    const screen = await open(mine, DELETE_HELD)
+    await screen.press('Delete')
+
+    expect(screen.text()).toContain('cannot be undone')
+    expect(screen.buttons()).toContain('Finance daily')
+    screen.unmount()
+  })
+
+  test('confirming removes the board and leaves another one active', async () => {
     const second = { ...mine.boards[0], id: 'b-2', name: 'Second board' }
     const screen = await open({ boards: [mine.boards[0], second], editingId: null }, DELETE_HELD)
 
     expect(screen.text()).toContain('Finance daily')
 
     await screen.press('Delete')
+    await screen.press('Confirm delete')
 
     expect(screen.buttons()).not.toContain('Finance daily')
     expect(screen.text()).toContain('Second board')

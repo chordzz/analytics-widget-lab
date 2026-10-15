@@ -11,6 +11,7 @@
 import { placedWidgets, widgetCountOf } from '../builder/boards'
 import { useBoards } from '../builder/useBoards'
 import { widgetType } from '../widgets/catalog'
+import { ConfirmDelete } from '../shell/ConfirmDelete'
 import type { Board } from '../builder/boards'
 import type { ScreenId } from '../shell/nav'
 
@@ -101,9 +102,9 @@ function DraftRow({
         >
           Publish
         </button>
-        <button type="button" className="a-button a-button--danger" onClick={onDelete}>
+        <ConfirmDelete label={board.name} className="a-button a-button--danger" onConfirm={onDelete}>
           Delete
-        </button>
+        </ConfirmDelete>
       </div>
     </li>
   )

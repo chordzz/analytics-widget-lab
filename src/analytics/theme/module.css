@@ -1049,6 +1049,37 @@
   color: var(--a-text-muted);
 }
 
+.a-confirm {
+  position: relative;
+  display: inline-flex;
+}
+
+.a-confirm__pop {
+  position: absolute;
+  z-index: 41;
+  top: calc(100% + 6px);
+  right: 0;
+  padding: var(--a-space-3);
+  border: 1px solid var(--a-border);
+  border-radius: var(--a-radius-lg);
+  background: var(--a-surface);
+  box-shadow: var(--a-shadow-raised);
+  width: max-content;
+  max-width: 260px;
+}
+
+.a-confirm__message {
+  margin: 0 0 var(--a-space-3);
+  font-size: var(--a-text-sm);
+  color: var(--a-text);
+}
+
+.a-confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--a-space-2);
+}
+
 .a-datefield__pop {
   position: absolute;
   z-index: 41;
