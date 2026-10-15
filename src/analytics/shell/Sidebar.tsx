@@ -9,6 +9,8 @@
 
 import { Icon } from './Icon'
 import { NAV_ITEMS, type NavItem, type ScreenId } from './nav'
+import { useBoards } from '../builder/useBoards'
+import { useMay } from '../data/AnalyticsData'
 
 const GROUPS: { key: NavItem['group']; label: string }[] = [
   { key: 'work', label: 'Workspace' },
@@ -37,6 +39,9 @@ export function Sidebar({
   theme: 'light' | 'dark'
   onToggleTheme: () => void
 }) {
+  const boards = useBoards()
+  const mayCreate = useMay('dashboard.create')
+
   return (
     <aside className="a-side" data-collapsed={collapsed} aria-label="Analytics navigation">
       <div className="a-side__head">
@@ -51,20 +56,43 @@ export function Sidebar({
           <div key={group.key} className="a-side__group">
             <p className="a-side__group-label">{group.label}</p>
 
-            {NAV_ITEMS.filter((item) => item.group === group.key).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className="a-nav-item"
-                aria-current={item.id === current}
-                aria-label={collapsed ? item.label : undefined}
-                title={collapsed ? item.label : undefined}
-                onClick={() => onNavigate(item.id)}
-              >
-                <Icon name={item.icon} />
-                {!collapsed && <span>{item.label}</span>}
-              </button>
-            ))}
+            {NAV_ITEMS.filter((item) => item.group === group.key).map((item) => {
+              /*
+               * "Create dashboard" reads as an action, not a bookmark — and a
+               * plain `onNavigate` is a bookmark: it reopens whatever
+               * `editingId` already points to, which is an existing board the
+               * moment one has ever been open. `NewDashboardButton` elsewhere
+               * in this shell gets this right; this item promised the same
+               * thing and did not do it.
+               */
+              const isCreate = item.id === 'create'
+              const disabled = isCreate && !mayCreate
+
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="a-nav-item"
+                  aria-current={item.id === current}
+                  aria-label={collapsed ? item.label : undefined}
+                  title={
+                    disabled
+                      ? 'You do not have permission to create dashboards.'
+                      : collapsed
+                        ? item.label
+                        : undefined
+                  }
+                  disabled={disabled}
+                  onClick={() => {
+                    if (isCreate) boards.createBoard()
+                    onNavigate(item.id)
+                  }}
+                >
+                  <Icon name={item.icon} />
+                  {!collapsed && <span>{item.label}</span>}
+                </button>
+              )
+            })}
           </div>
         ))}
       </nav>
